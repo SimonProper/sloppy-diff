@@ -16,6 +16,8 @@
 	import RepoList from '$lib/components/RepoList.svelte';
 	import ResizeHandle from '$lib/components/ResizeHandle.svelte';
 	import SidebarLayout from '$lib/components/SidebarLayout.svelte';
+	import StatusBadge from '$lib/components/StatusBadge.svelte';
+	import { displayPath } from '$lib/diff/path';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
 
 	let { data } = $props();
@@ -659,6 +661,17 @@
 				<div class="flex min-h-0 flex-1 flex-col">
 					<FileList files={data.files} />
 				</div>
+			{/snippet}
+			{#snippet rail()}
+				<!-- each file's status, to jump to it -->
+				{#each data.files as file (file.id)}
+					<a
+						href="#{file.id}"
+						class="grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle"
+						aria-label={displayPath(file)}
+						data-tip={displayPath(file)}><StatusBadge status={file.status} /></a
+					>
+				{/each}
 			{/snippet}
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}

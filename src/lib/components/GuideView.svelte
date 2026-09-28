@@ -217,26 +217,10 @@
 									onclick={() => toggleReviewed(section.id, false)}
 								>
 									{#if done}
-										<svg
-											viewBox="0 0 16 16"
-											class="size-2.5"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.5"
-											stroke-linecap="round"
-											stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
-										>
+										{@render checkmark('')}
 									{:else}
 										<span class="group-hover/check:hidden">{number.get(section.id)}</span>
-										<svg
-											viewBox="0 0 16 16"
-											class="hidden size-2.5 group-hover/check:block"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2.5"
-											stroke-linecap="round"
-											stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
-										>
+										{@render checkmark('hidden group-hover/check:block')}
 									{/if}
 								</button>
 								<a href="#{section.id}" class="min-w-0 flex-1">
@@ -257,6 +241,37 @@
 				{/if}
 			{/each}
 		</nav>
+	{/snippet}
+	{#snippet rail()}
+		<!-- the progress, then each step's number to jump to it, reviewed ones ticked -->
+		<span
+			class="pb-1 text-[10px] text-muted tabular-nums"
+			data-tip="{Math.round(progress * sections.length)} of {sections.length} reviewed"
+			>{Math.round(progress * sections.length)}/{sections.length}</span
+		>
+		{#each KINDS as { kind, label } (kind)}
+			{@const group = sections.filter((s) => s.kind === kind)}
+			{#if group.length}
+				<span class="my-1 h-px w-4 shrink-0 bg-line" data-tip={label}></span>
+				{#each group as section (section.id)}
+					{@const done = reviewed.includes(section.id)}
+					<button
+						type="button"
+						class={[
+							'grid size-[18px] shrink-0 place-items-center rounded-full border text-[10px] font-medium tabular-nums',
+							done
+								? 'border-add bg-add text-surface hover:opacity-80'
+								: 'border-line text-muted hover:border-muted hover:text-fg'
+						]}
+						aria-label={section.title}
+						data-tip={section.title}
+						onclick={() => document.getElementById(section.id)?.scrollIntoView()}
+					>
+						{#if done}{@render checkmark('')}{:else}{number.get(section.id)}{/if}
+					</button>
+				{/each}
+			{/if}
+		{/each}
 	{/snippet}
 
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
@@ -391,6 +406,18 @@
 		{/each}
 	</main>
 </SidebarLayout>
+
+{#snippet checkmark(className: string)}
+	<svg
+		viewBox="0 0 16 16"
+		class={['size-2.5', className]}
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2.5"
+		stroke-linecap="round"
+		stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
+	>
+{/snippet}
 
 {#snippet description(section: GuideSection)}
 	<div class="prose max-w-3xl text-[13.5px] leading-relaxed">
