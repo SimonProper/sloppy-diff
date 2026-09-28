@@ -47,7 +47,7 @@ describe('formatting only', () => {
 			'f.ts',
 			`@@ -1,2 +1,3 @@\n-call(first, second);\n+call(first,\n+\tsecond);\n end();\n`
 		);
-		expect(file.changes).toEqual({ formattingOnly: true, movedOnly: false });
+		expect(file.changes).toEqual({ formattingOnly: true });
 	});
 
 	test('code moved past other code is not', () => {
@@ -70,7 +70,7 @@ describe('formatting only', () => {
 	test('spaces inside a string are part of it', () => {
 		const { file, line } = tokens('f.ts', `@@ -1 +1 @@\n-const s = "a  b";\n+const s = "a b";\n`);
 		expect(file.changes?.formattingOnly).toBe(false);
-		expect(line('add', 'const s').moved).toBeFalsy();
+		expect(line('add', 'const s').reformatted).toBeFalsy();
 	});
 
 	test('shell words split by a space are not', () => {
@@ -88,7 +88,7 @@ describe('indentation that carries meaning', () => {
 	test('python moving a statement into an if is a change, the indentation highlighted', () => {
 		const { file, line } = tokens('f.py', `@@ -1,3 +1,3 @@\n if cond:\n     a()\n-b()\n+    b()\n`);
 		expect(file.changes?.formattingOnly).toBe(false);
-		expect(line('add', 'b()').moved).toBeFalsy();
+		expect(line('add', 'b()').reformatted).toBeFalsy();
 		expect(novel(line('add', 'b()'))).toEqual(['    ']);
 	});
 
@@ -98,187 +98,45 @@ describe('indentation that carries meaning', () => {
 	});
 });
 
-describe('moved lines', () => {
+describe('within a block', () => {
 	test('a line stitched from two removed lines keeps what came from the second', () => {
 		const { line } = tokens(
 			'f.ts',
 			`@@ -1,2 +1 @@\n-if (isAdmin(user)) allow();\n-if (isGuest(user)) deny();\n+if (isAdmin(user)) deny();\n`
 		);
 		const added = line('add', 'isAdmin');
-		expect(added.moved).toBeFalsy();
+		expect(added.reformatted).toBeFalsy();
 		expect(novel(added)).toEqual(['deny();']);
 	});
 
-	test('a block moved with its leading blank line is still a move', () => {
-		const fn = [
-			'',
-			'export function describe(items: Item[]) {',
-			'\treturn items.map(format).join(", ");',
-			'}'
-		];
-		const body = [
-			'@@ -1,9 +1,9 @@',
-			...fn.map((l) => `-${l}`),
-			' const a = 1;',
-			' const b = 2;',
-			' const c = 3;',
-			' const d = 4;',
-			' const e = 5;',
-			...fn.map((l) => `+${l}`)
-		].join('\n');
-		const { line } = tokens('f.ts', body + '\n');
-		expect(line('del', 'export function').moveLabel).toMatch(/^moved to line \d+$/);
-		expect(line('add', 'export function').moveLabel).toMatch(/^moved from line \d+$/);
-	});
-
-	test('lines swapped within a block are moves, not re-indentation', () => {
+	test('lines swapped within a block are not reformatted', () => {
 		const { file, line } = tokens(
 			'f.ts',
 			`@@ -1,2 +1,2 @@\n-const alphabetical = sortEverything(items);\n-const broadcasted = sendEverywhere(items);\n+const broadcasted = sendEverywhere(items);\n+const alphabetical = sortEverything(items);\n`
 		);
 		expect(file.changes?.formattingOnly).toBe(false);
-		expect(line('add', 'alphabetical').moveLabel ?? line('add', 'broadcasted').moveLabel).toMatch(
-			/^moved from line \d+$/
+		expect(
+			line('add', 'alphabetical').reformatted && line('add', 'broadcasted').reformatted
+		).toBeFalsy();
+	});
+
+	test('markup wrapped in a new element highlights only what is new', () => {
+		const { line } = tokens(
+			'Field.svelte',
+			[
+				'@@ -1,3 +1,5 @@',
+				'-<div class="relative my-2 {div_css}">',
+				'-    <label class="whitespace-nowrap">{label}</label>',
+				'+<div class="relative {div_css}">',
+				'+    {#if label}',
+				'+        <div class="flex items-center gap-1 py-1">',
+				'+            <label for={id} class="whitespace-nowrap">{label}</label>',
+				'     <slot />'
+			].join('\n') + '\n'
 		);
-	});
-
-	test('a line edited in place is not a move, even when another file has it too', () => {
-		const patch = [
-			'diff --git a/Field.svelte b/Field.svelte\n--- a/Field.svelte\n+++ b/Field.svelte',
-			'@@ -1,3 +1,5 @@',
-			'-<div class="relative my-2 {div_css}">',
-			'-    <label class="whitespace-nowrap">{label}</label>',
-			'+<div class="relative {div_css}">',
-			'+    {#if label}',
-			'+        <div class="flex items-center gap-1 py-1">',
-			'+            <label for={id} class="whitespace-nowrap">{label}</label>',
-			'     <slot />',
-			// had the new line, and loses it
-			'diff --git a/Select.svelte b/Select.svelte\n--- a/Select.svelte\n+++ b/Select.svelte',
-			'@@ -1,3 +1,2 @@',
-			'-<label for={id} class="whitespace-nowrap">{label}</label>',
-			'-<select {id}>',
-			'+<Field {label} {id}>',
-			' </select>',
-			// gains the old line
-			'diff --git a/Checkbox.svelte b/Checkbox.svelte\n--- a/Checkbox.svelte\n+++ b/Checkbox.svelte',
-			'@@ -1 +1,2 @@',
-			' <input type="checkbox" />',
-			'+<label class="whitespace-nowrap">{label}</label>'
-		].join('\n');
-		const files = parseDiff(patch + '\n');
-		annotateChanges(files, 'tokens');
-		const lines = files[0].hunks.flatMap((h) => h.lines);
-		const line = (kind: 'add' | 'del') =>
-			lines.find((l) => l.kind === kind && l.text.includes('<label'))!;
-
-		expect(line('add').moveLabel).toBeUndefined();
-		expect(line('add').moved).toBeFalsy();
-		expect(line('del').moveLabel).toBeUndefined();
-		// compared with the label it replaced, so the label itself isn't new
-		expect(novel(line('add'))).toContain('for={id}');
-		expect(novel(line('add')).join('')).not.toContain('whitespace-nowrap');
-	});
-
-	describe('imports', () => {
-		/** A patch over several files, each `[path, hunk lines]`. */
-		function patch(...files: [string, string[]][]) {
-			const text = files
-				.map(([f, lines]) =>
-					[`diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}`, ...lines].join('\n')
-				)
-				.join('\n');
-			const parsed = parseDiff(text + '\n');
-			annotateChanges(parsed, 'tokens');
-			const lines = parsed.flatMap((f) => f.hunks.flatMap((h) => h.lines));
-			return (kind: 'add' | 'del', text: string) =>
-				lines.find((l) => l.kind === kind && l.text.includes(text))!;
-		}
-
-		test('an import dropped in one file and added in another is not a move', () => {
-			const line = patch(
-				[
-					'src/a.ts',
-					[
-						'@@ -1,3 +1,2 @@',
-						"-import { formatPrice } from '$lib/format';",
-						" import { cart } from './cart';",
-						' cart();'
-					]
-				],
-				[
-					'src/b.svelte',
-					[
-						'@@ -1,3 +1,4 @@',
-						' <script lang="ts">',
-						"+\timport { formatPrice } from '$lib/format';",
-						" \timport { page } from '$app/state';",
-						' </script>'
-					]
-				]
-			);
-			expect(line('del', 'formatPrice').moveLabel).toBeUndefined();
-			expect(line('add', 'formatPrice').moveLabel).toBeUndefined();
-			expect(line('add', 'formatPrice').moved).toBeFalsy();
-		});
-
-		test('nor is an import spread over several lines', () => {
-			const names = ['\tformatPrice,', '\tformatQuantity,', '\tformatDiscount'];
-			const line = patch(
-				[
-					'src/a.ts',
-					[
-						'@@ -1,6 +1,1 @@',
-						'-import {',
-						...names.map((n) => `-${n}`),
-						"-} from '$lib/format';",
-						' cart();'
-					]
-				],
-				[
-					'src/c.ts',
-					[
-						'@@ -1 +1,6 @@',
-						' cart();',
-						'+import {',
-						...names.map((n) => `+${n}`),
-						"+} from '$lib/format';"
-					]
-				]
-			);
-			expect(line('del', 'formatQuantity').moved).toBeFalsy();
-			expect(line('add', 'formatQuantity').moved).toBeFalsy();
-		});
-
-		test('code moved to another file with its imports is still a move', () => {
-			const code = [
-				"import { formatPrice } from '$lib/format';",
-				'',
-				'export function describe(items: Item[]) {',
-				'\treturn items.map(formatPrice).join(", ");',
-				'}'
-			];
-			const line = patch(
-				['src/a.ts', ['@@ -1,6 +1,1 @@', ...code.map((l) => `-${l}`), ' cart();']],
-				['src/c.ts', ['@@ -1 +1,6 @@', ' cart();', ...code.map((l) => `+${l}`)]]
-			);
-			expect(line('add', 'formatPrice } from').moveLabel).toBe('moved from src/a.ts:1');
-			expect(line('add', 'export function describe').moved).toBe(true);
-		});
-
-		test('imports reordered within a file are still moves', () => {
-			const line = patch([
-				'src/a.ts',
-				[
-					'@@ -1,3 +1,3 @@',
-					"-import { formatPrice } from '$lib/format';",
-					" import { cart } from './cart';",
-					"+import { formatPrice } from '$lib/format';",
-					' cart();'
-				]
-			]);
-			expect(line('add', 'formatPrice').moveLabel).toBe('moved from line 1');
-		});
+		const label = line('add', '<label');
+		expect(novel(label)).toContain('for={id}');
+		expect(novel(label).join('')).not.toContain('whitespace-nowrap');
 	});
 
 	test('a lockfile full of repeated lines stays fast', () => {
@@ -300,5 +158,33 @@ describe('moved lines', () => {
 		const started = performance.now();
 		tokens('deps.json', body.join('\n') + '\n');
 		expect(performance.now() - started).toBeLessThan(5000);
+	});
+});
+
+describe('moved code', () => {
+	test('a block moved further down is a removal and an addition', () => {
+		const fn = [
+			'',
+			'export function describe(items: Item[]) {',
+			'\treturn items.map(format).join(", ");',
+			'}'
+		];
+		const body = [
+			'@@ -1,9 +1,9 @@',
+			...fn.map((l) => `-${l}`),
+			' const a = 1;',
+			' const b = 2;',
+			' const c = 3;',
+			' const d = 4;',
+			' const e = 5;',
+			...fn.map((l) => `+${l}`)
+		].join('\n');
+		const { file, line } = tokens('f.ts', body + '\n');
+		for (const kind of ['del', 'add'] as const) {
+			expect(line(kind, 'export function').reformatted).toBeFalsy();
+			// the whole line is new, the row colour says so
+			expect(line(kind, 'export function').spans).toBeUndefined();
+		}
+		expect(file.changes?.formattingOnly).toBe(false);
 	});
 });

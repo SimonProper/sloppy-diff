@@ -30,15 +30,7 @@ function changed(r: Result, file: string) {
 		.filter((l) => l.kind !== 'ctx');
 }
 
-const FILES = [
-	'src/cart.ts',
-	'src/format.ts',
-	'src/label.ts',
-	'NOTES.txt',
-	'src/util.ts',
-	'src/helpers.ts',
-	'src/math.ts'
-];
+const FILES = ['src/cart.ts', 'src/format.ts', 'src/label.ts', 'NOTES.txt', 'src/util.ts'];
 
 export const CHECKS: Check[] = [
 	// lines
@@ -51,8 +43,7 @@ export const CHECKS: Check[] = [
 			if (f.changes) return 'ran the change engine';
 			const lines = f.hunks.flatMap((h) => h.lines);
 			if (lines.some((l) => l.spans)) return 'a line has highlighted pieces';
-			if (lines.some((l) => l.moved)) return 'a line is marked as moved';
-			if (lines.some((l) => l.moveLabel)) return 'a line has a move label';
+			if (lines.some((l) => l.reformatted)) return 'a line is marked as reformatted';
 			if (lines.some((l) => l.html?.includes('novel'))) return 'markup contains novel';
 			return true;
 		}
@@ -85,23 +76,18 @@ export const CHECKS: Check[] = [
 	{
 		mode: 'tokens',
 		file: 'src/cart.ts',
-		label: 'describe() moving to the top is recognised on both sides',
+		label: 'describe() moving to the top is a removal and an addition',
 		run: (r) => {
 			const added = r.line('src/cart.ts', 'add', 'export function describe');
 			const removed = r.line('src/cart.ts', 'del', 'export function describe');
-			return all(
-				same(added.moved, true),
-				same(removed.moved, true),
-				/^moved from line \d+$/.test(added.moveLabel ?? '') ? true : `label: ${added.moveLabel}`,
-				/^moved to line \d+$/.test(removed.moveLabel ?? '') ? true : `label: ${removed.moveLabel}`
-			);
+			return all(same(added.reformatted, undefined), same(removed.reformatted, undefined));
 		}
 	},
 	{
 		mode: 'tokens',
 		file: 'src/cart.ts',
-		label: 'is neither formatting only nor moved only',
-		run: (r) => same(r.file('src/cart.ts').changes, { formattingOnly: false, movedOnly: false })
+		label: 'is not formatting only',
+		run: (r) => same(r.file('src/cart.ts').changes, { formattingOnly: false })
 	},
 	{
 		mode: 'tokens',
@@ -111,19 +97,9 @@ export const CHECKS: Check[] = [
 			all(
 				same(r.file('src/format.ts').changes?.formattingOnly, true),
 				same(
-					changed(r, 'src/format.ts').every((l) => l.moved),
+					changed(r, 'src/format.ts').every((l) => l.reformatted),
 					true
 				)
-			)
-	},
-	{
-		mode: 'tokens',
-		file: 'src/format.ts',
-		label: "a re-wrap isn't a move, so there's no move label",
-		run: (r) =>
-			same(
-				changed(r, 'src/format.ts').some((l) => l.moveLabel),
-				false
 			)
 	},
 	{
@@ -149,48 +125,20 @@ export const CHECKS: Check[] = [
 	{
 		mode: 'tokens',
 		file: 'src/util.ts',
-		label: 'clamp() moving to the bottom is recognised, with labels pointing both ways',
-		run: (r) => {
-			const removed = r.line('src/util.ts', 'del', 'export function clamp');
-			const added = r.line('src/util.ts', 'add', 'export function clamp');
-			return all(
-				same(removed.moveLabel, `moved to line ${added.new}`),
-				same(added.moveLabel, `moved from line ${removed.old}`),
-				same(
-					changed(r, 'src/util.ts').every((l) => l.moved || !l.text.trim()),
-					true
-				)
-			);
-		}
+		label: 'the re-indented return has nothing new, the if around it is new',
+		run: (r) =>
+			all(
+				same(r.line('src/util.ts', 'del', 'return Math.min').reformatted, true),
+				same(r.line('src/util.ts', 'add', 'return Math.min').reformatted, true),
+				same(r.line('src/util.ts', 'add', 'Number.isFinite').reformatted, undefined),
+				same(r.line('src/util.ts', 'add', 'return min;').reformatted, undefined)
+			)
 	},
 	{
 		mode: 'tokens',
 		file: 'src/util.ts',
-		label: 'counts as moved only, not formatting',
-		run: (r) => same(r.file('src/util.ts').changes, { formattingOnly: false, movedOnly: true })
-	},
-	{
-		mode: 'tokens',
-		file: 'src/helpers.ts',
-		label: 'double() moving out points at src/math.ts',
-		run: (r) =>
-			same(
-				r.line('src/helpers.ts', 'del', 'export function double').moveLabel,
-				'moved to src/math.ts:1'
-			)
-	},
-	{
-		mode: 'tokens',
-		file: 'src/math.ts',
-		label: 'double() arriving points back at src/helpers.ts',
-		run: (r) =>
-			all(
-				same(
-					r.line('src/math.ts', 'add', 'export function double').moveLabel,
-					'moved from src/helpers.ts:1'
-				),
-				same(r.file('src/math.ts').changes?.movedOnly, true)
-			)
+		label: 'is not formatting only',
+		run: (r) => same(r.file('src/util.ts').changes, { formattingOnly: false })
 	}
 ];
 

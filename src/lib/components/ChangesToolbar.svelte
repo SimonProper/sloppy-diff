@@ -5,9 +5,7 @@
 
 	interface Summary {
 		mode: ChangeMode;
-		moved: number;
 		formattingOnly: number;
-		movedOnly: number;
 	}
 
 	interface Props {
@@ -24,11 +22,9 @@
 		{
 			mode: 'tokens',
 			label: 'Tokens',
-			title: 'Highlight the changed tokens inside lines, and find moved and reformatted code'
+			title: 'Highlight the changed tokens inside lines, and find reformatted code'
 		}
 	];
-
-	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 </script>
 
 <div class="flex items-center justify-between gap-4 px-1">
@@ -37,9 +33,6 @@
 			Whole lines, as git reports them
 		{:else}
 			Changed tokens within lines
-			{#if summary?.moved}
-				· <span class="text-move">{plural(summary.moved, 'moved block')}</span>
-			{/if}
 			{#if summary?.formattingOnly}
 				· <span class="text-mod">{summary.formattingOnly} formatting only</span>
 			{/if}

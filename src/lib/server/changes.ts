@@ -7,287 +7,49 @@ import { detectLanguage, tokenRanges, type Language } from './highlight';
  * stays the backbone (hunks, line numbers, guide ids), this only adds `spans`
  * for the new pieces of a line and flags lines where nothing is new.
  *
- * 1. Moves: runs of removed and added lines that match anywhere in the diff,
- *    ignoring indentation where it carries no meaning, are moved code. Like
- *    git's --color-moved.
- * 2. Tokens: within each block of removed and added lines, twinkleplop's
+ * 1. Tokens: within each block of removed and added lines, twinkleplop's
  *    tokens are compared, so a rename or a changed argument lights up as a
- *    whole token, never half a word.
- * 3. Formatting: a file whose code reads the same token for token, context
+ *    whole token, never half a word. Indentation isn't a token where it
+ *    carries no meaning, so a re-indented line has nothing new.
+ * 2. Formatting: a file whose code reads the same token for token, context
  *    included, was only reformatted. Only claimed for languages where the
  *    whitespace between tokens means nothing.
  *
- * Every false "moved" or "formatting only" hides a real change from the
+ * Moved code stays a removal and an addition, as on GitHub: telling a move
+ * from two files sharing a line took more guessing than it was worth. Every
+ * false "reformatted" or "formatting only" hides a real change from the
  * reviewer, so when in doubt a line stays a change.
  */
 
 export interface ChangeSummary {
 	mode: ChangeMode;
-	/** blocks of code that moved */
-	moved: number;
 	/** files with nothing new in them */
 	formattingOnly: number;
-	movedOnly: number;
 }
 
 export function annotateChanges(files: DiffFile[], mode: ChangeMode): ChangeSummary {
-	const summary: ChangeSummary = { mode, moved: 0, formattingOnly: 0, movedOnly: 0 };
+	const summary: ChangeSummary = { mode, formattingOnly: 0 };
 	if (mode === 'lines') return summary;
 
-	// lockfiles and the like are noise, and their repetition is what makes moves expensive
+	// lockfiles and the like are noise, comparing their tokens says nothing
 	const targets = files.filter((f) => !f.binary && f.hunks.length > 0 && !isGenerated(f));
-	summary.moved = detectMoves(targets);
-
 	for (const file of targets) {
 		const lang = detectLanguage(file.newPath);
 		for (const hunk of file.hunks) {
 			for (const { dels, adds } of blocks(hunk)) {
-				// moved lines are settled, and a block that only adds or only removes has nothing to compare
-				const a = dels.filter((l) => !l.moved);
-				const b = adds.filter((l) => !l.moved);
-				if (a.length && b.length) compare(a, b, lang);
+				// a block that only adds or only removes has nothing to compare
+				if (dels.length && adds.length) compare(dels, adds, lang);
 			}
 		}
 
-		const changed = changedLines(file);
-		const quiet = changed.length > 0 && changed.every((l) => l.moved || !l.text.trim());
-		const movedOnly = quiet && changed.some((l) => l.moveLabel);
-		const formattingOnly = !movedOnly && onlyWhitespace(file, lang);
+		const formattingOnly = onlyWhitespace(file, lang);
 		// a reformatted file has nothing new anywhere, even where blocks didn't line up
-		if (formattingOnly) for (const line of changed) settle(line, []);
+		if (formattingOnly) for (const line of changedLines(file)) settle(line, []);
 
-		file.changes = { formattingOnly, movedOnly };
+		file.changes = { formattingOnly };
 		if (formattingOnly) summary.formattingOnly++;
-		if (movedOnly) summary.movedOnly++;
 	}
 	return summary;
-}
-
-// ---------------------------------------------------------------------------
-// moves
-
-interface Entry {
-	line: DiffLine;
-	file: DiffFile;
-	key: string;
-	/** letters and digits, so a block of braces never counts as a move */
-	weight: number;
-	/** consecutive removed (or added) lines share a run, matches never cross runs */
-	run: number;
-	/** which change block it sits in */
-	block: number;
-	/** its place among the block's removed (or added) lines */
-	index: number;
-	/** part of an import, which moving between files says nothing about */
-	import: boolean;
-}
-
-// a move needs some substance: two lines with 10 letters or digits, or one with 20
-const MIN_WEIGHT_BLOCK = 10;
-const MIN_WEIGHT_LINE = 20;
-// a line added more often than this (`"dev": true,` in a lockfile) says nothing about
-// where it came from, and matching every copy against every other is quadratic
-const MAX_COPIES = 8;
-// a line that reads almost the same as a line across its own block was edited in place,
-// that it also exists somewhere else (markup repeated across components) says nothing
-const SIMILAR = 0.6;
-// beyond this many lines a move is too long to be a coincidence, and too costly to doubt
-const MAX_DOUBTED = 4;
-
-const substantial = (length: number, weight: number) =>
-	(length >= 2 && weight >= MIN_WEIGHT_BLOCK) || weight >= MIN_WEIGHT_LINE;
-
-/** Words (letters and digits) of both lines in the same order, weighed by length. */
-function similar(a: Entry, b: Entry): boolean {
-	const lo = Math.min(a.weight, b.weight);
-	const hi = Math.max(a.weight, b.weight);
-	if (!lo || (2 * lo) / (lo + hi) < SIMILAR) return false;
-	const words = (e: Entry) => e.key.match(/[\p{L}\p{N}]+/gu) ?? [];
-	const wa = words(a);
-	const [ma] = match(wa, words(b));
-	const shared = wa.reduce((sum, w, i) => (ma[i] >= 0 ? sum + w.length : sum), 0);
-	return (2 * shared) / (a.weight + b.weight) >= SIMILAR;
-}
-
-function detectMoves(files: DiffFile[]): number {
-	const dels: Entry[] = [];
-	const adds: Entry[] = [];
-	let run = 0;
-	let block = 0;
-
-	for (const file of files) {
-		const lang = detectLanguage(file.newPath);
-		// where indentation carries meaning, re-indented code isn't the same code
-		const key = (text: string) =>
-			lang && INDENT_SENSITIVE.has(lang) ? text.trimEnd() : text.trim();
-		for (const hunk of file.hunks) {
-			const imported = importLines(hunk, lang);
-			let last: DiffLine['kind'] | null = null;
-			let index = { del: 0, add: 0 };
-			for (const line of hunk.lines) {
-				if (line.kind === 'ctx') {
-					if (last !== 'ctx') block++;
-					index = { del: 0, add: 0 };
-				} else {
-					if (line.kind !== last) run++;
-					const k = key(line.text);
-					const entry = {
-						line,
-						file,
-						key: k,
-						weight: k.replace(/[^\p{L}\p{N}]/gu, '').length,
-						run,
-						block,
-						index: index[line.kind]++,
-						import: imported.has(line)
-					};
-					(line.kind === 'del' ? dels : adds).push(entry);
-				}
-				last = line.kind;
-			}
-			block++;
-		}
-	}
-
-	const addsByKey = new Map<string, number[]>();
-	adds.forEach((entry, i) => {
-		if (!entry.weight) return;
-		const list = addsByKey.get(entry.key) ?? [];
-		list.push(i);
-		addsByKey.set(entry.key, list);
-	});
-	for (const [key, list] of addsByKey) if (list.length > MAX_COPIES) addsByKey.delete(key);
-
-	const before = (list: Entry[], i: number) =>
-		i > 0 && list[i - 1].run === list[i].run ? list[i - 1] : null;
-
-	// every maximal run of matching lines, heaviest first
-	const candidates: { d: number; a: number; length: number; weight: number }[] = [];
-	dels.forEach((del, d) => {
-		for (const a of addsByKey.get(del.key) ?? []) {
-			const pd = before(dels, d);
-			const pa = before(adds, a);
-			// not where the run starts, unless the line before can't start one (a blank or `}`)
-			if (pd && pa && pd.key === pa.key && pd.weight > 0 && addsByKey.has(pd.key)) continue;
-
-			let length = 0;
-			let weight = 0;
-			while (
-				d + length < dels.length &&
-				a + length < adds.length &&
-				dels[d + length].run === del.run &&
-				adds[a + length].run === adds[a].run &&
-				dels[d + length].key === adds[a + length].key
-			) {
-				weight += dels[d + length].weight;
-				length++;
-			}
-			if (substantial(length, weight)) candidates.push({ d, a, length, weight });
-		}
-	});
-	candidates.sort((x, y) => y.weight - x.weight);
-
-	const byBlock = new Map<number, Entry[]>();
-	for (const entry of [...dels, ...adds]) {
-		const list = byBlock.get(entry.block) ?? [];
-		list.push(entry);
-		byBlock.set(entry.block, list);
-	}
-	const used = new Set<DiffLine>();
-	const edited = (entry: Entry) =>
-		byBlock
-			.get(entry.block)!
-			.some((o) => o.line.kind !== entry.line.kind && !used.has(o.line) && similar(entry, o));
-	let moves = 0;
-	for (const { d, a, length } of candidates) {
-		const from = dels.slice(d, d + length);
-		const to = adds.slice(a, a + length);
-		const both = [...from, ...to];
-		if (both.some((e) => used.has(e.line))) continue;
-		// a match into another block has to be more than lines edited where they stand, and
-		// more than imports: two files using the same thing isn't code going from one to the other
-		if (from[0].block !== to[0].block) {
-			const across = from[0].file !== to[0].file;
-			const short = length <= MAX_DOUBTED;
-			const unexplained = (side: Entry[]) => {
-				const rest = side.filter((e) => !(across && e.import) && !(short && edited(e)));
-				return substantial(
-					rest.length,
-					rest.reduce((sum, e) => sum + e.weight, 0)
-				);
-			};
-			if (!unexplained(from) || !unexplained(to)) continue;
-		}
-		for (const entry of both) {
-			used.add(entry.line);
-			settle(entry.line, []);
-		}
-		// in the same place of the same block it was re-indented, there's nowhere to point.
-		// Anywhere else in the block it changed order, which is a move
-		if (from[0].block === to[0].block && from[0].index === to[0].index) continue;
-		from[0].line.moveLabel = `moved to ${where(to[0], from[0].file)}`;
-		to[0].line.moveLabel = `moved from ${where(from[0], to[0].file)}`;
-		moves++;
-	}
-	return moves;
-}
-
-/** "line 12" in the same file, "src/other.ts:12" elsewhere. */
-function where(entry: Entry, from: DiffFile): string {
-	const number = entry.line.kind === 'del' ? entry.line.old : entry.line.new;
-	if (entry.file === from) return `line ${number}`;
-	const path = entry.line.kind === 'del' ? entry.file.oldPath : entry.file.newPath;
-	return `${path}:${number}`;
-}
-
-const JS_IMPORT = /^(import\b|export\b[^=]*\bfrom\s*['"]|(const|let|var)\s[^=]*=\s*require\()/;
-/** How an import starts, per language. */
-const IMPORTS: Partial<Record<Language, RegExp>> = {
-	javascript: JS_IMPORT,
-	typescript: JS_IMPORT,
-	tsx: JS_IMPORT,
-	svelte: JS_IMPORT,
-	python: /^(import|from)\s+[\w.]+/,
-	go: /^import\b/,
-	rust: /^(pub(\([^)]*\))?\s+)?(use|extern\s+crate)\s/,
-	css: /^@(import|use|forward)\b/
-};
-
-/**
- * The lines of a hunk that are part of an import, one spread over several
- * lines (`import {` up to `} from`) included when the hunk shows where it
- * starts. The old and new side are followed apart, a group can open on one
- * and not the other.
- */
-function importLines(hunk: Hunk, lang: Language | null): Set<DiffLine> {
-	const out = new Set<DiffLine>();
-	const pattern = lang && IMPORTS[lang];
-	if (!pattern) return out;
-	// brackets an import has left open, per side
-	const open = { old: 0, new: 0 };
-	for (const line of hunk.lines) {
-		const sides =
-			line.kind === 'ctx'
-				? (['old', 'new'] as const)
-				: ([line.kind === 'del' ? 'old' : 'new'] as const);
-		const text = line.text.trim();
-		for (const side of sides) {
-			if (!open[side] && !pattern.test(text)) continue;
-			out.add(line);
-			open[side] = Math.max(0, open[side] + brackets(text));
-		}
-	}
-	return out;
-}
-
-/** Opening brackets less closing ones. */
-function brackets(text: string): number {
-	let depth = 0;
-	for (const c of text) {
-		if (c === '{' || c === '(') depth++;
-		else if (c === '}' || c === ')') depth--;
-	}
-	return depth;
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +292,7 @@ function changedLines(file: DiffFile): DiffLine[] {
 }
 
 /**
- * Settles a changed line: nothing new means it only moved or was reformatted,
+ * Settles a changed line: nothing new means it was only reformatted,
  * everything new needs no spans since the row colour already says it, and
  * anything in between keeps its spans, merged across whitespace.
  */
@@ -547,7 +309,7 @@ function settle(line: DiffLine, spans: [number, number][]) {
 	}
 
 	if (merged.length === 0) {
-		line.moved = true;
+		line.reformatted = true;
 		return;
 	}
 	const visible = (s: string) => s.replace(/\s/g, '').length;

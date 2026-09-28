@@ -88,19 +88,17 @@
 				<li class="flex items-center gap-2.5">
 					<span
 						class="rounded-[3px] bg-surface px-1 font-mono text-[11.5px] opacity-50 ring-1 ring-line"
-						>moved line</span
+						>reformatted line</span
 					>
-					<span class="text-muted">changed for git, but moved or reformatted: nothing new</span>
+					<span class="text-muted"
+						>changed for git, but only re-indented or re-wrapped: nothing new</span
+					>
 				</li>
 				<li class="flex items-center gap-2.5">
 					<span class="rounded-md bg-mod/10 px-1.5 py-0.5 text-[10.5px] font-medium text-mod"
 						>formatting only</span
 					>
-					<span class="text-muted">every changed line in the file is moved or reformatted</span>
-				</li>
-				<li class="flex items-center gap-2.5">
-					<span class="rounded-[4px] bg-move/10 px-1 text-[10px] text-move">moved from line 1</span>
-					<span class="text-muted">the start of a block that moved, and where it came from</span>
+					<span class="text-muted">every changed line in the file is reformatted</span>
 				</li>
 			</ul>
 		</div>

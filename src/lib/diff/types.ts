@@ -13,10 +13,8 @@ export interface DiffLine {
 	html?: string;
 	/** [start, end) columns of the pieces that are actually new, when a change engine ran */
 	spans?: [number, number][];
-	/** changed according to git but nothing in it is new: moved, re-indented or re-wrapped */
-	moved?: boolean;
-	/** on the first line of a moved block: where it came from or went, e.g. "moved from line 12" */
-	moveLabel?: string;
+	/** changed according to git but nothing in it is new: re-indented or re-wrapped */
+	reformatted?: boolean;
 }
 
 export interface Hunk {
@@ -38,8 +36,6 @@ export type ChangeMode = 'lines' | 'tokens';
 export interface FileChanges {
 	/** nothing new, the file was only reformatted: re-indented, re-wrapped, respaced */
 	formattingOnly: boolean;
-	/** nothing new, every changed line moved somewhere else */
-	movedOnly: boolean;
 }
 
 export type FileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied';

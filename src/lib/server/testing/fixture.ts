@@ -36,12 +36,9 @@ export function describe(items: Item[]) {
 	'src/label.ts': 'export const label = "café — crème"; export const count = 1;\n',
 	// plain text without a grammar, compared word by word
 	'NOTES.txt': 'Release notes\nAdded discounts to the cart.\n',
-	// a function that moves from the top of the file to the bottom
+	// a body that gets wrapped in an if, so its line is only re-indented
 	'src/util.ts':
-		'export function clamp(value: number, min: number, max: number) {\n\treturn Math.min(Math.max(value, min), max);\n}\n\nexport const A = 1;\nexport const B = 2;\nexport const C = 3;\nexport const D = 4;\nexport const E = 5;\nexport const F = 6;\nexport const G = 7;\nexport const H = 8;\n',
-	// a function that moves to another file
-	'src/helpers.ts':
-		'export function double(value: number) {\n\treturn value * 2;\n}\n\nexport const ONE = 1;\n'
+		'export function clamp(value: number, min: number, max: number) {\n\treturn Math.min(Math.max(value, min), max);\n}\n'
 };
 
 export const AFTER: Record<string, string> = {
@@ -65,9 +62,7 @@ export function subtotal(items: Item[]): number {
 	'src/label.ts': 'export const label = "café — crème"; export const count = 2;\n',
 	'NOTES.txt': 'Release notes (draft)\nAdded line item discounts to the cart.\n',
 	'src/util.ts':
-		'export const A = 1;\nexport const B = 2;\nexport const C = 3;\nexport const D = 4;\nexport const E = 5;\nexport const F = 6;\nexport const G = 7;\nexport const H = 8;\n\nexport function clamp(value: number, min: number, max: number) {\n\treturn Math.min(Math.max(value, min), max);\n}\n',
-	'src/helpers.ts': 'export const ONE = 1;\n',
-	'src/math.ts': 'export function double(value: number) {\n\treturn value * 2;\n}\n'
+		'export function clamp(value: number, min: number, max: number) {\n\tif (Number.isFinite(value)) {\n\t\treturn Math.min(Math.max(value, min), max);\n\t}\n\treturn min;\n}\n'
 };
 
 /** What each fixture file is there to show, in display order. */
@@ -82,9 +77,10 @@ export const ABOUT: { path: string; about: string }[] = [
 		about: 'Changes 1 to 2 after "café — crème", so columns have to count characters.'
 	},
 	{ path: 'NOTES.txt', about: 'Plain text without a grammar, compared word by word.' },
-	{ path: 'src/util.ts', about: 'Moves clamp() from the top of the file to the bottom.' },
-	{ path: 'src/helpers.ts', about: 'Moves double() out of this file into src/math.ts.' },
-	{ path: 'src/math.ts', about: 'New file that receives double() from src/helpers.ts.' }
+	{
+		path: 'src/util.ts',
+		about: 'Wraps the body of clamp() in an if, so its line is only re-indented.'
+	}
 ];
 
 export interface Fixture {

@@ -46,7 +46,7 @@
 	// another commit or change mode starts from its own default, and still toggles
 	let open = $derived(expanded || (!isGenerated(file) && !file.changes?.formattingOnly));
 
-	const MOVED = 'Moved or reformatted, nothing in this line is new';
+	const REFORMATTED = 'Reformatted, nothing in this line is new';
 	/** lines rendered together, each block only once it's near the viewport */
 	const BLOCK = 100;
 	/** height of a row, leading-5; split rows can wrap so theirs is a guess until rendered */
@@ -130,12 +130,6 @@
 				class="shrink-0 rounded-md bg-mod/10 px-1.5 py-0.5 text-[10.5px] font-medium text-mod"
 				title="Only reformatted: the same code with different whitespace or line breaks"
 				>formatting only</span
-			>
-		{:else if file.changes?.movedOnly}
-			<span
-				class="shrink-0 rounded-md bg-move/10 px-1.5 py-0.5 text-[10.5px] font-medium text-move"
-				title="Every changed line moved here from elsewhere, or from here to elsewhere"
-				>moved only</span
 			>
 		{/if}
 		{#if only && hunks.length < file.hunks.length}
@@ -229,8 +223,8 @@
 								<LazyBlock estimate={lines.length * ROW} lazy={virtualize}>
 									{#each lines as line, i (i)}
 										<div
-											class={['row flex', line.kind, line.moved && 'moved']}
-											title={line.moved ? MOVED : undefined}
+											class={['row flex', line.kind, line.reformatted && 'reformatted']}
+											title={line.reformatted ? REFORMATTED : undefined}
 										>
 											<span
 												class="gutter sticky left-0 flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
@@ -262,17 +256,19 @@
 	{@html line.html}{#if line.noNewline}<span
 			class="ml-2 font-sans text-[10px] text-faint select-none"
 			title="No newline at end of file">no newline</span
-		>{/if}{#if line.moveLabel}<span
-			class="ml-3 rounded-[4px] bg-move/10 px-1 font-sans text-[10px] text-move select-none"
-			>{line.moveLabel}</span
 		>{/if}
 {/snippet}
 
 {#snippet cell(line: DiffLine | null, side: 'old' | 'new')}
 	{#if line}
 		<div
-			class={['row flex min-w-0', line.kind, line.moved && 'moved', side === 'old' && 'split-old']}
-			title={line.moved ? MOVED : undefined}
+			class={[
+				'row flex min-w-0',
+				line.kind,
+				line.reformatted && 'reformatted',
+				side === 'old' && 'split-old'
+			]}
+			title={line.reformatted ? REFORMATTED : undefined}
 		>
 			<span
 				class="gutter w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
@@ -327,13 +323,13 @@
 		border-radius: 3px;
 	}
 
-	/* changed according to git, but nothing new: moved, re-indented or re-wrapped */
-	.row.moved.add,
-	.row.moved.del {
+	/* changed according to git, but nothing new: re-indented or re-wrapped */
+	.row.reformatted.add,
+	.row.reformatted.del {
 		background: var(--surface);
 	}
-	.row.moved .text,
-	.row.moved .marker {
+	.row.reformatted .text,
+	.row.reformatted .marker {
 		opacity: 0.5;
 	}
 

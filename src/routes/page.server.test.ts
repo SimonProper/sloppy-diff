@@ -66,9 +66,7 @@ describe('on the fixture as it is', () => {
 			'NOTES.txt',
 			'src/cart.ts',
 			'src/format.ts',
-			'src/helpers.ts',
 			'src/label.ts',
-			'src/math.ts',
 			'src/util.ts'
 		]);
 		// the diff itself isn't recomputed, so its steps don't appear
