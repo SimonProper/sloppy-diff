@@ -666,7 +666,7 @@
 					<CommitCard {commit} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
-					<FileDiff {file} {layout} {virtualize} />
+					<FileDiff {file} {layout} {virtualize} remember={data.repo} />
 				{:else}
 					<!-- the commit list stays, so an empty commit is one step on the way -->
 					<div class="flex flex-col items-center py-16 text-center">{@render nothing()}</div>

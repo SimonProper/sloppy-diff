@@ -3,6 +3,7 @@
 	import type { GuideNote } from '$lib/guide/types';
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
+	import { storedOpen, storeOpen } from '$lib/diff/folds';
 	import { chunk } from '$lib/lazy';
 	import StatusBadge from './StatusBadge.svelte';
 	import ChangeBar from './ChangeBar.svelte';
@@ -27,6 +28,8 @@
 		layout?: Layout;
 		/** only render lines near the viewport, for diffs too big to render whole */
 		virtualize?: boolean;
+		/** where opening and closing the file is remembered, by path, not remembered when absent */
+		remember?: string;
 	}
 
 	let {
@@ -39,12 +42,22 @@
 		inSection = false,
 		expanded = false,
 		layout = 'unified',
-		virtualize = false
+		virtualize = false,
+		remember
 	}: Props = $props();
 
-	// lockfiles and formatting-only files start collapsed. Derived, so a file reused for
-	// another commit or change mode starts from its own default, and still toggles
-	let open = $derived(expanded || (!isGenerated(file) && !file.changes?.formattingOnly));
+	// lockfiles and formatting-only files start collapsed, unless the reader opened them
+	// before. Derived, so a file reused for another commit or change mode starts from its
+	// own default or what was stored, and still toggles
+	const startsOpen = $derived(expanded || (!isGenerated(file) && !file.changes?.formattingOnly));
+	let open = $derived(
+		(remember ? storedOpen(remember, displayPath(file)) : undefined) ?? startsOpen
+	);
+
+	function toggle() {
+		open = !open;
+		if (remember) storeOpen(remember, displayPath(file), open, startsOpen);
+	}
 
 	const REFORMATTED = 'Reformatted, nothing in this line is new';
 	/** lines rendered together, each block only once it's near the viewport */
@@ -105,7 +118,7 @@
 			class="-ml-1 grid size-6 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
 			aria-expanded={open}
 			aria-label={open ? 'Collapse file' : 'Expand file'}
-			onclick={() => (open = !open)}
+			onclick={toggle}
 		>
 			<svg
 				viewBox="0 0 16 16"

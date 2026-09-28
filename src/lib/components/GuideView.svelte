@@ -69,9 +69,8 @@
 	// reviewed sections are a per-browser convenience, so localStorage is enough. Keyed by
 	// when the guide was written too: a regenerated guide's sections share ids with the
 	// old one's, and must not show as reviewed with their diffs hidden
-	const storageKey = $derived(
-		`sloppy-diff:reviewed:${guide.repo}:${guide.start}..${guide.stop}:${guide.createdAt}`
-	);
+	const guideKey = $derived(`${guide.repo}:${guide.start}..${guide.stop}:${guide.createdAt}`);
+	const storageKey = $derived(`sloppy-diff:reviewed:${guideKey}`);
 	// read while rendering, so reviewed steps are collapsed before the page scrolls to a step
 	let reviewed = $derived(load(storageKey));
 
@@ -384,6 +383,7 @@
 							inSection
 							{layout}
 							{virtualize}
+							remember="{guideKey}:{section.id}"
 						/>
 					{/each}
 				{/if}
