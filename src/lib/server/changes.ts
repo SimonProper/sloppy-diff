@@ -78,6 +78,8 @@ interface Entry {
 	block: number;
 	/** its place among the block's removed (or added) lines */
 	index: number;
+	/** part of an import, which moving between files says nothing about */
+	import: boolean;
 }
 
 // a move needs some substance: two lines with 10 letters or digits, or one with 20
@@ -86,6 +88,26 @@ const MIN_WEIGHT_LINE = 20;
 // a line added more often than this (`"dev": true,` in a lockfile) says nothing about
 // where it came from, and matching every copy against every other is quadratic
 const MAX_COPIES = 8;
+// a line that reads almost the same as a line across its own block was edited in place,
+// that it also exists somewhere else (markup repeated across components) says nothing
+const SIMILAR = 0.6;
+// beyond this many lines a move is too long to be a coincidence, and too costly to doubt
+const MAX_DOUBTED = 4;
+
+const substantial = (length: number, weight: number) =>
+	(length >= 2 && weight >= MIN_WEIGHT_BLOCK) || weight >= MIN_WEIGHT_LINE;
+
+/** Words (letters and digits) of both lines in the same order, weighed by length. */
+function similar(a: Entry, b: Entry): boolean {
+	const lo = Math.min(a.weight, b.weight);
+	const hi = Math.max(a.weight, b.weight);
+	if (!lo || (2 * lo) / (lo + hi) < SIMILAR) return false;
+	const words = (e: Entry) => e.key.match(/[\p{L}\p{N}]+/gu) ?? [];
+	const wa = words(a);
+	const [ma] = match(wa, words(b));
+	const shared = wa.reduce((sum, w, i) => (ma[i] >= 0 ? sum + w.length : sum), 0);
+	return (2 * shared) / (a.weight + b.weight) >= SIMILAR;
+}
 
 function detectMoves(files: DiffFile[]): number {
 	const dels: Entry[] = [];
@@ -99,6 +121,7 @@ function detectMoves(files: DiffFile[]): number {
 		const key = (text: string) =>
 			lang && INDENT_SENSITIVE.has(lang) ? text.trimEnd() : text.trim();
 		for (const hunk of file.hunks) {
+			const imported = importLines(hunk, lang);
 			let last: DiffLine['kind'] | null = null;
 			let index = { del: 0, add: 0 };
 			for (const line of hunk.lines) {
@@ -115,7 +138,8 @@ function detectMoves(files: DiffFile[]): number {
 						weight: k.replace(/[^\p{L}\p{N}]/gu, '').length,
 						run,
 						block,
-						index: index[line.kind]++
+						index: index[line.kind]++,
+						import: imported.has(line)
 					};
 					(line.kind === 'del' ? dels : adds).push(entry);
 				}
@@ -158,19 +182,42 @@ function detectMoves(files: DiffFile[]): number {
 				weight += dels[d + length].weight;
 				length++;
 			}
-			const substantial = (length >= 2 && weight >= MIN_WEIGHT_BLOCK) || weight >= MIN_WEIGHT_LINE;
-			if (substantial) candidates.push({ d, a, length, weight });
+			if (substantial(length, weight)) candidates.push({ d, a, length, weight });
 		}
 	});
 	candidates.sort((x, y) => y.weight - x.weight);
 
+	const byBlock = new Map<number, Entry[]>();
+	for (const entry of [...dels, ...adds]) {
+		const list = byBlock.get(entry.block) ?? [];
+		list.push(entry);
+		byBlock.set(entry.block, list);
+	}
 	const used = new Set<DiffLine>();
+	const edited = (entry: Entry) =>
+		byBlock
+			.get(entry.block)!
+			.some((o) => o.line.kind !== entry.line.kind && !used.has(o.line) && similar(entry, o));
 	let moves = 0;
 	for (const { d, a, length } of candidates) {
 		const from = dels.slice(d, d + length);
 		const to = adds.slice(a, a + length);
 		const both = [...from, ...to];
 		if (both.some((e) => used.has(e.line))) continue;
+		// a match into another block has to be more than lines edited where they stand, and
+		// more than imports: two files using the same thing isn't code going from one to the other
+		if (from[0].block !== to[0].block) {
+			const across = from[0].file !== to[0].file;
+			const short = length <= MAX_DOUBTED;
+			const unexplained = (side: Entry[]) => {
+				const rest = side.filter((e) => !(across && e.import) && !(short && edited(e)));
+				return substantial(
+					rest.length,
+					rest.reduce((sum, e) => sum + e.weight, 0)
+				);
+			};
+			if (!unexplained(from) || !unexplained(to)) continue;
+		}
 		for (const entry of both) {
 			used.add(entry.line);
 			settle(entry.line, []);
@@ -191,6 +238,56 @@ function where(entry: Entry, from: DiffFile): string {
 	if (entry.file === from) return `line ${number}`;
 	const path = entry.line.kind === 'del' ? entry.file.oldPath : entry.file.newPath;
 	return `${path}:${number}`;
+}
+
+const JS_IMPORT = /^(import\b|export\b[^=]*\bfrom\s*['"]|(const|let|var)\s[^=]*=\s*require\()/;
+/** How an import starts, per language. */
+const IMPORTS: Partial<Record<Language, RegExp>> = {
+	javascript: JS_IMPORT,
+	typescript: JS_IMPORT,
+	tsx: JS_IMPORT,
+	svelte: JS_IMPORT,
+	python: /^(import|from)\s+[\w.]+/,
+	go: /^import\b/,
+	rust: /^(pub(\([^)]*\))?\s+)?(use|extern\s+crate)\s/,
+	css: /^@(import|use|forward)\b/
+};
+
+/**
+ * The lines of a hunk that are part of an import, one spread over several
+ * lines (`import {` up to `} from`) included when the hunk shows where it
+ * starts. The old and new side are followed apart, a group can open on one
+ * and not the other.
+ */
+function importLines(hunk: Hunk, lang: Language | null): Set<DiffLine> {
+	const out = new Set<DiffLine>();
+	const pattern = lang && IMPORTS[lang];
+	if (!pattern) return out;
+	// brackets an import has left open, per side
+	const open = { old: 0, new: 0 };
+	for (const line of hunk.lines) {
+		const sides =
+			line.kind === 'ctx'
+				? (['old', 'new'] as const)
+				: ([line.kind === 'del' ? 'old' : 'new'] as const);
+		const text = line.text.trim();
+		for (const side of sides) {
+			if (!open[side] && !pattern.test(text)) continue;
+			out.add(line);
+			open[side] = Math.max(0, open[side] + brackets(text));
+		}
+	}
+	return out;
+}
+
+/** Opening brackets less closing ones. */
+function brackets(text: string): number {
+	let depth = 0;
+	for (const c of text) {
+		if (c === '{' || c === '(') depth++;
+		else if (c === '}' || c === ')') depth--;
+	}
+	return depth;
 }
 
 // ---------------------------------------------------------------------------

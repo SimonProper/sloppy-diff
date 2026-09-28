@@ -142,6 +142,145 @@ describe('moved lines', () => {
 		);
 	});
 
+	test('a line edited in place is not a move, even when another file has it too', () => {
+		const patch = [
+			'diff --git a/Field.svelte b/Field.svelte\n--- a/Field.svelte\n+++ b/Field.svelte',
+			'@@ -1,3 +1,5 @@',
+			'-<div class="relative my-2 {div_css}">',
+			'-    <label class="whitespace-nowrap">{label}</label>',
+			'+<div class="relative {div_css}">',
+			'+    {#if label}',
+			'+        <div class="flex items-center gap-1 py-1">',
+			'+            <label for={id} class="whitespace-nowrap">{label}</label>',
+			'     <slot />',
+			// had the new line, and loses it
+			'diff --git a/Select.svelte b/Select.svelte\n--- a/Select.svelte\n+++ b/Select.svelte',
+			'@@ -1,3 +1,2 @@',
+			'-<label for={id} class="whitespace-nowrap">{label}</label>',
+			'-<select {id}>',
+			'+<Field {label} {id}>',
+			' </select>',
+			// gains the old line
+			'diff --git a/Checkbox.svelte b/Checkbox.svelte\n--- a/Checkbox.svelte\n+++ b/Checkbox.svelte',
+			'@@ -1 +1,2 @@',
+			' <input type="checkbox" />',
+			'+<label class="whitespace-nowrap">{label}</label>'
+		].join('\n');
+		const files = parseDiff(patch + '\n');
+		annotateChanges(files, 'tokens');
+		const lines = files[0].hunks.flatMap((h) => h.lines);
+		const line = (kind: 'add' | 'del') =>
+			lines.find((l) => l.kind === kind && l.text.includes('<label'))!;
+
+		expect(line('add').moveLabel).toBeUndefined();
+		expect(line('add').moved).toBeFalsy();
+		expect(line('del').moveLabel).toBeUndefined();
+		// compared with the label it replaced, so the label itself isn't new
+		expect(novel(line('add'))).toContain('for={id}');
+		expect(novel(line('add')).join('')).not.toContain('whitespace-nowrap');
+	});
+
+	describe('imports', () => {
+		/** A patch over several files, each `[path, hunk lines]`. */
+		function patch(...files: [string, string[]][]) {
+			const text = files
+				.map(([f, lines]) =>
+					[`diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}`, ...lines].join('\n')
+				)
+				.join('\n');
+			const parsed = parseDiff(text + '\n');
+			annotateChanges(parsed, 'tokens');
+			const lines = parsed.flatMap((f) => f.hunks.flatMap((h) => h.lines));
+			return (kind: 'add' | 'del', text: string) =>
+				lines.find((l) => l.kind === kind && l.text.includes(text))!;
+		}
+
+		test('an import dropped in one file and added in another is not a move', () => {
+			const line = patch(
+				[
+					'src/a.ts',
+					[
+						'@@ -1,3 +1,2 @@',
+						"-import { formatPrice } from '$lib/format';",
+						" import { cart } from './cart';",
+						' cart();'
+					]
+				],
+				[
+					'src/b.svelte',
+					[
+						'@@ -1,3 +1,4 @@',
+						' <script lang="ts">',
+						"+\timport { formatPrice } from '$lib/format';",
+						" \timport { page } from '$app/state';",
+						' </script>'
+					]
+				]
+			);
+			expect(line('del', 'formatPrice').moveLabel).toBeUndefined();
+			expect(line('add', 'formatPrice').moveLabel).toBeUndefined();
+			expect(line('add', 'formatPrice').moved).toBeFalsy();
+		});
+
+		test('nor is an import spread over several lines', () => {
+			const names = ['\tformatPrice,', '\tformatQuantity,', '\tformatDiscount'];
+			const line = patch(
+				[
+					'src/a.ts',
+					[
+						'@@ -1,6 +1,1 @@',
+						'-import {',
+						...names.map((n) => `-${n}`),
+						"-} from '$lib/format';",
+						' cart();'
+					]
+				],
+				[
+					'src/c.ts',
+					[
+						'@@ -1 +1,6 @@',
+						' cart();',
+						'+import {',
+						...names.map((n) => `+${n}`),
+						"+} from '$lib/format';"
+					]
+				]
+			);
+			expect(line('del', 'formatQuantity').moved).toBeFalsy();
+			expect(line('add', 'formatQuantity').moved).toBeFalsy();
+		});
+
+		test('code moved to another file with its imports is still a move', () => {
+			const code = [
+				"import { formatPrice } from '$lib/format';",
+				'',
+				'export function describe(items: Item[]) {',
+				'\treturn items.map(formatPrice).join(", ");',
+				'}'
+			];
+			const line = patch(
+				['src/a.ts', ['@@ -1,6 +1,1 @@', ...code.map((l) => `-${l}`), ' cart();']],
+				['src/c.ts', ['@@ -1 +1,6 @@', ' cart();', ...code.map((l) => `+${l}`)]]
+			);
+			expect(line('add', 'formatPrice } from').moveLabel).toBe('moved from src/a.ts:1');
+			expect(line('add', 'export function describe').moved).toBe(true);
+		});
+
+		test('imports reordered within a file are still moves', () => {
+			const line = patch([
+				'src/a.ts',
+				[
+					'@@ -1,3 +1,3 @@',
+					"-import { formatPrice } from '$lib/format';",
+					" import { cart } from './cart';",
+					"+import { formatPrice } from '$lib/format';",
+					' cart();'
+				]
+			]);
+			expect(line('add', 'formatPrice').moveLabel).toBe('moved from line 1');
+		});
+	});
+
 	test('a lockfile full of repeated lines stays fast', () => {
 		const group = (i: number) => [
 			`"pkg-${i}": {`,
