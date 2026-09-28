@@ -1,19 +1,9 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import MarkdownIt from 'markdown-it';
 import { env } from '$env/dynamic/private';
 import type { DiffFile } from '$lib/diff/types';
 import type { Guide, GuideDraft, GuideListing, GuideSection } from '$lib/guide/types';
-
-// raw HTML in model output is shown as text, never rendered. Images are off: one
-// would load as soon as the guide opens, a way to send data out of a prompt injection
-const markdown = new MarkdownIt({ html: false, linkify: true }).disable('image');
-// links open in a new tab instead of navigating the app away
-markdown.renderer.rules.link_open = (tokens, i, options, _env, self) => {
-	tokens[i].attrSet('target', '_blank');
-	tokens[i].attrSet('rel', 'noopener noreferrer');
-	return self.renderToken(tokens, i, options);
-};
+import { markdown } from './markdown';
 
 function guidesDir(): string {
 	return resolve(env.GUIDES_DIR || join(process.cwd(), '.guides'));
@@ -23,7 +13,7 @@ function guidesDir(): string {
  * Guides live outside the reviewed repo, one folder per repo named after its
  * path the way Claude Code names its project folders.
  */
-function repoDir(root: string): string {
+export function repoDir(root: string): string {
 	return join(guidesDir(), root.replace(/[^a-zA-Z0-9]/g, '-'));
 }
 

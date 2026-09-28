@@ -1,12 +1,11 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { relative } from 'node:path';
-import { createInterface } from 'node:readline';
 import { env } from '$env/dynamic/private';
 import { parseDiff } from '$lib/diff/parse';
 import type { DiffFile } from '$lib/diff/types';
 import type { Guide, GuideDraft, GuideEvent } from '$lib/guide/types';
-import { commitLog, errorMessage, readDiff } from './git';
+import { describeTool, runClaude } from './claude';
+import { commitLog, readDiff } from './git';
 import { reconcile, saveGuide } from './guides';
+import { jobQueue, type Job } from './jobs';
 
 /** The structured output Claude must return. */
 const GUIDE_SCHEMA = {
@@ -53,63 +52,25 @@ const DISALLOWED_TOOLS = 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch';
 const MAX_DIFF_CHARS = 400_000;
 const SHORT_HUNK_LINES = 30;
 
-interface Job {
-	key: string;
-	events: GuideEvent[];
-	listeners: Set<(event: GuideEvent) => void>;
-	finished: boolean;
-	child?: ChildProcess;
-}
-
-// kept on globalThis so a dev server module reload doesn't orphan running jobs
-const store = globalThis as { __guideJobs?: Map<string, Job> };
-const jobs = (store.__guideJobs ??= new Map<string, Job>());
+const jobs = jobQueue<GuideEvent>('guides');
+const emit = jobs.emit;
 
 const jobKey = (root: string, start: string, stop: string) => `${root}\0${start}..${stop}`;
 
-export function getJob(root: string, start: string, stop: string): Job | undefined {
+export function getJob(root: string, start: string, stop: string): Job<GuideEvent> | undefined {
 	return jobs.get(jobKey(root, start, stop));
 }
 
 export function cancelJob(root: string, start: string, stop: string) {
-	const job = getJob(root, start, stop);
-	if (job && !job.finished) {
-		job.child?.kill();
-		emit(job, { type: 'error', message: 'Cancelled' });
-	}
-}
-
-/** How long a finished job's events stay around for a page that reconnects. */
-const KEEP_FINISHED_MS = 5 * 60_000;
-
-function emit(job: Job, event: GuideEvent) {
-	if (job.finished) return;
-	job.events.push(event);
-	if (event.type === 'done' || event.type === 'error') {
-		job.finished = true;
-		setTimeout(() => {
-			if (jobs.get(job.key) === job) jobs.delete(job.key);
-		}, KEEP_FINISHED_MS).unref();
-	}
-	for (const listener of job.listeners) listener(event);
+	jobs.cancel(jobKey(root, start, stop));
 }
 
 /** Starts generating a guide for start..stop (resolved shas), or joins the running job. */
-export function startGuide(root: string, start: string, stop: string): Job {
-	const key = jobKey(root, start, stop);
-	const running = jobs.get(key);
-	if (running && !running.finished) return running;
-
-	const job: Job = { key, events: [], listeners: new Set(), finished: false };
-	jobs.set(key, job);
-	run(job, root, start, stop).catch((error) => {
-		job.child?.kill();
-		emit(job, { type: 'error', message: errorMessage(error) });
-	});
-	return job;
+export function startGuide(root: string, start: string, stop: string): Job<GuideEvent> {
+	return jobs.start(jobKey(root, start, stop), (job) => run(job, root, start, stop));
 }
 
-async function run(job: Job, root: string, start: string, stop: string) {
+async function run(job: Job<GuideEvent>, root: string, start: string, stop: string) {
 	emit(job, { type: 'status', text: 'Reading commits and diff' });
 	const [log, patch] = await Promise.all([
 		commitLog(root, start, stop),
@@ -136,33 +97,20 @@ async function run(job: Job, root: string, start: string, stop: string) {
 	];
 	if (env.GUIDE_MODEL) args.push('--model', env.GUIDE_MODEL);
 
-	const child = spawn(env.CLAUDE_BIN || 'claude', args, {
+	const claude = runClaude({
+		args,
+		input: prompt(start, stop, log, files),
 		cwd: root,
-		stdio: ['pipe', 'pipe', 'pipe']
+		onSpawnError: (error) =>
+			emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
 	});
+	const child = claude.child;
 	job.child = child;
-	// claude exiting before it reads everything (a bad flag, not signed in) would
-	// otherwise throw EPIPE and take the server down, the exit is reported below
-	child.stdin.on('error', () => {});
-	child.stdin.end(prompt(start, stop, log, files));
-
-	let stderr = '';
-	child.stderr.on('data', (chunk) => (stderr = (stderr + chunk).slice(-2000)));
-	child.on('error', (error) =>
-		emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
-	);
 
 	emit(job, { type: 'status', text: 'Starting Claude Code' });
 	let model = env.GUIDE_MODEL || 'default';
 
-	for await (const line of createInterface({ input: child.stdout })) {
-		let message;
-		try {
-			message = JSON.parse(line);
-		} catch {
-			continue;
-		}
-
+	for await (const message of claude.messages) {
 		if (message.type === 'system' && message.subtype === 'init') {
 			model = message.model ?? model;
 			emit(job, { type: 'status', text: `Claude is reviewing the change (${model})` });
@@ -199,27 +147,9 @@ async function run(job: Job, root: string, start: string, stop: string) {
 		}
 	}
 
-	const code = await new Promise<number | null>((resolve) => {
-		if (child.exitCode !== null) resolve(child.exitCode);
-		child.on('close', resolve);
-		child.on('error', () => resolve(null));
-	});
+	const code = await claude.exited;
 	if (!job.finished) {
-		throw new Error(stderr.trim() || `claude exited with code ${code} before finishing`);
-	}
-}
-
-function describeTool(name: string, input: Record<string, string> = {}, root: string): string {
-	const path = (p?: string) => (p ? relative(root, p) || '.' : '');
-	switch (name) {
-		case 'Read':
-			return `Reading ${path(input.file_path)}`;
-		case 'Grep':
-			return `Searching for ${input.pattern}`;
-		case 'Glob':
-			return `Looking for ${input.pattern}`;
-		default:
-			return name;
+		throw new Error(claude.stderr().trim() || `claude exited with code ${code} before finishing`);
 	}
 }
 
