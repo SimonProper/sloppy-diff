@@ -1,0 +1,57 @@
+{
+	"name": "sloppy-diff",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"engines": {
+		"node": ">=22.12"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"lint": "prettier --check .",
+		"test": "vitest run",
+		"format": "prettier --write ."
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^7.0.1",
+		"@sveltejs/kit": "^2.63.0",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@tailwindcss/vite": "^4.3.0",
+		"@types/markdown-it": "^14.2.0",
+		"@types/node": "^26.6.2",
+		"prettier": "^3.8.3",
+		"prettier-plugin-svelte": "^4.1.0",
+		"prettier-plugin-tailwindcss": "^0.8.0",
+		"svelte": "^5.56.1",
+		"svelte-check": "^4.6.0",
+		"tailwindcss": "^4.3.0",
+		"typescript": "^6.0.3",
+		"vite": "^8.0.16",
+		"vitest": "^5.0.2"
+	},
+	"dependencies": {
+		"@twinkleplop/bash": "^0.1.4",
+		"@twinkleplop/core": "^0.2.1",
+		"@twinkleplop/css": "^0.1.4",
+		"@twinkleplop/go": "^0.1.4",
+		"@twinkleplop/html": "^0.1.4",
+		"@twinkleplop/javascript": "^0.1.4",
+		"@twinkleplop/json": "^0.1.4",
+		"@twinkleplop/markdown": "^0.1.4",
+		"@twinkleplop/python": "^0.1.4",
+		"@twinkleplop/rust": "^0.1.4",
+		"@twinkleplop/sql": "^0.1.4",
+		"@twinkleplop/svelte": "^0.1.4",
+		"@twinkleplop/theme-github": "^0.2.1",
+		"@twinkleplop/toml": "^0.1.4",
+		"@twinkleplop/tsx": "^0.1.4",
+		"@twinkleplop/typescript": "^0.1.4",
+		"@twinkleplop/yaml": "^0.1.4",
+		"markdown-it": "^15.0.2"
+	}
+}

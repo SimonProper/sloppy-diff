@@ -1,0 +1,103 @@
+@import 'tailwindcss';
+
+/* a .dark class on <html>, set from the OS preference in app.html, drives both
+   the UI tokens and the twinkleplop theme, which switches on the same class */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+	--color-canvas: var(--canvas);
+	--color-surface: var(--surface);
+	--color-subtle: var(--subtle);
+	--color-line: var(--line);
+	--color-fg: var(--fg);
+	--color-muted: var(--muted);
+	--color-faint: var(--faint);
+
+	--color-accent: var(--accent);
+	--color-add: var(--add);
+	--color-del: var(--del);
+	--color-mod: var(--mod);
+	--color-move: var(--move);
+}
+
+:root {
+	--canvas: #fafafa;
+	--surface: #ffffff;
+	--subtle: #f4f4f4;
+	--line: #e6e6e6;
+	--fg: #0a0a0a;
+	--muted: #6e6e6e;
+	--faint: #a6a6a6;
+
+	--accent: #0969da;
+	--add: #1a7f37;
+	--del: #cf222e;
+	--mod: #9a6700;
+	--move: #8250df;
+
+	--add-bg: color-mix(in oklab, var(--add) 9%, var(--surface));
+	--add-gutter: color-mix(in oklab, var(--add) 16%, var(--surface));
+	--del-bg: color-mix(in oklab, var(--del) 8%, var(--surface));
+	--del-gutter: color-mix(in oklab, var(--del) 15%, var(--surface));
+	--add-novel: color-mix(in oklab, var(--add) 26%, var(--surface));
+	--del-novel: color-mix(in oklab, var(--del) 24%, var(--surface));
+	color-scheme: light;
+}
+
+:root.dark {
+	--canvas: #0a0a0a;
+	--surface: #111111;
+	--subtle: #191919;
+	--line: #252525;
+	--fg: #ececec;
+	--muted: #8c8c8c;
+	--faint: #555555;
+
+	--accent: #4493f8;
+	--add: #3fb950;
+	--del: #f85149;
+	--mod: #d29922;
+	--move: #ab7df8;
+
+	--add-bg: color-mix(in oklab, var(--add) 12%, var(--surface));
+	--add-gutter: color-mix(in oklab, var(--add) 20%, var(--surface));
+	--del-bg: color-mix(in oklab, var(--del) 11%, var(--surface));
+	--del-gutter: color-mix(in oklab, var(--del) 19%, var(--surface));
+	--add-novel: color-mix(in oklab, var(--add) 32%, var(--surface));
+	--del-novel: color-mix(in oklab, var(--del) 30%, var(--surface));
+	color-scheme: dark;
+}
+
+html {
+	background: var(--canvas);
+	color: var(--fg);
+	-webkit-font-smoothing: antialiased;
+	/* the scrollbar's room is kept, so locking the page under a dialog doesn't shift it */
+	scrollbar-gutter: stable;
+}
+
+/* showModal() already makes the page behind inert, this keeps it from scrolling too */
+html:has(dialog:modal) {
+	overflow: hidden;
+}
+
+/* the browser styles popovers as centred boxes, PopoverContent positions and
+   styles its own, and utilities still win since this sits in the base layer */
+@layer base {
+	[popover] {
+		margin: 0;
+		inset: auto;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		overflow: visible;
+	}
+}
+
+::selection {
+	background: color-mix(in oklab, var(--accent) 22%, transparent);
+}
