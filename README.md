@@ -5,14 +5,15 @@ A local diff viewer for reviewing changes, AI-written or not, with guided review
 - **Uncommitted, Branch and Range**: uncommitted changes include new files git doesn't track yet. A branch is compared against wherever it split off, found from the history, so a branch taken off another feature branch is compared against that branch. Its commits can be stepped through one at a time, or narrowed to a span.
 - **Lines or Tokens**: tokens highlights only the changed pieces of a line, and recognises lines and files that were only reformatted.
 - **Unified or split** layout, syntax highlighting by [twinkleplop](https://twinkleplop.pngwn.at).
-- **Guides**: Claude Code reads the commits and splits the change into sections to review in order, every hunk in exactly one section. Guides are saved per commit range.
+- **Guides**: Claude Code reads the commits and splits the change into sections to review in order, every hunk in exactly one section. Steps can be marked reviewed, which folds them away. Guides are saved per commit range.
+- **Sidebar**: when the diff needs the room, the sidebar folds into a rail of file badges or guide steps, and opens over the diff or docks beside it. Files you open or close stay that way across reloads.
 - **Ask Claude**: drag over line numbers, select code, or press `a` and pick lines with the arrow keys, then ask Claude Code about them, in any view. `↵` opens the answer in the lens: every question in the diff, the lines it's about, and the conversation, with what Claude thought and read along the way folded above the answer. `⌘↵` asks in the background. A thin marker down the right edge of the lines shows the question is there, `q` reopens the lens, and follow-ups carry on the same session. Questions are saved per commit range, and for uncommitted changes until the lines they're about change.
 
-Everything runs on your machine: the server shells out to `git` and, for guides, to `claude`.
+Everything runs on your machine: the server shells out to `git` and, for guides and questions, to `claude`.
 
 ## Running
 
-Needs Node 22.12 or later, pnpm and git 2.41 or later (for finding where branches split off). Guides also need [Claude Code](https://claude.com/claude-code) installed and signed in.
+Needs Node 22.12 or later, pnpm and git 2.41 or later (for finding where branches split off). Guides and questions also need [Claude Code](https://claude.com/claude-code) installed and signed in.
 
 ```sh
 pnpm install
@@ -22,6 +23,22 @@ pnpm dev
 Open the printed URL and pick a repository. The repo picker scans your home folder for git repositories. Its "Choose folder…" button opens the system folder picker on macOS, and on Linux with zenity or kdialog installed.
 
 sloppy-diff runs on the dev server, there's no production build to deploy. It refuses requests from other websites, since any page you visit can reach localhost.
+
+## Keys
+
+| Key      | Where                 | What it does                                    |
+| -------- | --------------------- | ----------------------------------------------- |
+| `[` `]`  | a commit              | step to the older or newer commit               |
+| `j` `k`  | a guide               | step to the next or previous section            |
+| `s`      | the folded sidebar    | open or close it                                |
+| `a`      | a diff                | ask about lines, picked with the arrow keys     |
+| `q`      | a diff with questions | reopen the lens                                 |
+| `↵` `⌘↵` | the question box      | ask and open the lens, or ask in the background |
+| `j` `k`  | the lens              | step to the next or previous question           |
+| `r`      | the lens              | reply with a follow-up                          |
+| `t`      | the lens              | show or hide what Claude thought and read       |
+| `\`      | the lens              | show or hide the question list                  |
+| `⌘.`     | the lens              | stop the answer being written                   |
 
 ## Settings
 
