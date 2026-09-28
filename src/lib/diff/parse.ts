@@ -1,3 +1,4 @@
+import { treeOrder } from './tree';
 import type { DiffFile, Hunk } from './types';
 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
@@ -65,13 +66,18 @@ export function parseDiff(patch: string): DiffFile[] {
 		i++;
 	}
 
-	files.forEach((f, index) => {
+	for (const f of files) {
 		if (!f.oldPath) f.oldPath = f.newPath;
 		if (!f.newPath) f.newPath = f.oldPath;
+	}
+	// git's byte order puts untracked files last and a folder's own files before its
+	// subfolders, the tree's order is what every view shows
+	const sorted = treeOrder(files);
+	sorted.forEach((f, index) => {
 		f.id = `file-${index}`;
 		assignHunkIds(f);
 	});
-	return files;
+	return sorted;
 }
 
 /**

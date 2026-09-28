@@ -21,7 +21,7 @@ describe('file headers', () => {
 	});
 
 	test('quoted paths with escapes and octal bytes', () => {
-		const [quote, accent] = parseDiff(
+		const [accent, quote] = parseDiff(
 			[
 				'diff --git "a/quo\\"te.bin" "b/quo\\"te.bin"',
 				'Binary files differ',
@@ -36,7 +36,7 @@ describe('file headers', () => {
 	});
 
 	test('a deleted file and a new empty file', () => {
-		const [deleted, added] = parseDiff(
+		const [added, deleted] = parseDiff(
 			[
 				'diff --git a/gone.ts b/gone.ts',
 				'deleted file mode 100644',
@@ -56,6 +56,20 @@ describe('file headers', () => {
 			deletions: 1
 		});
 		expect(added).toMatchObject({ status: 'added', newPath: 'empty.txt', hunks: [] });
+	});
+
+	test('files come in folder tree order, numbered in it', () => {
+		const files = parseDiff(
+			['src/app.ts', 'src/lib/b.ts', 'README.md', 'src/lib/a.ts']
+				.map((path) => `diff --git a/${path} b/${path}\nBinary files differ\n`)
+				.join('')
+		);
+		expect(files.map((f) => [f.id, f.newPath])).toEqual([
+			['file-0', 'src/lib/a.ts'],
+			['file-1', 'src/lib/b.ts'],
+			['file-2', 'src/app.ts'],
+			['file-3', 'README.md']
+		]);
 	});
 });
 

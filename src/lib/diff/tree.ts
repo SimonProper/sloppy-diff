@@ -54,6 +54,13 @@ export function fileTree(files: DiffFile[]): TreeNode[] {
 	return finish(root).children;
 }
 
+/** The files in the order the tree shows them, so a flat list reads the same. */
+export function treeOrder(files: DiffFile[]): DiffFile[] {
+	const walk = (nodes: TreeNode[]): DiffFile[] =>
+		nodes.flatMap((n) => (n.kind === 'dir' ? walk(n.children) : [n.file]));
+	return walk(fileTree(files));
+}
+
 /** Merges single-folder chains, adds up the counts and sorts, depth first. */
 function finish(dir: TreeDir): TreeDir {
 	dir.children = dir.children.map((c) => (c.kind === 'dir' ? finish(c) : c));

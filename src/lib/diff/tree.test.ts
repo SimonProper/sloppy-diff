@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fileTree, type TreeNode } from './tree';
+import { fileTree, treeOrder, type TreeNode } from './tree';
 import type { DiffFile } from './types';
 
 function file(path: string, additions = 1, deletions = 0, status = 'modified'): DiffFile {
@@ -59,4 +59,23 @@ test('a folder chain down to the files is one row', () => {
 test('deleted files sit under their old path, names sort numerically', () => {
 	const tree = fileTree([file('v10.ts'), file('v2.ts'), file('old/gone.ts', 0, 4, 'deleted')]);
 	expect(outline(tree)).toEqual(['old/ +0 -4', '  gone.ts', 'v2.ts', 'v10.ts']);
+});
+
+test('the flat order walks the tree, whatever order the files came in', () => {
+	const files = [
+		file('src/app.html'),
+		file('README.md'),
+		file('src/lib/diff/tree.ts'),
+		file('old/gone.ts', 0, 1, 'deleted'),
+		file('src/lib/components/FileList.svelte'),
+		file('src/lib/components/FileDiff.svelte')
+	];
+	expect(treeOrder(files).map((f) => f.id)).toEqual([
+		'old/gone.ts',
+		'src/lib/components/FileDiff.svelte',
+		'src/lib/components/FileList.svelte',
+		'src/lib/diff/tree.ts',
+		'src/app.html',
+		'README.md'
+	]);
 });
