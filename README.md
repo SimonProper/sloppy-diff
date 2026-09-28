@@ -6,6 +6,7 @@ A local diff viewer for reviewing changes, AI-written or not, with guided review
 - **Lines or Tokens**: tokens highlights only the changed pieces of a line, and recognises lines and files that were only reformatted.
 - **Unified or split** layout, syntax highlighting by [twinkleplop](https://twinkleplop.pngwn.at).
 - **Guides**: Claude Code reads the commits and splits the change into sections to review in order, every hunk in exactly one section. Guides are saved per commit range.
+- **Ask Claude**: drag over line numbers, select code, or press `a` and pick lines with the arrow keys, then ask Claude Code about them, in any view. `↵` opens the answer in the lens: every question in the diff, the lines it's about, and the conversation, with what Claude thought and read along the way folded above the answer. `⌘↵` asks in the background. A thin marker down the right edge of the lines shows the question is there, `q` reopens the lens, and follow-ups carry on the same session. Questions are saved per commit range, and for uncommitted changes until the lines they're about change.
 
 Everything runs on your machine: the server shells out to `git` and, for guides, to `claude`.
 
@@ -26,14 +27,15 @@ sloppy-diff runs on the dev server, there's no production build to deploy. It re
 
 Set these in the environment, or in a `.env` file:
 
-| Variable          | Default               | What it does                                      |
-| ----------------- | --------------------- | ------------------------------------------------- |
-| `REPO`            | the working directory | repository opened when the URL doesn't name one   |
-| `REPO_ROOTS`      | your home folder      | `:`-separated folders the repo picker scans       |
-| `REPO_SCAN_DEPTH` | `6`                   | how many folders deep the scan goes               |
-| `GUIDES_DIR`      | `.guides` in here     | where guides are saved, one folder per repository |
-| `CLAUDE_BIN`      | `claude`              | the Claude Code executable                        |
-| `GUIDE_MODEL`     | Claude Code's default | model used to write guides                        |
+| Variable          | Default               | What it does                                                    |
+| ----------------- | --------------------- | --------------------------------------------------------------- |
+| `REPO`            | the working directory | repository opened when the URL doesn't name one                 |
+| `REPO_ROOTS`      | your home folder      | `:`-separated folders the repo picker scans                     |
+| `REPO_SCAN_DEPTH` | `6`                   | how many folders deep the scan goes                             |
+| `GUIDES_DIR`      | `.guides` in here     | where guides and questions are saved, one folder per repository |
+| `CLAUDE_BIN`      | `claude`              | the Claude Code executable                                      |
+| `GUIDE_MODEL`     | Claude Code's default | model used to write guides                                      |
+| `ASK_MODEL`       | Claude Code's default | model used to answer questions about lines                      |
 
 ## Checks
 

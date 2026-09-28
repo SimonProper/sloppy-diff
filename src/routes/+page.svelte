@@ -4,6 +4,8 @@
 	import { slowNavigation } from '$lib/slow.svelte';
 	import { remember } from '$lib/prefs';
 	import { sameSha } from '$lib/refs';
+	import { Threads } from '$lib/ask/threads.svelte';
+	import AskLayer from '$lib/components/ask/AskLayer.svelte';
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
 	import CommitCard from '$lib/components/CommitCard.svelte';
 	import CommitList from '$lib/components/CommitList.svelte';
@@ -80,6 +82,28 @@
 	});
 
 	let dialogOpen = $state(false);
+
+	// questions to Claude about lines of the diff on screen. A range is named by the
+	// shas the page resolved, so the server files them where the page load found them
+	const threads = new Threads(() => ({
+		repo: data.repo,
+		from: data.selection?.range?.from ?? data.selection?.from ?? '',
+		to: data.selection?.range?.to ?? '',
+		scope: data.scope ?? 'worktree',
+		threads: data.threads
+	}));
+	const asking = $derived(data.scope !== null && data.selection !== null ? threads : undefined);
+
+	// answers still being written when the page loaded carry on streaming
+	$effect(() => {
+		if (asking) threads.resume();
+	});
+
+	// lines picked in a diff that's no longer on screen can't be asked about
+	$effect(() => {
+		const hunk = threads.draft?.span.hunk;
+		if (hunk && !data.files.some((f) => f.hunks.some((h) => h.id === hunk))) threads.draft = null;
+	});
 
 	// the split between commits and files in the sidebar, kept in this browser only
 	const SPLIT_KEY = 'sidebar-commits-height';
@@ -549,6 +573,24 @@
 					bind:layout
 				/>
 			</div>
+			{#if asking && threads.list.length}
+				<!-- every question about this diff, in the lens -->
+				<button
+					type="button"
+					class="ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-muted hover:border-muted hover:text-fg"
+					title="Open the questions to Claude  q"
+					onclick={() => threads.openLens()}
+				>
+					{#if threads.running}
+						<span class="spin size-3 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
+						></span>
+						{threads.running} answering
+					{:else}
+						Questions
+						<span class="text-faint tabular-nums">{threads.list.length}</span>
+					{/if}
+				</button>
+			{/if}
 		</div>
 	{/snippet}
 
@@ -605,7 +647,14 @@
 			{@render saved()}
 		</div>
 	{:else if data.view === 'guide' && data.guide}
-		<GuideView guide={data.guide} files={data.files} {toolbar} {layout} {virtualize} />
+		<GuideView
+			guide={data.guide}
+			files={data.files}
+			{toolbar}
+			{layout}
+			{virtualize}
+			threads={asking}
+		/>
 	{:else if data.view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			<p class="text-[13px] font-medium">No guide for this range yet</p>
@@ -679,7 +728,7 @@
 					<CommitCard {commit} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
-					<FileDiff {file} {layout} {virtualize} remember={data.repo} />
+					<FileDiff {file} {layout} {virtualize} threads={asking} remember={data.repo} />
 				{:else}
 					<!-- the commit list stays, so an empty commit is one step on the way -->
 					<div class="flex flex-col items-center py-16 text-center">{@render nothing()}</div>
@@ -688,6 +737,11 @@
 		</SidebarLayout>
 	{/if}
 </div>
+
+{#if asking}
+	<!-- the question composer, the peek on markers and the lens, one of each for the page -->
+	<AskLayer threads={asking} files={data.files} guide={data.view === 'guide' ? data.guide : null} />
+{/if}
 
 {#if dialogOpen}
 	<GuideDialog
@@ -705,6 +759,14 @@
 <style>
 	.loading {
 		animation: slide 1s ease-in-out infinite;
+	}
+	.spin {
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	@keyframes slide {
 		from {

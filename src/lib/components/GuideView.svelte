@@ -2,6 +2,7 @@
 	import SidebarLayout from './SidebarLayout.svelte';
 	import { tick, type Snippet } from 'svelte';
 	import { page } from '$app/state';
+	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Layout } from '$lib/diff/split';
 	import type { DiffFile } from '$lib/diff/types';
 	import { KINDS, orderSections } from '$lib/guide/order';
@@ -17,9 +18,11 @@
 		layout?: Layout;
 		/** only render lines near the viewport, for big diffs */
 		virtualize?: boolean;
+		/** questions to Claude about lines of the diff */
+		threads?: Threads;
 	}
 
-	let { guide, files, toolbar, layout = 'unified', virtualize = false }: Props = $props();
+	let { guide, files, toolbar, layout = 'unified', virtualize = false, threads }: Props = $props();
 
 	// sections read core first, whatever order they were written in
 	const sections = $derived(orderSections(guide.sections));
@@ -223,9 +226,20 @@
 											done && 'text-muted line-through decoration-faint'
 										]}>{section.title}</span
 									>
-									<span class="mt-0.5 block font-mono text-[10.5px] tabular-nums">
+									<span class="mt-0.5 flex items-center gap-1 font-mono text-[10.5px] tabular-nums">
 										<span class="text-add">+{c.additions}</span>
 										<span class="text-del">−{c.deletions}</span>
+										{#if threads}
+											{@const asked = threads.in(section.hunks)}
+											{#if asked.length}
+												<span class="text-faint" title="Questions to Claude in this section"
+													>· {asked.length} ?</span
+												>
+												{#if asked.some((t) => threads.live[t.id])}
+													<span class="answering size-1.5 rounded-full bg-ink"></span>
+												{/if}
+											{/if}
+										{/if}
 									</span>
 								</a>
 							</div>
@@ -391,6 +405,8 @@
 							inSection
 							{layout}
 							{virtualize}
+							{threads}
+							section={section.id}
 							remember="{guideKey}:{section.id}"
 						/>
 					{/each}
@@ -427,34 +443,13 @@
 {/snippet}
 
 <style>
-	.prose :global(p + p),
-	.prose :global(ul),
-	.prose :global(ol) {
-		margin-top: 0.5em;
+	/* a question in the section is being answered */
+	.answering {
+		animation: pulse 1.2s ease-in-out infinite;
 	}
-	.prose :global(ul) {
-		list-style: disc;
-		padding-left: 1.25em;
-	}
-	.prose :global(ol) {
-		list-style: decimal;
-		padding-left: 1.25em;
-	}
-	.prose :global(code) {
-		font-family: var(--font-mono);
-		font-size: 0.88em;
-		padding: 0.1em 0.3em;
-		border-radius: 4px;
-		background: var(--subtle);
-		color: var(--fg);
-	}
-	.prose :global(a) {
-		color: var(--accent);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.prose :global(strong) {
-		font-weight: 600;
-		color: var(--fg);
+	@keyframes pulse {
+		50% {
+			opacity: 0.25;
+		}
 	}
 </style>

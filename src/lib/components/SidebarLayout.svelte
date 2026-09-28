@@ -23,11 +23,12 @@
 	const DEFAULT = 272;
 	/** characters of code a diff always has room for, per side when split */
 	const CHARS = 80;
-	// what surrounds the code in FileDiff: line number gutters, the +/− marker and
-	// right padding, the card's border, and the page's padding around the cards
+	// what surrounds the code in FileDiff: line number gutters, the +/− marker, right
+	// padding and the slot for question markers, the card's border, and the page's
+	// padding around the cards
 	const CHROME: Record<Layout, number> = {
-		unified: 96 + 20 + 32 + 2 + 32,
-		split: 2 * (48 + 20 + 16) + 2 + 32
+		unified: 96 + 20 + 32 + 14 + 2 + 32,
+		split: 2 * (48 + 20 + 16 + 14) + 2 + 32
 	};
 
 	let total = $state(0);

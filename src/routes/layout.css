@@ -21,6 +21,11 @@
 	--color-del: var(--del);
 	--color-mod: var(--mod);
 	--color-move: var(--move);
+
+	--color-ink: var(--ink);
+	--color-ink-soft: var(--ink-soft);
+	--color-ink-wash: var(--ink-wash);
+	--shadow-float: var(--float);
 }
 
 :root {
@@ -44,6 +49,16 @@
 	--del-gutter: color-mix(in oklab, var(--del) 15%, var(--surface));
 	--add-novel: color-mix(in oklab, var(--add) 26%, var(--surface));
 	--del-novel: color-mix(in oklab, var(--del) 24%, var(--surface));
+
+	/* asking Claude is drawn in ink rather than the accent, which already means diff
+	   chrome and guide progress. Taken from the text colour, so dark mode follows */
+	--ink: var(--fg);
+	--ink-soft: color-mix(in oklab, var(--fg) 45%, transparent);
+	--ink-wash: color-mix(in oklab, var(--fg) 6%, transparent);
+	/* the marker down the right edge of asked lines, strong enough to be seen at 2px */
+	--ink-mark: color-mix(in oklab, var(--fg) 62%, transparent);
+	--ink-mark-seen: color-mix(in oklab, var(--fg) 34%, transparent);
+	--float: 0 8px 30px -12px rgb(0 0 0 / 0.25);
 	color-scheme: light;
 }
 
@@ -68,6 +83,7 @@
 	--del-gutter: color-mix(in oklab, var(--del) 19%, var(--surface));
 	--add-novel: color-mix(in oklab, var(--add) 32%, var(--surface));
 	--del-novel: color-mix(in oklab, var(--del) 30%, var(--surface));
+	--float: 0 8px 30px -12px rgb(0 0 0 / 0.8);
 	color-scheme: dark;
 }
 
@@ -96,6 +112,77 @@ html:has(dialog:modal) {
 		color: inherit;
 		overflow: visible;
 	}
+}
+
+/* lines flashed on the way back from a question to the diff */
+[data-index].flash {
+	animation: flash 0.9s ease-out;
+}
+@keyframes flash {
+	from {
+		box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--fg) 14%, transparent);
+	}
+}
+
+/* markdown written by Claude: guide descriptions and answers */
+.prose p + p,
+.prose ul,
+.prose ol,
+.prose pre {
+	margin-top: 0.5em;
+}
+.prose ul {
+	list-style: disc;
+	padding-left: 1.25em;
+}
+.prose ol {
+	list-style: decimal;
+	padding-left: 1.25em;
+}
+.prose code {
+	font-family: var(--font-mono);
+	font-size: 0.88em;
+	padding: 0.1em 0.3em;
+	border-radius: 4px;
+	background: var(--subtle);
+	color: var(--fg);
+}
+.prose pre {
+	overflow-x: auto;
+	padding: 0.5em 0.75em;
+	border-radius: 8px;
+	background: var(--subtle);
+}
+.prose pre code {
+	padding: 0;
+	background: none;
+}
+.prose table {
+	display: block;
+	overflow-x: auto;
+	margin-top: 0.5em;
+	border-collapse: collapse;
+	font-size: 0.95em;
+}
+.prose th,
+.prose td {
+	padding: 0.25em 0.6em;
+	border: 1px solid var(--line);
+	text-align: left;
+	vertical-align: top;
+}
+.prose th {
+	background: var(--subtle);
+	font-weight: 600;
+}
+.prose a {
+	color: var(--accent);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.prose strong {
+	font-weight: 600;
+	color: var(--fg);
 }
 
 ::selection {
