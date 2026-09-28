@@ -58,6 +58,12 @@ export function cachedDiff<T>(key: string): T | undefined {
 	return hit.value as T;
 }
 
+/** Forgets every kept diff, for when the code that builds them changed. */
+export function clearDiffs() {
+	diffs.entries.clear();
+	diffs.lines = 0;
+}
+
 /** Keeps a diff, `weight` is its number of lines. */
 export function storeDiff(key: string, value: unknown, weight: number) {
 	const { entries } = diffs;

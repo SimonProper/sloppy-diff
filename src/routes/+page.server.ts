@@ -23,12 +23,17 @@ import {
 	resolveStart,
 	type BranchInfo
 } from '$lib/server/git';
-import { cachedDiff, remember, repoVersion, storeDiff } from '$lib/server/cache';
+import { dev } from '$app/environment';
+import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
 import { annotateChanges, type ChangeSummary } from '$lib/server/changes';
 import { listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { highlightFile } from '$lib/server/highlight';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
+
+// in dev this module runs again whenever it or what it imports (the diff engine) is
+// edited, and kept diffs were built by the code as it was before
+if (dev) clearDiffs();
 
 /**
  * What is being compared:
