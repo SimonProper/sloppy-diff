@@ -123,8 +123,13 @@
 	/** the lines being dragged over, from `anchor` to wherever the pointer is */
 	let drag = $state<{ hunk: string; side?: Side; anchor: number } | null>(null);
 	let dragged = $state<LineSpan | null>(null);
-	const picked = $derived(dragged ?? threads?.draft?.span ?? null);
 	const cursor = $derived(threads?.cursor ?? null);
+	const picked = $derived(
+		dragged ??
+			(cursor && span(cursor.hunk, cursor.anchor, cursor.head, cursor.side)) ??
+			threads?.draft?.span ??
+			null
+	);
 
 	function isPicked(hunk: string, index: number, line: DiffLine, side?: Side) {
 		return picked?.hunk === hunk && inSpan(picked, index, line, side);
@@ -644,9 +649,12 @@
 		background: color-mix(in oklab, var(--fg) 10%, var(--surface));
 		color: var(--fg);
 	}
-	.row.cursor {
-		outline: 1px solid var(--ink-soft);
-		outline-offset: -1px;
+	/* the keyboard cursor's line, on top of the pick's wash: a darker gutter with a
+	   hairline down its left edge */
+	.row.cursor .gutter {
+		box-shadow: inset 1px 0 0 var(--fg);
+		background: color-mix(in oklab, var(--fg) 16%, var(--surface));
+		color: var(--fg);
 	}
 	[data-index] {
 		/* the keyboard cursor scrolls rows into view clear of the sticky bars */

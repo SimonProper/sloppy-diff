@@ -92,6 +92,28 @@
 
 <svelte:window {onkeydown} />
 
+{#if threads.cursor}
+	<!-- picking lines from the keyboard, what the keys do meanwhile -->
+	<div
+		class="pointer-events-none fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-[10px] border border-line bg-surface px-3 py-2 text-[12px] whitespace-nowrap text-muted shadow-float"
+		role="status"
+	>
+		<span><kbd>↑</kbd><kbd>↓</kbd> line</span>
+		<span><kbd>⇧</kbd><kbd>↑</kbd><kbd>↓</kbd> more lines</span>
+		{#if threads.cursor.side}<span><kbd>←</kbd><kbd>→</kbd> other side</span>{/if}
+		<span><kbd>↵</kbd> ask</span>
+		<span><kbd>esc</kbd> cancel</span>
+	</div>
+{/if}
+
 <AskComposer {threads} {files} {guide} />
 <AskPeek {threads} />
 <AskLens {threads} {files} {guide} />
+
+<style>
+	kbd {
+		margin-right: 2px;
+		font: 10.5px var(--font-mono);
+		color: var(--fg);
+	}
+</style>
