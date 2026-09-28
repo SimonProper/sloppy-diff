@@ -4,7 +4,8 @@
 	import { page } from '$app/state';
 	import type { Layout } from '$lib/diff/split';
 	import type { DiffFile } from '$lib/diff/types';
-	import type { Guide, GuideSection, SectionKind } from '$lib/guide/types';
+	import { KINDS, orderSections } from '$lib/guide/order';
+	import type { Guide, GuideSection } from '$lib/guide/types';
 	import { timeAgo } from '$lib/refs';
 	import FileDiff from './FileDiff.svelte';
 	import { Popover, PopoverContent, PopoverTrigger } from './popover';
@@ -20,16 +21,8 @@
 
 	let { guide, files, toolbar, layout = 'unified', virtualize = false }: Props = $props();
 
-	const KINDS: { kind: SectionKind; label: string }[] = [
-		{ kind: 'core', label: 'Core' },
-		{ kind: 'supporting', label: 'Supporting' },
-		{ kind: 'chore', label: 'Chores' }
-	];
-
 	// sections read core first, whatever order they were written in
-	const sections = $derived(
-		KINDS.flatMap(({ kind }) => guide.sections.filter((s) => s.kind === kind))
-	);
+	const sections = $derived(orderSections(guide.sections));
 	const number = $derived(new Map(sections.map((s, i) => [s.id, i + 1])));
 
 	const hunkFile = $derived(new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, f] as const))));
