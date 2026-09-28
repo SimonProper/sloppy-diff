@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import { parseDiff } from '$lib/diff/parse';
 import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, DiffFile } from '$lib/diff/types';
+import type { Scope, Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 import {
@@ -28,6 +29,7 @@ import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/s
 import { annotateChanges, type ChangeSummary } from '$lib/server/changes';
 import { listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { highlightFile } from '$lib/server/highlight';
+import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
 
@@ -192,14 +194,26 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 			files: [],
 			changes: null,
 			guide: null,
+			scope: null,
+			threads: [] as Thread[],
 			error: errorMessage(result.reason)
 		};
 	}
 
 	const { selection, lane, files, changes } = result.value;
-	const guide = await timing.measure('guide', guideFor(root, selection.range, files));
+	// questions asked about this diff: the range's, or the working tree's
+	const scope: Scope = selection.range
+		? `${selection.range.from}..${selection.range.to}`
+		: 'worktree';
+	const [guide, threads] = await Promise.all([
+		timing.measure('guide', guideFor(root, selection.range, files)),
+		timing.measure(
+			'threads',
+			loadThreads(root, scope).then((t) => prepareThreads(t, files))
+		)
+	]);
 	report();
-	return { ...context, selection, lane, files, changes, guide, error: null };
+	return { ...context, selection, lane, files, changes, guide, scope, threads, error: null };
 };
 
 async function select(
@@ -324,6 +338,8 @@ function empty() {
 		lane: null,
 		files: [],
 		changes: null,
-		guide: null
+		guide: null,
+		scope: null,
+		threads: [] as Thread[]
 	};
 }
