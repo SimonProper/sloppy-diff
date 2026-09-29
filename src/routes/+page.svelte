@@ -188,8 +188,9 @@
 		return `?${params}`;
 	}
 
-	function navigate(next: Record<string, string | null>, reset = false) {
-		goto(url(next, reset), { keepFocus: true });
+	/** `noScroll` stays where the page is, for another look at the same diff */
+	function navigate(next: Record<string, string | null>, reset = false, noScroll = false) {
+		goto(url(next, reset), { keepFocus: true, noScroll });
 	}
 
 	/** Another commit on the same lane, pinned so stepping never wanders onto another branch. */
@@ -262,7 +263,7 @@
 	function setChanges(mode: typeof data.changeMode) {
 		// remembered for the next visit, the url keeps it shareable
 		remember('changes', mode);
-		navigate({ changes: mode === 'lines' ? null : mode });
+		navigate({ changes: mode === 'lines' ? null : mode }, false, true);
 	}
 
 	function openGuide(start: string, stop: string) {
