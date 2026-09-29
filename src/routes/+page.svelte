@@ -277,7 +277,7 @@
 
 <div class="min-h-screen font-sans">
 	<header
-		class="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-canvas/85 px-4 backdrop-blur"
+		class="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-canvas px-4"
 	>
 		<span
 			class="mr-1 grid size-6 shrink-0 place-items-center rounded-md border border-fg font-mono text-[12px]"
@@ -563,7 +563,7 @@
 	{#snippet toolbar()}
 		<!-- stays under the header so the change mode can be switched from anywhere -->
 		<div
-			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas/85 px-4 backdrop-blur"
+			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas px-4"
 		>
 			<div class="min-w-0 flex-1">
 				<ChangesToolbar

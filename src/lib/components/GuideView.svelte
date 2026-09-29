@@ -302,7 +302,7 @@
 			<article id={section.id} class="flex scroll-mt-23 flex-col gap-3">
 				<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
 				<header
-					class="sticky top-23 z-[12] -mx-4 flex h-11 items-center gap-2.5 border-b border-line bg-canvas/85 px-5 backdrop-blur"
+					class="sticky top-23 z-[12] -mx-4 flex h-11 items-center gap-2.5 border-b border-line bg-canvas px-5"
 				>
 					<span
 						class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"

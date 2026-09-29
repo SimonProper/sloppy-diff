@@ -29,7 +29,7 @@
 
 <div class="min-h-screen font-sans">
 	<header
-		class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur"
+		class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4"
 	>
 		<a
 			href="/"
