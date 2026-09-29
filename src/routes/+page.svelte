@@ -530,7 +530,7 @@
 			{/if}
 			<button
 				type="button"
-				class="flex h-8 items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/8 px-2.5 text-[12px] font-medium text-accent hover:bg-accent/14"
+				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent hover:bg-accent/14"
 				title="Generate or open review guides"
 				onclick={() => (dialogOpen = true)}
 			>
@@ -549,7 +549,7 @@
 				Guides
 				{#if repoGuides.length}
 					<span
-						class="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] text-white tabular-nums"
+						class="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] text-surface tabular-nums"
 						title="{repoGuides.length} saved for this repo">{repoGuides.length}</span
 					>
 				{/if}
@@ -667,7 +667,7 @@
 			</p>
 			<button
 				type="button"
-				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-white hover:opacity-90"
+				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
 				onclick={() => (dialogOpen = true)}>Generate a guide</button
 			>
 			{@render saved()}
@@ -722,7 +722,7 @@
 						href="#{file.id}"
 						class={[
 							'grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle',
-							here && 'bg-subtle ring-1 ring-faint'
+							here && 'bg-subtle ring-1 ring-muted'
 						]}
 						aria-current={here ? 'location' : undefined}
 						aria-label={displayPath(file)}

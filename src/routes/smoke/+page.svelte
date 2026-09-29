@@ -55,7 +55,7 @@
 			<LayoutToggle bind:layout />
 			<button
 				type="button"
-				class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+				class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-50"
 				disabled={rerunning}
 				onclick={rerun}>{rerunning ? 'Running…' : 'Rerun'}</button
 			>

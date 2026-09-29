@@ -396,7 +396,7 @@
 				{/if}
 				<button
 					type="button"
-					class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-40"
+					class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
 					disabled={!target || !range || range.commits.length === 0}
 					onclick={generate}
 				>

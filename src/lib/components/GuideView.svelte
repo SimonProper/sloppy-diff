@@ -291,7 +291,7 @@
 							done
 								? 'border-add bg-add text-surface hover:opacity-80'
 								: here
-									? 'border-faint bg-subtle text-fg'
+									? 'border-muted bg-subtle text-fg'
 									: 'border-line text-muted hover:border-muted hover:text-fg'
 						]}
 						aria-current={here ? 'location' : undefined}

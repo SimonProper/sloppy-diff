@@ -37,7 +37,9 @@
 	--muted: #6e6e6e;
 	--faint: #a6a6a6;
 
-	--accent: #0969da;
+	/* the UI's own chrome is drawn in the text colour, so every hue on screen says
+	   something about the diff: added, removed, modified, moved */
+	--accent: var(--fg);
 	--add: #1a7f37;
 	--del: #cf222e;
 	--mod: #9a6700;
@@ -50,8 +52,7 @@
 	--add-novel: color-mix(in oklab, var(--add) 26%, var(--surface));
 	--del-novel: color-mix(in oklab, var(--del) 24%, var(--surface));
 
-	/* asking Claude is drawn in ink rather than the accent, which already means diff
-	   chrome and guide progress. Taken from the text colour, so dark mode follows */
+	/* asking Claude is drawn in ink, taken from the text colour so dark mode follows */
 	--ink: var(--fg);
 	--ink-soft: color-mix(in oklab, var(--fg) 45%, transparent);
 	--ink-wash: color-mix(in oklab, var(--fg) 6%, transparent);
@@ -71,7 +72,6 @@
 	--muted: #8c8c8c;
 	--faint: #555555;
 
-	--accent: #4493f8;
 	--add: #3fb950;
 	--del: #f85149;
 	--mod: #d29922;
