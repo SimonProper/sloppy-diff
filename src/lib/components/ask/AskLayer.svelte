@@ -71,10 +71,11 @@
 			if (!restored) {
 				restored = true;
 				const asked = page.url.searchParams.get('ask');
-				if (asked && threads.get(asked)) {
-					threads.openLens(asked);
-					return;
-				}
+				if (asked && threads.get(asked)) threads.openLens(asked);
+				// the first run can be the page's first mount, before the router has started,
+				// where replaceState throws and leaves SvelteKit to mount every later page
+				// beside this one. A stale ?ask= stays until the lens next opens or closes
+				return;
 			}
 			if ((page.url.searchParams.get('ask') ?? null) === open) return;
 			const url = new URL(page.url);
