@@ -8,6 +8,8 @@ import { branchBase, nearestBranch, resolveCommit } from './git';
 interface Repo {
 	root: string;
 	git: (...args: string[]) => string;
+	/** git as of `seconds` since the epoch, which is what its reflogs record */
+	at: (seconds: number, ...args: string[]) => string;
 	commit: (message: string) => string;
 	sha: (rev: string) => Promise<string>;
 }
@@ -26,15 +28,19 @@ afterAll(() => repos.forEach((r) => rmSync(r.root, { recursive: true, force: tru
  */
 function graph(): Repo {
 	const root = realpathSync(mkdtempSync(join(tmpdir(), 'sloppy-diff-git-')));
-	const git = (...args: string[]) =>
+	const run = (args: string[], env: Record<string, string> = {}) =>
 		execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
 			cwd: root,
-			stdio: 'pipe'
+			stdio: 'pipe',
+			env: { ...process.env, ...env }
 		})
 			.toString()
 			.trim();
+	const git = (...args: string[]) => run(args);
+	const at = (seconds: number, ...args: string[]) =>
+		run(args, { GIT_COMMITTER_DATE: `@${seconds} +0000` });
 	const commit = (message: string) => git('commit', '-q', '--allow-empty', '-m', message);
-	const repo: Repo = { root, git, commit, sha: (rev) => resolveCommit(root, rev) };
+	const repo: Repo = { root, git, at, commit, sha: (rev) => resolveCommit(root, rev) };
 	repos.push(repo);
 
 	git('init', '-q', '-b', 'main');
@@ -164,6 +170,22 @@ describe('with remotes', () => {
 	test('the default branch is compared against what is pushed', async () => {
 		expect(await branchBase(r.root, 'main', 'origin/main')).toEqual({
 			name: 'origin/main',
+			mergeBase: await r.sha('m2'),
+			merged: false
+		});
+	});
+
+	test('a branch taken off the pushed copy is not its base once it moves on', async () => {
+		// sibling is pushed at s1, next is taken off origin/sibling, then sibling is
+		// checked out again from origin and gets s2: its reflog starts where next's does
+		const r = graph();
+		r.at(1, 'update-ref', 'refs/remotes/origin/sibling', 'sibling');
+		r.at(2, 'branch', 'next', 'origin/sibling');
+		r.git('branch', '-D', 'sibling');
+		r.at(3, 'checkout', '-q', '-b', 'sibling', 'origin/sibling');
+		r.commit('s2');
+		expect(await branchBase(r.root, 'sibling', 'main')).toEqual({
+			name: 'main',
 			mergeBase: await r.sha('m2'),
 			merged: false
 		});

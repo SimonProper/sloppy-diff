@@ -252,11 +252,16 @@ export async function branchBase(
 	// its own copies on remotes would only show what isn't pushed
 	const candidates = refs.filter((r) => r.part !== self.part && r.behind > 0).sort(order);
 	// a branch taken off this one shares as much history with it as its real
-	// base does, the reflog tells them apart by where each was created
+	// base does, the reflog tells them apart by where each was created. Checked
+	// out again from a remote, the local copy is newer than the branch, its
+	// copies there say when it really started
 	const common = (
 		await git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
 	).trim();
-	const started = await createdAt(common, self.ref);
+	const copies = refs.filter((r) => r.part === self.part);
+	const started = (await Promise.all(copies.map((r) => createdAt(common, r.ref))))
+		.filter((c) => c !== null)
+		.sort((a, b) => a.time - b.time)[0];
 	// its own line of work, a branch merged into it forks off somewhere else
 	const line = new Set(
 		(await git(root, ['rev-list', '--first-parent', '-n5000', name])).split('\n')
@@ -270,8 +275,10 @@ export async function branchBase(
 	for (const tier of tiers.values()) {
 		let fallback: { name: string; point: string } | null = null;
 		for (const candidate of tier) {
-			const other = started && (await createdAt(common, candidate.ref));
-			if (other && other !== started && (await isAncestor(root, started, other))) continue;
+			// only a local branch's reflog says where it was taken off, a remote one's
+			// starts whenever it was first fetched
+			const other = started && candidate.local && (await createdAt(common, candidate.ref));
+			if (other && (await takenOff(root, other, started))) continue;
 			const point = (await git(root, ['merge-base', candidate.short, name]).catch(() => '')).trim();
 			if (!point) continue;
 			if (line.has(point)) {
@@ -307,13 +314,27 @@ async function compareWith(
 	return point ? { name: base.short, mergeBase: point, merged: false } : null;
 }
 
-/** The commit a local branch was created at, from the first line of its reflog. */
-async function createdAt(common: string, ref: string): Promise<string | null> {
-	if (!ref.startsWith('refs/heads/')) return null;
+interface Creation {
+	sha: string;
+	/** seconds since the epoch */
+	time: number;
+}
+
+/** The commit a ref was created at and when, from the first line of its reflog. */
+async function createdAt(common: string, ref: string): Promise<Creation | null> {
 	const log = await readFile(join(common, 'logs', ref), 'utf8').catch(() => '');
-	// "<old sha> <new sha> <who> <when>\t<message>", old is zeros on creation
-	const [old, sha] = log.slice(0, log.indexOf('\n')).split(' ');
-	return /^0+$/.test(old ?? '') && /^[0-9a-f]{40,64}$/.test(sha ?? '') ? sha : null;
+	// "<old sha> <new sha> <who> <when> <zone>\t<message>", old is zeros on creation
+	const fields = log.slice(0, log.indexOf('\t')).split(' ');
+	const [old, sha] = fields;
+	const time = Number(fields.at(-2));
+	const created = /^0+$/.test(old ?? '') && /^[0-9a-f]{40,64}$/.test(sha ?? '');
+	return created && Number.isFinite(time) ? { sha, time } : null;
+}
+
+/** A branch created at `other` was taken off one that `started`, further along it or later. */
+async function takenOff(root: string, other: Creation, started: Creation): Promise<boolean> {
+	if (other.sha === started.sha) return other.time > started.time;
+	return isAncestor(root, started.sha, other.sha);
 }
 
 async function isAncestor(root: string, ancestor: string, of: string): Promise<boolean> {
