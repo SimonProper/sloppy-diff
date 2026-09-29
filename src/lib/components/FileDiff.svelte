@@ -70,6 +70,7 @@
 	}
 
 	const REFORMATTED = 'Reformatted, nothing in this line is new';
+	const PICK = 'Drag to pick lines to ask Claude about, shift-click to extend';
 	/** lines rendered together, each block only once it's near the viewport */
 	const BLOCK = 100;
 	/** height of a row, leading-5; split rows can wrap so theirs is a guess until rendered */
@@ -454,11 +455,11 @@
 											<!-- svelte-ignore a11y_no_static_element_interactions -->
 											<span
 												class="gutter sticky left-0 flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
+												title={threads ? PICK : undefined}
 												onpointerdown={(e) => pick(e, hunk.id, index)}
 											>
 												<span class="w-12 pr-2">{line.old ?? ''}</span>
 												<span class="w-12 pr-2">{line.new ?? ''}</span>
-												{@render plus()}
 											</span>
 											<!-- pinned beside the gutter, the one sign of a change that isn't a colour -->
 											{@render marker(line, 'pinned sticky left-24')}
@@ -518,12 +519,6 @@
 	{/if}
 {/snippet}
 
-{#snippet plus()}
-	{#if threads}
-		<span class="plus" aria-hidden="true">+</span>
-	{/if}
-{/snippet}
-
 {#snippet marker(line: DiffLine, place: string)}
 	<span class={['marker w-5 shrink-0 text-center select-none', place]}
 		>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
@@ -561,9 +556,10 @@
 		>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<span
-				class="gutter relative w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
+				class="gutter w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
+				title={threads ? PICK : undefined}
 				onpointerdown={(e) => pick(e, hunk.id, index, side)}
-				>{side === 'old' ? line.old : line.new}{@render plus()}</span
+				>{side === 'old' ? line.old : line.new}</span
 			>
 			{@render marker(line, '')}
 			<span class="text min-w-0 flex-1 pr-4 break-all whitespace-pre-wrap"
@@ -646,28 +642,26 @@
 		opacity: 0.5;
 	}
 
-	/* asking Claude, drawn in ink: line numbers pick lines, a faint + hints at it */
+	/* asking Claude, drawn in ink: line numbers pick lines. Hovering them darkens the
+	   gutter a step in its own colour, below a pick and the cursor, and shows faintly
+	   where the question's marker will go. Only on the numbers, a press on the code
+	   selects text instead */
 	.ask .gutter {
 		cursor: pointer;
 	}
-	.plus {
-		display: none;
-		position: absolute;
-		top: 3px;
-		right: -7px;
-		z-index: 1;
-		width: 14px;
-		height: 14px;
-		border: 1px solid var(--line);
-		border-radius: 4px;
-		background: var(--surface);
-		color: var(--muted);
-		font: 11px/12px var(--font-sans);
-		text-align: center;
-		pointer-events: none;
-	}
-	.unpicked .row:hover .plus {
-		display: block;
+	@media (hover: hover) and (pointer: fine) {
+		.unpicked .gutter:hover {
+			background: color-mix(in oklab, var(--fg) 4%, var(--surface));
+			color: var(--muted);
+		}
+		.unpicked .row:is(.add, .del) .gutter:hover {
+			background: color-mix(in oklab, var(--fg) 4%, var(--gutter-bg));
+			color: var(--number);
+		}
+		.unpicked .row:has(.gutter:hover) .mk:not(.on)::before {
+			border-right: 2px dashed var(--ink-soft);
+			opacity: 0.5;
+		}
 	}
 	/* over whatever colour the line has, added, removed or reformatted */
 	.row.picked {
