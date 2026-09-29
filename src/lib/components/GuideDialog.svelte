@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { errorText } from '$lib/errors';
-	import { cancelGuide, generateGuide, getBranch, getRange } from '$lib/guide/guides.remote';
-	import type { GuideEvent, GuideListing } from '$lib/guide/types';
+	import {
+		cancelGuide,
+		followGuide,
+		generateGuide,
+		getBranch,
+		getRange
+	} from '$lib/guide/guides.remote';
+	import type { GuideProgress } from '$lib/guide/progress';
+	import type { GuideListing } from '$lib/guide/types';
 	import { timeAgo, type Branch, type Commit } from '$lib/refs';
 	import CommitList from './CommitList.svelte';
 	import RefPicker from './RefPicker.svelte';
@@ -85,12 +92,11 @@
 	let range = $state<Awaited<ReturnType<typeof getRange>> | null>(null);
 	let rangeError = $state('');
 
-	let events = $state<GuideEvent[]>([]);
+	let progress = $state<GuideProgress | null>(null);
 	let generating = $state(false);
 	let failure = $state('');
 
-	const status = $derived(events.findLast((e) => e.type === 'status'));
-	const tools = $derived(events.filter((e) => e.type === 'tool').slice(-6));
+	const tools = $derived(progress?.tools.slice(-6) ?? []);
 
 	// the open repo's guides first
 	const sortedGuides = $derived([
@@ -129,7 +135,7 @@
 	async function generate() {
 		if (!target) return;
 		failure = '';
-		events = [];
+		progress = null;
 		try {
 			const resolved = await generateGuide({ repo, ...target });
 			follow(resolved.start, resolved.stop);
@@ -141,29 +147,16 @@
 	async function follow(startSha: string, stopSha: string) {
 		generating = true;
 		failure = '';
-		events = [];
+		progress = null;
 		try {
-			const res = await fetch(
-				`/api/guides/events?${new URLSearchParams({ repo, start: startSha, stop: stopSha })}`
-			);
-			if (!res.ok || !res.body) throw new Error('Lost track of the generation');
-			const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-			let buffer = '';
-			for (;;) {
-				const { value, done } = await reader.read();
-				if (done) break;
-				buffer += value;
-				const lines = buffer.split('\n');
-				buffer = lines.pop() ?? '';
-				for (const line of lines.filter(Boolean)) {
-					const event: GuideEvent = JSON.parse(line);
-					events.push(event);
-					if (event.type === 'done') open(event.start, event.stop);
-					if (event.type === 'error') failure = event.message;
-				}
+			const follow = crypto.randomUUID();
+			for await (const next of followGuide({ repo, start: startSha, stop: stopSha, follow })) {
+				progress = next;
+				if (next.done) open(next.done.start, next.done.stop);
+				if (next.error) failure = next.error;
 			}
 		} catch (e) {
-			failure = e instanceof Error ? e.message : String(e);
+			failure = errorText(e);
 		} finally {
 			generating = false;
 		}
@@ -359,7 +352,7 @@
 				</p>
 			{/if}
 
-			{#if generating || events.length}
+			{#if generating || progress}
 				<div class="rounded-xl border border-line bg-subtle/60 px-3 py-2.5">
 					<p class="flex items-center gap-2 text-[12.5px] font-medium">
 						{#if generating}
@@ -369,14 +362,12 @@
 						{:else if failure}
 							<span class="size-1.5 rounded-full bg-del"></span>
 						{/if}
-						{failure || (status?.type === 'status' ? status.text : 'Working')}
+						{failure || progress?.status || 'Working'}
 					</p>
 					{#if tools.length}
 						<ul class="mt-1.5 flex flex-col gap-0.5 pl-5">
-							{#each tools as event, i (i)}
-								<li class="truncate font-mono text-[11px] text-muted">
-									{event.type === 'tool' ? event.text : ''}
-								</li>
+							{#each tools as tool, i (i)}
+								<li class="truncate font-mono text-[11px] text-muted">{tool}</li>
 							{/each}
 						</ul>
 					{/if}

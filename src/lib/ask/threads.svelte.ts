@@ -1,13 +1,11 @@
-import { askClaude, removeThread, stopAnswer } from './ask.remote';
-import type { AskEvent, LineSpan, Scope, Side, Step, Thread } from './types';
+import { isHttpError } from '@sveltejs/kit';
+import { errorText } from '$lib/errors';
+import { startAnswer, type Answer } from './answer';
+import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
+import type { LineSpan, Scope, Side, Thread } from './types';
 
-/** An answer on its way, built up from the streamed events. */
-export interface Live {
-	status: string;
-	steps: Step[];
-	/** the answer so far */
-	text: string;
-	thinkingTokens: number;
+/** An answer on its way, as the server last sent it. */
+export interface Live extends Answer {
 	startedAt: number;
 }
 
@@ -186,26 +184,19 @@ export class Threads {
 	/** Streams the answer being written in a thread, from the start. */
 	async follow(id: string, scope = this.#config().scope) {
 		const { repo } = this.#config();
-		this.live[id] = {
-			status: 'Starting Claude',
-			steps: [],
-			text: '',
-			thinkingTokens: 0,
-			startedAt: Date.now()
-		};
+		const startedAt = Date.now();
+		this.live[id] = { ...startAnswer(), startedAt };
 		delete this.lost[id];
 		try {
-			const res = await fetch(
-				`/api/ask/events?${new URLSearchParams({ repo, scope, thread: id })}`
-			);
-			if (res.status === 404) {
-				this.lost[id] = true;
-				return;
+			const follow = crypto.randomUUID();
+			for await (const answer of followAnswer({ repo, scope, thread: id, follow })) {
+				this.live[id] = { ...answer, startedAt };
+				if (answer.thread) this.#upsert(answer.thread);
+				if (answer.error) this.#fail(id, answer.error);
 			}
-			if (!res.ok || !res.body) throw new Error('Lost track of the answer');
-			await readLines(res.body, (event: AskEvent) => this.#apply(id, event));
 		} catch (e) {
-			this.#fail(id, e instanceof Error ? e.message : String(e));
+			if (isHttpError(e, 404)) this.lost[id] = true;
+			else this.#fail(id, errorText(e));
 		} finally {
 			delete this.live[id];
 		}
@@ -233,47 +224,6 @@ export class Threads {
 		delete this.replies[id];
 		if (this.open === id) this.open = null;
 		if (this.#lastOpen === id) this.#lastOpen = null;
-	}
-
-	#apply(id: string, event: AskEvent) {
-		const live = this.live[id];
-		if (!live) return;
-		// text before a thought or a tool call was said on the way, not the answer
-		const aside = () => {
-			if (live.text.trim()) live.steps.push({ type: 'text', text: live.text.trim() });
-			live.text = '';
-		};
-		switch (event.type) {
-			case 'status':
-				live.status = event.text;
-				break;
-			case 'thinking': {
-				aside();
-				const last = live.steps.at(-1);
-				if (last?.type === 'thinking') last.text += event.text;
-				else live.steps.push({ type: 'thinking', text: event.text });
-				live.status = 'Thinking';
-				break;
-			}
-			case 'thinking_tokens':
-				live.thinkingTokens = event.tokens;
-				break;
-			case 'tool':
-				aside();
-				live.steps.push({ type: 'tool', text: event.text });
-				live.status = event.text;
-				break;
-			case 'text':
-				live.text += event.text;
-				live.status = 'Answering';
-				break;
-			case 'done':
-				this.#upsert(event.thread);
-				break;
-			case 'error':
-				this.#fail(id, event.message);
-				break;
-		}
 	}
 
 	/** Shows an answer that failed the way the server saved it. */
@@ -315,19 +265,5 @@ function writeJson(key: string, value: unknown) {
 		localStorage.setItem(key, JSON.stringify(value));
 	} catch {
 		// private windows can refuse storage, it still works for this visit
-	}
-}
-
-/** Calls `onEvent` for every line of an NDJSON stream. */
-async function readLines<T>(body: NonNullable<Response['body']>, onEvent: (event: T) => void) {
-	const reader = body.pipeThrough(new TextDecoderStream()).getReader();
-	let buffer = '';
-	for (;;) {
-		const { value, done } = await reader.read();
-		if (done) break;
-		buffer += value;
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
-		for (const line of lines.filter(Boolean)) onEvent(JSON.parse(line));
 	}
 }

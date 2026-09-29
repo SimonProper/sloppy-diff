@@ -63,7 +63,7 @@ export interface Thread {
 /** Which diff a thread belongs to: a commit range, or the uncommitted changes. */
 export type Scope = 'worktree' | `${string}..${string}`;
 
-/** An answer's progress, streamed to the browser as NDJSON. */
+/** What happens while Claude answers, folded into an Answer for the page. */
 export type AskEvent =
 	| { type: 'status'; text: string }
 	| { type: 'thinking'; text: string }

@@ -15,9 +15,12 @@ type Final = { type: 'done' } | { type: 'error'; message: string };
 /** How long a finished job's events stay around for a page that reconnects. */
 const KEEP_FINISHED_MS = 5 * 60_000;
 
+/** How long a watcher waits for more events before sending the state on. */
+const BATCH_MS = 50;
+
 /**
  * Background jobs of one kind. A job runs until it emits `done` or `error`,
- * every event is kept so a page that reconnects can replay it from the start.
+ * every event is kept so a page that reconnects gets the whole state again.
  */
 export function jobQueue<E extends { type: string }>(name: string) {
 	// kept on globalThis so a dev server module reload doesn't orphan running jobs
@@ -67,37 +70,34 @@ export function jobQueue<E extends { type: string }>(name: string) {
 }
 
 /**
- * Streams a job's events as NDJSON: everything so far, then live events
- * until it finishes. Reconnecting replays from the start.
+ * The job's state after everything it has said so far, then again after each
+ * new event until it finishes. Events that arrive together are folded into one
+ * state, so a fast stream of text doesn't send the whole answer every token.
  */
-export function streamJob<E>(job: Job<E>): Response {
-	const encoder = new TextEncoder();
-	let listener: ((event: E) => void) | undefined;
-
-	const stream = new ReadableStream<Uint8Array>({
-		start(controller) {
-			const send = (event: E) => controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
-
-			job.events.forEach(send);
-			if (job.finished) {
-				controller.close();
-				return;
+export async function* watchJob<E, S>(
+	job: Job<E>,
+	fold: (state: S, event: E) => S,
+	state: S,
+	signal?: AbortSignal
+): AsyncGenerator<S> {
+	let folded = 0;
+	let wake: (() => void) | undefined;
+	const listener = () => wake?.();
+	job.listeners.add(listener);
+	signal?.addEventListener('abort', listener);
+	try {
+		for (;;) {
+			while (folded < job.events.length) state = fold(state, job.events[folded++]);
+			// a copy, the fold changes the state in place while this one is on its way
+			yield structuredClone(state);
+			if (job.finished || signal?.aborted) return;
+			if (folded === job.events.length) {
+				await new Promise<void>((resolve) => (wake = resolve));
+				await new Promise((resolve) => setTimeout(resolve, BATCH_MS));
 			}
-			listener = (event) => {
-				send(event);
-				if (job.finished) {
-					job.listeners.delete(listener!);
-					controller.close();
-				}
-			};
-			job.listeners.add(listener);
-		},
-		cancel() {
-			if (listener) job.listeners.delete(listener);
 		}
-	});
-
-	return new Response(stream, {
-		headers: { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' }
-	});
+	} finally {
+		job.listeners.delete(listener);
+		signal?.removeEventListener('abort', listener);
+	}
 }

@@ -1,4 +1,5 @@
-import { command, query } from '$app/server';
+import { command, getRequestEvent, query } from '$app/server';
+import { error } from '@sveltejs/kit';
 import { cancelJob, getJob, startGuide } from '$lib/server/generate';
 import {
 	commitsInRange,
@@ -9,7 +10,9 @@ import {
 	resolveStart
 } from '$lib/server/git';
 import { deleteGuide, loadGuide } from '$lib/server/guides';
+import { watchJob } from '$lib/server/jobs';
 import { badRequestOnError } from '$lib/server/requests';
+import { applyGuideEvent, startProgress } from './progress';
 
 type Range = { repo: string; start: string; stop: string };
 
@@ -55,6 +58,19 @@ export const generateGuide = command('unchecked', ({ repo, start, stop }: Range)
 		startGuide(root, range.start, range.stop);
 		return { repo: root, ...range };
 	})
+);
+
+/**
+ * How the generation for start..stop (resolved shas) is going, until it's done.
+ * `follow` only keys the stream, like followAnswer's.
+ */
+export const followGuide = query.live(
+	'unchecked',
+	async function* ({ repo, start, stop }: Range & { follow: string }) {
+		const job = getJob(repo, start, stop);
+		if (!job) error(404, 'No guide is being generated for this range');
+		yield* watchJob(job, applyGuideEvent, startProgress(), getRequestEvent().request.signal);
+	}
 );
 
 export const cancelGuide = command('unchecked', ({ repo, start, stop }: Range) => {

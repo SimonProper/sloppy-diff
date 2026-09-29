@@ -48,7 +48,7 @@ export interface GuideListing {
 	sections: number;
 }
 
-/** A generation run's progress, streamed to the browser as NDJSON. */
+/** What happens while a guide is generated, folded into a GuideProgress for the page. */
 export type GuideEvent =
 	| { type: 'status'; text: string }
 	| { type: 'tool'; text: string }
