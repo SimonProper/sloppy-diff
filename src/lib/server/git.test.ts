@@ -191,6 +191,40 @@ describe('with remotes', () => {
 		});
 	});
 
+	test('a branch taken off the pushed copy is not its base when only on a remote either', async () => {
+		// next is taken off origin/sibling, gets n1 and is pushed, then only its copy on
+		// origin is left, and sibling gets s2
+		const r = graph();
+		r.at(1, 'update-ref', 'refs/remotes/origin/sibling', 'sibling');
+		r.at(2, 'checkout', '-q', '-b', 'next', 'origin/sibling');
+		r.commit('n1');
+		r.at(3, 'update-ref', 'refs/remotes/origin/next', 'next');
+		r.git('checkout', '-q', 'sibling');
+		r.git('branch', '-D', 'next');
+		r.commit('s2');
+		expect(await branchBase(r.root, 'sibling', 'main')).toEqual({
+			name: 'main',
+			mergeBase: await r.sha('m2'),
+			merged: false
+		});
+	});
+
+	test('a branch taken off one only on a remote is compared against it', async () => {
+		const r = graph();
+		r.git('checkout', '-q', '-b', 'theirs', 'main');
+		r.commit('t1');
+		r.at(1, 'update-ref', 'refs/remotes/origin/theirs', 'theirs');
+		r.git('checkout', '-q', 'main');
+		r.git('branch', '-D', 'theirs');
+		r.at(2, 'checkout', '-q', '-b', 'mine', 'origin/theirs');
+		r.commit('y1');
+		expect(await branchBase(r.root, 'mine', 'main')).toEqual({
+			name: 'origin/theirs',
+			mergeBase: await r.sha('origin/theirs'),
+			merged: false
+		});
+	});
+
 	test('a local copy wins over an equally close remote one', async () => {
 		expect((await branchBase(r.root, 'stacked', 'origin/main'))?.name).toBe('feature');
 	});

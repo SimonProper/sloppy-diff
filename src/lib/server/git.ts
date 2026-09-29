@@ -275,9 +275,9 @@ export async function branchBase(
 	for (const tier of tiers.values()) {
 		let fallback: { name: string; point: string } | null = null;
 		for (const candidate of tier) {
-			// only a local branch's reflog says where it was taken off, a remote one's
-			// starts whenever it was first fetched
-			const other = started && candidate.local && (await createdAt(common, candidate.ref));
+			// a remote branch's reflog starts when it was first fetched, one first seen
+			// further along this one or later was still taken off it
+			const other = started && (await createdAt(common, candidate.ref));
 			if (other && (await takenOff(root, other, started))) continue;
 			const point = (await git(root, ['merge-base', candidate.short, name]).catch(() => '')).trim();
 			if (!point) continue;
