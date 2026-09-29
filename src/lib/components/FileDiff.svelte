@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 	import type { GuideNote } from '$lib/guide/types';
 	import { selectedSpan, span } from '$lib/ask/rows';
@@ -64,9 +65,18 @@
 		(remember ? storedOpen(remember, displayPath(file)) : undefined) ?? startsOpen
 	);
 
-	function toggle() {
+	let header: HTMLElement;
+
+	async function toggle() {
+		// collapsing a file read partway down would leave the page where the shorter
+		// file puts it, often a few files further on. Its header stays where it was
+		// stuck instead, with the next file right below it
+		const top = header.getBoundingClientRect().top;
 		open = !open;
 		if (remember) storeOpen(remember, displayPath(file), open, startsOpen);
+		await tick();
+		const moved = header.getBoundingClientRect().top - top;
+		if (moved) window.scrollBy({ top: moved, behavior: 'instant' });
 	}
 
 	const REFORMATTED = 'Reformatted, nothing in this line is new';
@@ -285,6 +295,7 @@
 	}}
 >
 	<header
+		bind:this={header}
 		class={[
 			'flex h-10 items-center gap-2.5 bg-surface px-3 text-[13px]',
 			// below the header and the sticky changes bar, and a guide step's title (44px)
