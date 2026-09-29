@@ -131,6 +131,11 @@
 			null
 	);
 
+	/** changed with no tokens marked as new: in lines mode, or new or removed as a whole */
+	function tinted(line: DiffLine) {
+		return line.kind !== 'ctx' && !line.spans?.length && !line.reformatted;
+	}
+
 	function isPicked(hunk: string, index: number, line: DiffLine, side?: Side) {
 		return picked?.hunk === hunk && inSpan(picked, index, line, side);
 	}
@@ -437,6 +442,7 @@
 											class={[
 												'row flex',
 												line.kind,
+												tinted(line) && 'tinted',
 												line.reformatted && 'reformatted',
 												on && 'picked',
 												cursor?.hunk === hunk.id && cursor.head === index && 'cursor'
@@ -454,7 +460,8 @@
 												<span class="w-12 pr-2">{line.new ?? ''}</span>
 												{@render plus()}
 											</span>
-											{@render marker(line)}
+											<!-- pinned beside the gutter, the one sign of a change that isn't a colour -->
+											{@render marker(line, 'pinned sticky left-24')}
 											<span class="text pr-8 whitespace-pre">{@render code(line)}</span>
 											<!-- pinned to the visible right edge while the hunk scrolls sideways -->
 											{@render slot(marks.get(`${hunk.id}:${index}`), on, 'sticky right-0 ml-auto')}
@@ -517,8 +524,8 @@
 	{/if}
 {/snippet}
 
-{#snippet marker(line: DiffLine)}
-	<span class="marker w-5 shrink-0 text-center select-none"
+{#snippet marker(line: DiffLine, place: string)}
+	<span class={['marker w-5 shrink-0 text-center select-none', place]}
 		>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
 	>
 {/snippet}
@@ -538,6 +545,7 @@
 			class={[
 				'row flex min-w-0',
 				line.kind,
+				tinted(line) && 'tinted',
 				line.reformatted && 'reformatted',
 				side === 'old' && 'split-old',
 				on && 'picked',
@@ -557,7 +565,7 @@
 				onpointerdown={(e) => pick(e, hunk.id, index, side)}
 				>{side === 'old' ? line.old : line.new}{@render plus()}</span
 			>
-			{@render marker(line)}
+			{@render marker(line, '')}
 			<span class="text min-w-0 flex-1 pr-4 break-all whitespace-pre-wrap"
 				>{@render code(line)}</span
 			>
@@ -571,31 +579,45 @@
 {/snippet}
 
 <style>
+	/* the gutter says a line was added or removed, with a saturated edge against the
+	   code. The code itself stays on the surface so the changed tokens are the only
+	   colour in it, and only a line with no tokens marked gets a faint tint */
 	.gutter {
 		background: var(--surface);
 		border-right: 1px solid var(--line);
 	}
 
 	.row.add {
-		background: var(--add-bg);
+		--hue: var(--add);
+		--gutter-bg: var(--add-gutter);
+		--number: var(--add-number);
+		--row-bg: var(--add-bg);
 	}
-	.row.add .gutter {
-		background: var(--add-gutter);
-		color: var(--add);
+	.row.del {
+		--hue: var(--del);
+		--gutter-bg: var(--del-gutter);
+		--number: var(--del-number);
+		--row-bg: var(--del-bg);
 	}
-	.row.add .marker {
-		color: var(--add);
+	.row:is(.add, .del) .gutter {
+		background: var(--gutter-bg);
+		color: var(--number);
+		border-right-color: var(--hue);
+	}
+	.row:is(.add, .del) .marker {
+		color: var(--hue);
+	}
+	.row.tinted {
+		background: var(--row-bg);
 	}
 
-	.row.del {
-		background: var(--del-bg);
+	/* opaque, so the code scrolls under it, and washed like the rest of its row */
+	.marker.pinned {
+		background: var(--surface);
+		box-shadow: inherit;
 	}
-	.row.del .gutter {
-		background: var(--del-gutter);
-		color: var(--del);
-	}
-	.row.del .marker {
-		color: var(--del);
+	.row.tinted .marker.pinned {
+		background: inherit;
 	}
 
 	/* the pieces of a line that are actually new */
@@ -608,10 +630,16 @@
 		border-radius: 3px;
 	}
 
-	/* changed according to git, but nothing new: re-indented or re-wrapped */
-	.row.reformatted.add,
+	/* changed according to git, but nothing new: re-indented or re-wrapped, so a
+	   quieter gutter with no edge */
+	.row.reformatted.add {
+		--gutter-bg: var(--add-quiet);
+	}
 	.row.reformatted.del {
-		background: var(--surface);
+		--gutter-bg: var(--del-quiet);
+	}
+	.row.reformatted .gutter {
+		border-right-color: var(--line);
 	}
 	.row.reformatted .text,
 	.row.reformatted .marker {
@@ -649,12 +677,19 @@
 		background: color-mix(in oklab, var(--fg) 10%, var(--surface));
 		color: var(--fg);
 	}
+	/* a darker shade of its own colour, so added and removed still tell apart */
+	.row.picked:is(.add, .del) .gutter {
+		background: color-mix(in oklab, var(--fg) 8%, var(--gutter-bg));
+	}
 	/* the keyboard cursor's line, on top of the pick's wash: a darker gutter with a
 	   hairline down its left edge */
 	.row.cursor .gutter {
 		box-shadow: inset 1px 0 0 var(--fg);
 		background: color-mix(in oklab, var(--fg) 16%, var(--surface));
 		color: var(--fg);
+	}
+	.row.cursor:is(.add, .del) .gutter {
+		background: color-mix(in oklab, var(--fg) 14%, var(--gutter-bg));
 	}
 	[data-index] {
 		/* the keyboard cursor scrolls rows into view clear of the sticky bars */

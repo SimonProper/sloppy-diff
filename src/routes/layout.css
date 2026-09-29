@@ -45,10 +45,16 @@
 	--mod: #9a6700;
 	--move: #8250df;
 
-	--add-bg: color-mix(in oklab, var(--add) 9%, var(--surface));
+	/* the gutter carries a changed line, the code only gets a faint tint when no
+	   tokens in it are marked as new */
+	--add-bg: color-mix(in oklab, var(--add) 5%, var(--surface));
 	--add-gutter: color-mix(in oklab, var(--add) 16%, var(--surface));
-	--del-bg: color-mix(in oklab, var(--del) 8%, var(--surface));
+	--add-quiet: color-mix(in oklab, var(--add) 7%, var(--surface));
+	--add-number: color-mix(in oklab, var(--add) 80%, var(--fg));
+	--del-bg: color-mix(in oklab, var(--del) 5%, var(--surface));
 	--del-gutter: color-mix(in oklab, var(--del) 15%, var(--surface));
+	--del-quiet: color-mix(in oklab, var(--del) 7%, var(--surface));
+	--del-number: color-mix(in oklab, var(--del) 80%, var(--fg));
 	--add-novel: color-mix(in oklab, var(--add) 26%, var(--surface));
 	--del-novel: color-mix(in oklab, var(--del) 24%, var(--surface));
 
@@ -77,10 +83,12 @@
 	--mod: #d29922;
 	--move: #ab7df8;
 
-	--add-bg: color-mix(in oklab, var(--add) 12%, var(--surface));
+	--add-bg: color-mix(in oklab, var(--add) 7%, var(--surface));
 	--add-gutter: color-mix(in oklab, var(--add) 20%, var(--surface));
-	--del-bg: color-mix(in oklab, var(--del) 11%, var(--surface));
+	--add-quiet: color-mix(in oklab, var(--add) 9%, var(--surface));
+	--del-bg: color-mix(in oklab, var(--del) 7%, var(--surface));
 	--del-gutter: color-mix(in oklab, var(--del) 19%, var(--surface));
+	--del-quiet: color-mix(in oklab, var(--del) 9%, var(--surface));
 	--add-novel: color-mix(in oklab, var(--add) 32%, var(--surface));
 	--del-novel: color-mix(in oklab, var(--del) 30%, var(--surface));
 	--float: 0 8px 30px -12px rgb(0 0 0 / 0.8);

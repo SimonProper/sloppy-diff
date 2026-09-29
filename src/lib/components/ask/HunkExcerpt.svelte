@@ -37,6 +37,9 @@
 	});
 
 	const asked = (index: number, line: DiffLine) => inSpan(anchor, index, line);
+	/** changed with no tokens marked as new, tinted across the code */
+	const tinted = (line: DiffLine) =>
+		line.kind !== 'ctx' && !line.spans?.length && !line.reformatted;
 	// a question about one side of a split diff: the other side's lines stay, dimmed
 	const dimmed = (line: DiffLine) =>
 		(anchor.side === 'old' && line.kind === 'add') ||
@@ -117,7 +120,13 @@
 					{#each shown as { line, index } (index)}
 						{@const on = asked(index, line)}
 						<div
-							class={['row flex', line.kind, on && 'asked', dimmed(line) && 'dim']}
+							class={[
+								'row flex',
+								line.kind,
+								tinted(line) && 'tinted',
+								on && 'asked',
+								dimmed(line) && 'dim'
+							]}
 							data-asked={on && index === anchor.start ? '' : undefined}
 						>
 							<span
@@ -153,25 +162,30 @@
 		background: var(--surface);
 		border-right: 1px solid var(--line);
 	}
+	/* drawn like the diff: a tinted gutter with a saturated edge, the code only
+	   tinted when no tokens in it are marked */
 	.row.add {
-		background: var(--add-bg);
-	}
-	.row.add .gutter {
-		background: var(--add-gutter);
-		color: var(--add);
-	}
-	.row.add .marker {
-		color: var(--add);
+		--hue: var(--add);
+		--gutter-bg: var(--add-gutter);
+		--number: var(--add-number);
+		--row-bg: var(--add-bg);
 	}
 	.row.del {
-		background: var(--del-bg);
+		--hue: var(--del);
+		--gutter-bg: var(--del-gutter);
+		--number: var(--del-number);
+		--row-bg: var(--del-bg);
 	}
-	.row.del .gutter {
-		background: var(--del-gutter);
-		color: var(--del);
+	.row:is(.add, .del) .gutter {
+		background: var(--gutter-bg);
+		color: var(--number);
+		border-right-color: var(--hue);
 	}
-	.row.del .marker {
-		color: var(--del);
+	.row:is(.add, .del) .marker {
+		color: var(--hue);
+	}
+	.row.tinted {
+		background: var(--row-bg);
 	}
 	.row.add :global(.novel) {
 		background: var(--add-novel);
@@ -187,6 +201,9 @@
 	.row.asked .gutter {
 		background: color-mix(in oklab, var(--fg) 10%, var(--surface));
 		color: var(--fg);
+	}
+	.row.asked:is(.add, .del) .gutter {
+		background: color-mix(in oklab, var(--fg) 8%, var(--gutter-bg));
 	}
 	.row.dim {
 		opacity: 0.38;
