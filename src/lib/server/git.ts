@@ -442,8 +442,12 @@ async function mergedBase(root: string, name: string, into: string): Promise<Bra
 		after.length ? mergeBase(root, `${after.at(-1)}^1`, name) : null,
 		resolveCommit(root, name)
 	]);
-	// fast-forwarded, or simply behind: it has nothing of its own
-	if (!point || point === tip) return { name: into, mergeBase: tip, merged: false };
+	// fast-forwarded, or simply behind: it has nothing of its own, its last commit
+	// is what it shows, against nothing when that's the first commit
+	if (!point || point === tip) {
+		const previous = await resolveCommit(root, `${tip}^`).catch(() => emptyTree(root));
+		return { name: into, mergeBase: previous, merged: false };
+	}
 	return { name: into, mergeBase: point, merged: true };
 }
 

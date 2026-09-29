@@ -99,6 +99,18 @@ describe('branchBase', () => {
 		});
 	});
 
+	test('a branch with nothing of its own shows its last commit', async () => {
+		// taken off main's tip, or fast-forwarded into it: main contains all of it
+		r.git('branch', 'fresh', 'main');
+		r.git('branch', 'old', 'm2');
+		expect(await branchBase(r.root, 'fresh', 'main')).toEqual({
+			name: 'main',
+			mergeBase: await r.sha('main^'),
+			merged: false
+		});
+		expect((await branchBase(r.root, 'old', 'main'))?.mergeBase).toBe(await r.sha('m1'));
+	});
+
 	test('the default branch has nothing to compare against without a remote', async () => {
 		expect(await branchBase(r.root, 'main', 'main')).toBeNull();
 	});

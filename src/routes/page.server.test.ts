@@ -118,7 +118,10 @@ describe('the caches notice what git changed', () => {
 		expect(before.data.selection.branch.commits).toHaveLength(1);
 		r.git('branch', '-f', 'team/topic', 'main');
 		const after = await run(r.root, { branch: 'team/topic' });
-		expect(after.data.selection.branch.commits).toHaveLength(0);
+		// nothing of its own any more, main's last commit is what it shows
+		expect(after.data.selection.branch.commits.map((c: { sha: string }) => c.sha)).toEqual([
+			r.git('rev-parse', '--short=7', 'main')
+		]);
 	});
 
 	test('a range to a branch that moved is diffed where the branch is now', async () => {
