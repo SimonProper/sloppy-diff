@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { redirect } from '@sveltejs/kit';
 import { parseDiff } from '$lib/diff/parse';
 import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, DiffFile } from '$lib/diff/types';
@@ -15,6 +16,7 @@ import {
 	currentBranch,
 	defaultBranch,
 	errorMessage,
+	isDefaultBranch,
 	listBranches,
 	listCommits,
 	nearestBranch,
@@ -131,6 +133,28 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		timing.measure(name, remember(`${root}\0${name}\0${detail}`, version, compute));
 
 	const head = cached('head', () => Promise.all([currentBranch(root), defaultBranch(root)]));
+
+	// the default branch split off nothing, with nothing unpushed to show its history is
+	// stepped through a commit at a time instead, from its last one
+	if (mode === 'branch') {
+		const [, defaultBase] = await head;
+		const name = inputs.branch;
+		const base =
+			isDefaultBranch(name, defaultBase) &&
+			(await cached(
+				'base',
+				() => branchBase(root, name, defaultBase).catch(() => undefined),
+				name
+			));
+		if (base === null) {
+			const to = new URLSearchParams(url.searchParams);
+			to.delete('branch');
+			to.delete('commits');
+			to.set('commit', await resolveCommit(root, name));
+			to.set('on', name);
+			redirect(307, `${url.pathname}?${to}`);
+		}
+	}
 	const rev = mode === 'commit' ? '' : mode === 'branch' ? inputs.branch : inputs.to;
 	const meta = Promise.all([
 		cached('branches', () => listBranches(root).catch(() => [])),

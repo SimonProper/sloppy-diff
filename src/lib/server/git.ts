@@ -323,6 +323,11 @@ async function isAncestor(root: string, ancestor: string, of: string): Promise<b
 	);
 }
 
+/** `name` is the default branch, or the local copy of a default branch on a remote. */
+export function isDefaultBranch(name: string, defaultBase: string | null): boolean {
+	return name === defaultBase || !!defaultBase?.endsWith(`/${name}`);
+}
+
 export interface BranchInfo {
 	name: string;
 	/** the branch it split off, found by looking at the history */
@@ -348,7 +353,7 @@ export async function describeBranch(
 	]);
 	if (!base) {
 		throw new Error(
-			name === defaultBase || defaultBase?.endsWith(`/${name}`)
+			isDefaultBranch(name, defaultBase)
 				? `${name} is the default branch and has nothing unpushed, pick a range instead`
 				: `Couldn't tell which branch ${name} was taken from, pick a range instead`
 		);

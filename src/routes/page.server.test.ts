@@ -82,6 +82,17 @@ describe('on the fixture as it is', () => {
 		expect(data.lane.earlier[0].subject).toBe('before');
 	});
 
+	test('the default branch is stepped through from its last commit', async () => {
+		// nothing it split off, and nothing unpushed without a remote
+		const redirect = await run(r.root, { branch: 'main', commits: 'abc' }).catch((e) => e);
+		expect(redirect.status).toBe(307);
+		const to = new URL(redirect.location, 'http://localhost').searchParams;
+		expect(to.get('commit')).toBe(r.git('rev-parse', '--short=12', 'main'));
+		expect(to.get('on')).toBe('main');
+		expect(to.get('repo')).toBe(r.root);
+		expect(to.has('branch') || to.has('commits')).toBe(false);
+	});
+
 	test('a commit on the default branch follows its history', async () => {
 		const { data } = await run(r.root, { commit: 'main' });
 		expect(data.lane).toMatchObject({ name: 'main', base: null, earlier: [] });
