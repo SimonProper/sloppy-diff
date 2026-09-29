@@ -796,10 +796,10 @@
 		   stripes of stacked empty cells join up instead of restarting at each row */
 		background-image: linear-gradient(
 			-45deg,
-			var(--subtle) 25%,
-			var(--surface) 25% 50%,
-			var(--subtle) 50% 75%,
-			var(--surface) 75%
+			var(--subtle) 12.5%,
+			var(--surface) 12.5% 50%,
+			var(--subtle) 50% 62.5%,
+			var(--surface) 62.5%
 		);
 		background-size: 10px 10px;
 	}
