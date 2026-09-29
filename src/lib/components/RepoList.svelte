@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { pickRepo } from '$lib/pick-repo';
-	import { loadRepos, type Scan } from '$lib/repos';
+	import { errorText } from '$lib/errors';
+	import type { Scan } from '$lib/repos';
+	import { getRepos, pickRepo, rescanRepos } from '$lib/repos.remote';
 	import { timeAgo } from '$lib/refs';
 
 	interface Props {
@@ -28,9 +29,9 @@
 		scanning = true;
 		problem = '';
 		try {
-			scan = await loadRepos(force);
+			scan = await (force ? rescanRepos() : getRepos());
 		} catch (e) {
-			problem = e instanceof Error ? e.message : String(e);
+			problem = errorText(e);
 		} finally {
 			scanning = false;
 		}
@@ -77,10 +78,14 @@
 	async function choose() {
 		picking = true;
 		problem = '';
-		const result = await pickRepo(current);
-		picking = false;
-		if ('error' in result) problem = result.error;
-		else if ('repo' in result) onpick(result.repo);
+		try {
+			const repo = await pickRepo(current);
+			if (repo) onpick(repo);
+		} catch (e) {
+			problem = errorText(e);
+		} finally {
+			picking = false;
+		}
 	}
 </script>
 

@@ -1,3 +1,4 @@
+import { askClaude, removeThread, stopAnswer } from './ask.remote';
 import type { AskEvent, LineSpan, Scope, Side, Step, Thread } from './types';
 
 /** An answer on its way, built up from the streamed events. */
@@ -156,21 +157,15 @@ export class Threads {
 	async ask(text: string, thread?: string, options: { retry?: boolean } = {}): Promise<string> {
 		const { repo, from, to } = this.#config();
 		const draft = this.draft;
-		const res = await fetch('/api/ask', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				repo,
-				from,
-				to,
-				question: text,
-				...(thread
-					? { thread, retry: options.retry === true }
-					: { span: draft?.span, section: draft?.section })
-			})
+		const { scope, thread: saved } = await askClaude({
+			repo,
+			from,
+			to,
+			text,
+			...(thread
+				? { thread, retry: options.retry === true }
+				: { span: draft?.span, section: draft?.section })
 		});
-		if (!res.ok) throw new Error((await res.json()).message);
-		const { scope, thread: saved }: { scope: Scope; thread: Thread } = await res.json();
 
 		this.#upsert(saved);
 		delete this.lost[saved.id];
@@ -228,15 +223,12 @@ export class Threads {
 
 	cancel(id: string) {
 		const { repo, scope } = this.#config();
-		fetch(`/api/ask?${new URLSearchParams({ repo, scope, thread: id })}`, { method: 'DELETE' });
+		stopAnswer({ repo, scope, thread: id });
 	}
 
 	async remove(id: string) {
 		const { repo, scope } = this.#config();
-		const res = await fetch(`/api/threads?${new URLSearchParams({ repo, scope, thread: id })}`, {
-			method: 'DELETE'
-		});
-		if (!res.ok) throw new Error((await res.json()).message);
+		await removeThread({ repo, scope, thread: id });
 		this.list = this.list.filter((t) => t.id !== id);
 		delete this.replies[id];
 		if (this.open === id) this.open = null;

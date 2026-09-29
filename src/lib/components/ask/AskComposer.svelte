@@ -5,6 +5,7 @@
 	import { spanLabel } from '$lib/ask/span';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { DiffFile } from '$lib/diff/types';
+	import { errorText } from '$lib/errors';
 	import type { Guide } from '$lib/guide/types';
 	import AskField from './AskField.svelte';
 
@@ -93,7 +94,7 @@
 			const id = await threads.ask(text);
 			if (!background) threads.openLens(id);
 		} catch (e) {
-			failure = e instanceof Error ? e.message : String(e);
+			failure = errorText(e);
 		} finally {
 			sending = false;
 		}

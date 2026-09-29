@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { errorText } from '$lib/errors';
+	import { cancelGuide, generateGuide, getBranch, getRange } from '$lib/guide/guides.remote';
 	import type { GuideEvent, GuideListing } from '$lib/guide/types';
 	import { timeAgo, type Branch, type Commit } from '$lib/refs';
 	import CommitList from './CommitList.svelte';
@@ -44,32 +46,24 @@
 	// svelte-ignore state_referenced_locally
 	let stop = $state(initial.stop);
 
-	type BranchInfo = {
-		name: string;
-		base: string;
-		mergeBase: string;
-		merged: boolean;
-		tip: string;
-		commits: Commit[];
-	};
-	let info = $state<BranchInfo | null>(null);
+	let info = $state<Awaited<ReturnType<typeof getBranch>> | null>(null);
 	let infoError = $state('');
 
 	$effect(() => {
 		if (!canGenerate || tab !== 'branch' || !branch) return;
-		const controller = new AbortController();
+		let stale = false;
 		infoError = '';
-		fetch(`/api/branch?${new URLSearchParams({ repo, branch })}`, { signal: controller.signal })
-			.then(async (res) => {
-				if (!res.ok) throw new Error((await res.json()).message);
-				info = await res.json();
-			})
-			.catch((e) => {
-				if (controller.signal.aborted) return;
+		getBranch({ repo, branch }).then(
+			(value) => {
+				if (!stale) info = value;
+			},
+			(e) => {
+				if (stale) return;
 				info = null;
-				infoError = e.message;
-			});
-		return () => controller.abort();
+				infoError = errorText(e);
+			}
+		);
+		return () => (stale = true);
 	});
 
 	/** What the guide covers: the whole branch, a span of it, or the range. */
@@ -88,14 +82,7 @@
 		tab = next;
 	}
 
-	type Range = {
-		start: string;
-		stop: string;
-		commits: Commit[];
-		hasGuide: boolean;
-		running: boolean;
-	};
-	let range = $state<Range | null>(null);
+	let range = $state<Awaited<ReturnType<typeof getRange>> | null>(null);
 	let rangeError = $state('');
 
 	let events = $state<GuideEvent[]>([]);
@@ -117,21 +104,21 @@
 		range = null;
 		rangeError = '';
 		if (!canGenerate || !target) return;
-		const params = new URLSearchParams({ repo, ...target });
-		const controller = new AbortController();
-		fetch(`/api/range?${params}`, { signal: controller.signal })
-			.then(async (res) => {
-				if (!res.ok) throw new Error((await res.json()).message);
-				range = await res.json();
+		let stale = false;
+		getRange({ repo, ...target }).then(
+			(value) => {
+				if (stale) return;
+				range = value;
 				// pick up a generation that is already running for this range
-				if (range?.running && !generating) follow(range.start, range.stop);
-			})
-			.catch((e) => {
-				if (controller.signal.aborted) return;
+				if (range.running && !generating) follow(range.start, range.stop);
+			},
+			(e) => {
+				if (stale) return;
 				range = null;
-				rangeError = e.message;
-			});
-		return () => controller.abort();
+				rangeError = errorText(e);
+			}
+		);
+		return () => (stale = true);
 	});
 
 	function open(start: string, stop: string) {
@@ -143,17 +130,12 @@
 		if (!target) return;
 		failure = '';
 		events = [];
-		const res = await fetch('/api/guides', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ repo, ...target })
-		});
-		if (!res.ok) {
-			failure = (await res.json()).message;
-			return;
+		try {
+			const resolved = await generateGuide({ repo, ...target });
+			follow(resolved.start, resolved.stop);
+		} catch (e) {
+			failure = errorText(e);
 		}
-		const resolved = await res.json();
-		follow(resolved.start, resolved.stop);
 	}
 
 	async function follow(startSha: string, stopSha: string) {
@@ -189,9 +171,7 @@
 
 	function cancel() {
 		if (!range) return;
-		fetch(`/api/guides?${new URLSearchParams({ repo, start: range.start, stop: range.stop })}`, {
-			method: 'DELETE'
-		});
+		cancelGuide({ repo, start: range.start, stop: range.stop });
 	}
 </script>
 

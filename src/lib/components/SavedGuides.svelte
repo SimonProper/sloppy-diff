@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
+	import { errorText } from '$lib/errors';
+	import { deleteSavedGuide } from '$lib/guide/guides.remote';
 	import type { GuideListing } from '$lib/guide/types';
 	import { timeAgo } from '$lib/refs';
 
@@ -29,10 +31,12 @@
 		}
 		deleting = key(g);
 		failure = '';
-		const params = new URLSearchParams({ repo: g.repo, start: g.start, stop: g.stop });
-		const res = await fetch(`/api/guides/saved?${params}`, { method: 'DELETE' });
-		if (res.ok) await invalidateAll();
-		else failure = (await res.json()).message;
+		try {
+			await deleteSavedGuide({ repo: g.repo, start: g.start, stop: g.stop });
+			await invalidateAll();
+		} catch (e) {
+			failure = errorText(e);
+		}
 		deleting = confirming = null;
 	}
 </script>

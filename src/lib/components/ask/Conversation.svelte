@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Message, Thread } from '$lib/ask/types';
+	import { errorText } from '$lib/errors';
 	import AskField from './AskField.svelte';
 	import Trail from './Trail.svelte';
 
@@ -34,7 +35,7 @@
 		try {
 			await threads.ask(text, thread.id);
 		} catch (e) {
-			failure = e instanceof Error ? e.message : String(e);
+			failure = errorText(e);
 		} finally {
 			sending = false;
 		}
@@ -45,7 +46,7 @@
 		try {
 			await threads.retry(thread.id);
 		} catch (e) {
-			failure = e instanceof Error ? e.message : String(e);
+			failure = errorText(e);
 		}
 	}
 
@@ -53,7 +54,7 @@
 		try {
 			await threads.remove(thread.id);
 		} catch (e) {
-			failure = e instanceof Error ? e.message : String(e);
+			failure = errorText(e);
 		}
 	}
 

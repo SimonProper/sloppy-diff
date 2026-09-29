@@ -20,17 +20,3 @@ export interface Scan {
 	/** the time or folder budget ran out before the walk finished */
 	truncated: boolean;
 }
-
-let scan: Promise<Scan> | undefined;
-
-/** The repos found on this machine, fetched once per page load unless refreshed. */
-export function loadRepos(refresh = false): Promise<Scan> {
-	if (!scan || refresh) {
-		scan = fetch(`/api/repos${refresh ? '?refresh' : ''}`).then((res) => {
-			if (!res.ok) throw new Error('Could not scan for repositories');
-			return res.json();
-		});
-		scan.catch(() => (scan = undefined));
-	}
-	return scan;
-}
