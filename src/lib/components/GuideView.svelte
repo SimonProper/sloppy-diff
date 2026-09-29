@@ -1,6 +1,8 @@
 <script lang="ts">
 	import SidebarLayout from './SidebarLayout.svelte';
-	import { tick, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
+	import { quintOut } from 'svelte/easing';
+	import type { TransitionConfig } from 'svelte/transition';
 	import { page } from '$app/state';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Layout } from '$lib/diff/split';
@@ -88,21 +90,62 @@
 		}
 	}
 
-	/** `advance` scrolls on to the next step left to review, used from the step itself */
-	async function toggleReviewed(id: string, advance = true) {
-		const done = !reviewed.includes(id);
-		reviewed = done ? [...reviewed, id] : reviewed.filter((r) => r !== id);
+	function toggleReviewed(id: string) {
+		reviewed = reviewed.includes(id) ? reviewed.filter((r) => r !== id) : [...reviewed, id];
 		try {
 			localStorage.setItem(storageKey, JSON.stringify(reviewed));
 		} catch {
 			// private windows can refuse storage, the state still works for this visit
 		}
-		if (done && advance) {
-			// once the step has collapsed, or the scroll aims where the next step used to be
-			await tick();
-			const next = sections.find((s) => !reviewed.includes(s.id));
-			if (next) document.getElementById(next.id)?.scrollIntoView({ behavior: 'smooth' });
+	}
+
+	const FOLD = 240;
+	const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	/**
+	 * Folds a reviewed step's body up into its title. With the title stuck partway down
+	 * the step, the part scrolled away above it goes at once and the page scrolls with
+	 * it, so nothing on screen moves. The rest folds up and the next step follows right
+	 * below the title, like collapsing a file does, rather than the page landing a few
+	 * steps further on.
+	 */
+	function fold(node: HTMLElement): TransitionConfig {
+		const inner = node.firstElementChild as HTMLElement;
+		const box = node.getBoundingClientRect();
+		const under = (node.previousElementSibling as HTMLElement).getBoundingClientRect().bottom;
+		const hidden = box.top < under && box.bottom > under ? under - box.top : 0;
+		const height = box.height - hidden;
+		node.style.overflow = 'clip';
+		if (hidden) {
+			const top = inner.getBoundingClientRect().top;
+			node.style.height = `${height}px`;
+			inner.style.marginTop = `${-hidden}px`;
+			// measured, the browser's scroll anchoring may have made up for it already
+			const moved = inner.getBoundingClientRect().top - top;
+			if (moved) window.scrollBy({ top: moved, behavior: 'instant' });
 		}
+		return {
+			duration: still() ? 0 : FOLD,
+			easing: quintOut,
+			css: (t) => `height: ${t * height}px`
+		};
+	}
+
+	/**
+	 * Opens a step's body again, and undoes a fold cut short by opening it mid-way.
+	 * Clipped rather than hidden like `slide` does: hidden would make the body a scroll
+	 * container, and its files' sticky headers would stick inside it, over their first
+	 * hunk, until it's open.
+	 */
+	function unfold(node: HTMLElement): TransitionConfig {
+		node.style.overflow = node.style.height = '';
+		(node.firstElementChild as HTMLElement).style.marginTop = '';
+		const height = node.offsetHeight;
+		return {
+			duration: still() ? 0 : FOLD,
+			easing: quintOut,
+			css: (t) => `overflow: clip; height: ${t * height}px`
+		};
 	}
 
 	/** steps whose description has scrolled up under their sticky title */
@@ -227,7 +270,7 @@
 									title={done ? 'Mark as not reviewed' : 'Mark reviewed'}
 									aria-label="{done ? 'Mark as not reviewed' : 'Mark reviewed'}: {section.title}"
 									aria-pressed={done}
-									onclick={() => toggleReviewed(section.id, false)}
+									onclick={() => toggleReviewed(section.id)}
 								>
 									{#if done}
 										{@render checkmark('')}
@@ -324,7 +367,7 @@
 		{#each sections as section (section.id)}
 			{@const done = reviewed.includes(section.id)}
 			<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
-			<article id={section.id} class="flex scroll-mt-23 flex-col gap-3">
+			<article id={section.id} class="flex scroll-mt-23 flex-col">
 				<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
 				<header
 					class="sticky top-23 z-[12] -mx-4 flex h-11 items-center gap-2.5 border-b border-line bg-canvas px-5"
@@ -414,27 +457,29 @@
 				</header>
 
 				{#if !done}
-					<div class="pr-1 pl-[35px]" {@attach trackPast(section.id)}>
-						{@render description(section)}
+					<!-- right after the title, which the fold measures against -->
+					<div in:unfold out:fold>
+						<div class="flex flex-col gap-3 pt-3">
+							<div class="pr-1 pl-[35px]" {@attach trackPast(section.id)}>
+								{@render description(section)}
+							</div>
+							{#each groups(section) as { file, ids } (file.id)}
+								<FileDiff
+									{file}
+									only={ids}
+									notes={section.notes}
+									anchor="{section.id}-{file.id}"
+									href={fileHref(file)}
+									inSection
+									{layout}
+									{virtualize}
+									{threads}
+									section={section.id}
+									remember="{guideKey}:{section.id}"
+								/>
+							{/each}
+						</div>
 					</div>
-				{/if}
-
-				{#if !done}
-					{#each groups(section) as { file, ids } (file.id)}
-						<FileDiff
-							{file}
-							only={ids}
-							notes={section.notes}
-							anchor="{section.id}-{file.id}"
-							href={fileHref(file)}
-							inSection
-							{layout}
-							{virtualize}
-							{threads}
-							section={section.id}
-							remember="{guideKey}:{section.id}"
-						/>
-					{/each}
 				{/if}
 			</article>
 		{/each}
