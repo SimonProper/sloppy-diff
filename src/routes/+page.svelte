@@ -2,6 +2,7 @@
 	import { goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { slowNavigation } from '$lib/slow.svelte';
+	import { scrollSpy } from '$lib/scroll-spy.svelte';
 	import { remember } from '$lib/prefs';
 	import { sameSha } from '$lib/refs';
 	import { Threads } from '$lib/ask/threads.svelte';
@@ -40,6 +41,8 @@
 		data.files.reduce((n, f) => n + f.hunks.reduce((m, h) => m + h.lines.length, 0), 0) >
 			VIRTUALIZE_LINES
 	);
+	// the file on screen, for the sidebar. The guide follows its own steps
+	const reading = scrollSpy(() => (data.view === 'guide' ? [] : data.files.map((f) => f.id)));
 	const repoName = $derived(data.repo.split('/').filter(Boolean).pop() ?? data.repo);
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
@@ -708,15 +711,20 @@
 				{/if}
 				<!-- the list scrolls inside, its header stays put -->
 				<div class="flex min-h-0 flex-1 flex-col">
-					<FileList files={data.files} />
+					<FileList files={data.files} current={reading.current} />
 				</div>
 			{/snippet}
 			{#snippet rail()}
 				<!-- each file's status, to jump to it -->
 				{#each data.files as file (file.id)}
+					{@const here = file.id === reading.current}
 					<a
 						href="#{file.id}"
-						class="grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle"
+						class={[
+							'grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle',
+							here && 'bg-subtle ring-1 ring-faint'
+						]}
+						aria-current={here ? 'location' : undefined}
 						aria-label={displayPath(file)}
 						data-tip={displayPath(file)}><StatusBadge status={file.status} /></a
 					>

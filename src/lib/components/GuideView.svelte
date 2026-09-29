@@ -8,6 +8,7 @@
 	import { KINDS, orderSections } from '$lib/guide/order';
 	import type { Guide, GuideSection } from '$lib/guide/types';
 	import { timeAgo } from '$lib/refs';
+	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
 	import FileDiff from './FileDiff.svelte';
 	import { Popover, PopoverContent, PopoverTrigger } from './popover';
 
@@ -27,6 +28,15 @@
 	// sections read core first, whatever order they were written in
 	const sections = $derived(orderSections(guide.sections));
 	const number = $derived(new Map(sections.map((s, i) => [s.id, i + 1])));
+
+	// the step on screen, marked in the sidebar and kept in view there
+	const reading = scrollSpy(() => sections.map((s) => s.id));
+	let stepList = $state<HTMLElement>();
+	$effect(() => {
+		const id = reading.current;
+		const row = id && stepList?.querySelector<HTMLElement>(`[data-step="${CSS.escape(id)}"]`);
+		if (row) reveal(row);
+	});
 
 	const hunkFile = $derived(new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, f] as const))));
 
@@ -184,7 +194,7 @@
 			</div>
 		</div>
 
-		<nav class="flex flex-col gap-3 p-2">
+		<nav bind:this={stepList} class="flex flex-col gap-3 p-2">
 			{#each KINDS as { kind, label } (kind)}
 				{@const group = sections.filter((s) => s.kind === kind)}
 				{#if group.length}
@@ -197,7 +207,14 @@
 						{#each group as section (section.id)}
 							{@const done = reviewed.includes(section.id)}
 							{@const c = counts(section)}
-							<div class="group flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-subtle">
+							{@const here = section.id === reading.current}
+							<div
+								class={[
+									'group relative flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-subtle',
+									here && 'current bg-subtle'
+								]}
+								data-step={section.id}
+							>
 								<!-- the number doubles as the checkbox, hovering shows the tick it would set -->
 								<button
 									type="button"
@@ -219,7 +236,11 @@
 										{@render checkmark('hidden group-hover/check:block')}
 									{/if}
 								</button>
-								<a href="#{section.id}" class="min-w-0 flex-1">
+								<a
+									href="#{section.id}"
+									class="min-w-0 flex-1"
+									aria-current={here ? 'location' : undefined}
+								>
 									<span
 										class={[
 											'line-clamp-2 text-[12.5px] leading-snug',
@@ -262,14 +283,18 @@
 				<span class="my-1 h-px w-4 shrink-0 bg-line" data-tip={label}></span>
 				{#each group as section (section.id)}
 					{@const done = reviewed.includes(section.id)}
+					{@const here = section.id === reading.current}
 					<button
 						type="button"
 						class={[
 							'grid size-[18px] shrink-0 place-items-center rounded-full border text-[10px] font-medium tabular-nums',
 							done
 								? 'border-add bg-add text-surface hover:opacity-80'
-								: 'border-line text-muted hover:border-muted hover:text-fg'
+								: here
+									? 'border-faint bg-subtle text-fg'
+									: 'border-line text-muted hover:border-muted hover:text-fg'
 						]}
+						aria-current={here ? 'location' : undefined}
 						aria-label={section.title}
 						data-tip={section.title}
 						onclick={() => document.getElementById(section.id)?.scrollIntoView()}
@@ -443,6 +468,16 @@
 {/snippet}
 
 <style>
+	/* the step on screen, a bar at the row's edge */
+	.current::before {
+		content: '';
+		position: absolute;
+		inset-block: 6px;
+		left: 0;
+		width: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+	}
 	/* a question in the section is being answered */
 	.answering {
 		animation: pulse 1.2s ease-in-out infinite;

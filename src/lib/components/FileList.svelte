@@ -3,9 +3,17 @@
 	import type { DiffFile } from '$lib/diff/types';
 	import { displayPath, splitPath } from '$lib/diff/path';
 	import { fileTree, type TreeNode } from '$lib/diff/tree';
+	import { reveal } from '$lib/scroll-spy.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 
-	let { files }: { files: DiffFile[] } = $props();
+	interface Props {
+		files: DiffFile[];
+		/** the file on screen, marked and kept in view in the list */
+		current?: string | null;
+	}
+
+	let { files, current = null }: Props = $props();
+	let list = $state<HTMLElement>();
 
 	type View = 'list' | 'tree';
 	const KEY = 'file-list-view';
@@ -44,6 +52,12 @@
 	const STICKY_DEPTH = 3;
 	/** a folder row's height, h-7, what each level of the stack is offset by */
 	const ROW = 28;
+
+	$effect(() => {
+		const row = current && list?.querySelector<HTMLElement>(`[data-file="${CSS.escape(current)}"]`);
+		// clear of the folder rows stuck above it
+		if (row) reveal(row, Math.min(Number(row.dataset.depth), STICKY_DEPTH) * ROW);
+	});
 
 	const VIEWS: { view: View; label: string }[] = [
 		{ view: 'list', label: 'Flat list' },
@@ -87,7 +101,7 @@
 	</div>
 </div>
 
-<nav class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">
+<nav bind:this={list} class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">
 	{#if view === 'list'}
 		{#each files as file (file.id)}
 			{@const path = splitPath(displayPath(file))}
@@ -145,11 +159,18 @@
 {/snippet}
 
 {#snippet row(file: DiffFile, depth: number, name: string, dir: string)}
+	{@const here = file.id === current}
 	<a
 		href="#{file.id}"
-		class="group flex items-center gap-2 rounded-lg py-1.5 pr-2 text-[12.5px] hover:bg-subtle"
+		class={[
+			'group relative flex items-center gap-2 rounded-lg py-1.5 pr-2 text-[12.5px] hover:bg-subtle',
+			here && 'current bg-subtle'
+		]}
 		style:padding-left="{8 + depth * 12}px"
 		title={displayPath(file)}
+		aria-current={here ? 'location' : undefined}
+		data-file={file.id}
+		data-depth={depth}
 	>
 		<StatusBadge status={file.status} />
 		<span class="min-w-0 flex-1 truncate">
@@ -164,6 +185,16 @@
 {/snippet}
 
 <style>
+	/* the file on screen, a bar at the row's edge */
+	.current::before {
+		content: '';
+		position: absolute;
+		inset-block: 6px;
+		left: 0;
+		width: 2px;
+		border-radius: 1px;
+		background: var(--accent);
+	}
 	/* a line under a folder row only while it's stuck, where scroll-state queries exist */
 	.folder {
 		container-type: scroll-state;
