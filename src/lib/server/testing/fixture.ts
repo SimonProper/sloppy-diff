@@ -65,24 +65,6 @@ export function subtotal(items: Item[]): number {
 		'export function clamp(value: number, min: number, max: number) {\n\tif (Number.isFinite(value)) {\n\t\treturn Math.min(Math.max(value, min), max);\n\t}\n\treturn min;\n}\n'
 };
 
-/** What each fixture file is there to show, in display order. */
-export const ABOUT: { path: string; about: string }[] = [
-	{
-		path: 'src/cart.ts',
-		about: 'Renames qty to quantity and moves describe() to the top of the file.'
-	},
-	{ path: 'src/format.ts', about: 'Re-wraps one line over two. Nothing in it is new.' },
-	{
-		path: 'src/label.ts',
-		about: 'Changes 1 to 2 after "café — crème", so columns have to count characters.'
-	},
-	{ path: 'NOTES.txt', about: 'Plain text without a grammar, compared word by word.' },
-	{
-		path: 'src/util.ts',
-		about: 'Wraps the body of clamp() in an if, so its line is only re-indented.'
-	}
-];
-
 export interface Fixture {
 	root: string;
 	/** diff main..change through the real pipeline in one mode */
@@ -119,8 +101,7 @@ export function createFixture(): Fixture {
 				'commit.gpgsign=false',
 				...args
 			],
-			// the developer's hooks, signing or init templates mustn't get in the way,
-			// the smoke page runs this inside the dev server
+			// the developer's hooks, signing or init templates mustn't get in the way
 			{ cwd: root, stdio: 'pipe', env: { ...process.env, ...ISOLATED } }
 		);
 	const write = (path: string, content: string) => {

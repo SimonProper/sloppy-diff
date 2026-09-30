@@ -35,12 +35,6 @@
 	</p>
 
 	<div class="flex shrink-0 items-center gap-2">
-		<a
-			href="/smoke"
-			class="text-[11px] text-faint hover:text-accent"
-			title="See both modes side by side on a test repo">Compare modes</a
-		>
-		<span class="h-3 w-px bg-line"></span>
 		<LayoutToggle bind:layout />
 		<span class="h-3 w-px bg-line"></span>
 		<span class="text-[11px] text-faint">Changes</span>

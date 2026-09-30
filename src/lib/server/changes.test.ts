@@ -2,14 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { parseDiff } from '$lib/diff/parse';
 import type { ChangeMode } from '$lib/diff/types';
 import { annotateChanges } from './changes';
-import { CHECKS, runCheck } from './testing/checks';
 import { createFixture, novel, type Fixture, type Result } from './testing/fixture';
 
-/**
- * Smoke test for the change modes. The checks live in testing/checks.ts and
- * the /smoke page runs the same list, so what passes here is what the page
- * shows as passing.
- */
+/** The change modes on a fixture repo with one kind of change per file. */
 
 let fixture: Fixture;
 const results = {} as Record<ChangeMode, Result>;
@@ -20,15 +15,75 @@ beforeAll(async () => {
 });
 afterAll(() => fixture.cleanup());
 
-for (const mode of ['lines', 'tokens'] as const) {
-	describe(mode, () => {
-		for (const check of CHECKS.filter((c) => c.mode === mode)) {
-			test(`${check.file}: ${check.label}`, () => {
-				expect(runCheck(check, results[mode])).toEqual({ status: 'pass' });
-			});
-		}
+describe('lines', () => {
+	const FILES = ['src/cart.ts', 'src/format.ts', 'src/label.ts', 'NOTES.txt', 'src/util.ts'];
+	for (const path of FILES) {
+		test(`${path}: whole lines only, nothing highlighted inside them`, () => {
+			const f = results.lines.file(path);
+			expect(f.changes).toBeFalsy();
+			for (const l of f.hunks.flatMap((h) => h.lines)) {
+				expect(l.spans).toBeFalsy();
+				expect(l.reformatted).toBeFalsy();
+				expect(l.html ?? '').not.toContain('novel');
+			}
+		});
+	}
+});
+
+describe('tokens', () => {
+	const line = (path: string, kind: 'add' | 'del', text: string) =>
+		results.tokens.line(path, kind, text);
+
+	test('src/cart.ts: the rename highlights only qty and quantity', () => {
+		expect(novel(line('src/cart.ts', 'del', 'qty: number'))).toEqual(['qty']);
+		expect(novel(line('src/cart.ts', 'add', 'quantity: number'))).toEqual(['quantity']);
+		expect(novel(line('src/cart.ts', 'del', 'item.qty, 0'))).toEqual(['qty']);
+		expect(novel(line('src/cart.ts', 'add', 'item.quantity, 0'))).toEqual(['quantity']);
 	});
-}
+
+	test('src/cart.ts: the highlight is an overlay that keeps syntax colours', () => {
+		const html = line('src/cart.ts', 'add', 'quantity: number').html ?? '';
+		expect(html).toContain('<span class="tok novel">');
+		expect(html).toMatch(/class="tok [a-z_]+">quantity</);
+	});
+
+	test('src/cart.ts: describe() moving to the top is a removal and an addition', () => {
+		expect(line('src/cart.ts', 'add', 'export function describe').reformatted).toBeUndefined();
+		expect(line('src/cart.ts', 'del', 'export function describe').reformatted).toBeUndefined();
+	});
+
+	test('src/cart.ts: is not formatting only', () => {
+		expect(results.tokens.file('src/cart.ts').changes).toEqual({ formattingOnly: false });
+	});
+
+	test('src/format.ts: the re-wrap counts as formatting only', () => {
+		const f = results.tokens.file('src/format.ts');
+		expect(f.changes?.formattingOnly).toBe(true);
+		const changed = f.hunks.flatMap((h) => h.lines).filter((l) => l.kind !== 'ctx');
+		expect(changed.every((l) => l.reformatted)).toBe(true);
+	});
+
+	test('src/label.ts: highlights exactly 1 and 2 after the multi-byte text', () => {
+		expect(novel(line('src/label.ts', 'del', 'count = 1'))).toEqual(['1']);
+		expect(novel(line('src/label.ts', 'add', 'count = 2'))).toEqual(['2']);
+	});
+
+	test('NOTES.txt: highlights the new words', () => {
+		expect(novel(line('NOTES.txt', 'add', 'Release notes'))).toEqual(['(draft)']);
+		expect(novel(line('NOTES.txt', 'add', 'Added'))).toEqual(['line item']);
+	});
+
+	test('src/util.ts: the re-indented return has nothing new, the if around it is new', () => {
+		expect(line('src/util.ts', 'del', 'return Math.min').reformatted).toBe(true);
+		expect(line('src/util.ts', 'add', 'return Math.min').reformatted).toBe(true);
+		expect(line('src/util.ts', 'add', 'Number.isFinite').reformatted).toBeUndefined();
+		expect(line('src/util.ts', 'add', 'return min;').reformatted).toBeUndefined();
+	});
+
+	test('src/util.ts: is not formatting only', () => {
+		expect(results.tokens.file('src/util.ts').changes).toEqual({ formattingOnly: false });
+	});
+});
 
 /** Runs a hand-written patch through the token engine, `file` names its only file. */
 function tokens(file: string, body: string) {

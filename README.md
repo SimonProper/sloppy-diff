@@ -57,9 +57,7 @@ Set these in the environment, or in a `.env` file:
 ## Checks
 
 ```sh
-pnpm test    # unit tests, including the change-mode smoke tests
+pnpm test    # unit tests
 pnpm check   # types
 pnpm lint    # formatting
 ```
-
-`/smoke` in the running app shows the change modes side by side on a fixture repository, with the same checks `pnpm test` runs.
