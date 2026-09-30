@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { timeAgo, type Branch, type Commit } from '$lib/refs';
+	import { sameSha, timeAgo, type Branch, type Commit } from '$lib/refs';
 
 	type Tab = 'branches' | 'tags' | 'commits';
 
@@ -99,13 +99,9 @@
 		return found.map((item) => ({ ...item, group: item === firstMore ? moreLabel : undefined }));
 	});
 
-	// shas can arrive abbreviated to different lengths
-	const same = (a: string, b: string) =>
-		a === b || (a.length >= 7 && b.length >= 7 && (a.startsWith(b) || b.startsWith(a)));
-
 	const display = $derived.by(() => {
 		if (!value) return { title: fallback, sha: '' };
-		const commit = [...commits, ...more].find((c) => same(c.sha, value));
+		const commit = [...commits, ...more].find((c) => sameSha(c.sha, value));
 		if (commit) return { title: commit.subject, sha: commit.sha };
 		return { title: value, sha: '' };
 	});
@@ -116,7 +112,7 @@
 			query = '';
 			active = 0;
 			// start on the tab that holds the current selection
-			const guess: Tab = [...commits, ...more].some((c) => same(c.sha, value))
+			const guess: Tab = [...commits, ...more].some((c) => sameSha(c.sha, value))
 				? 'commits'
 				: tags.some((t) => t.name === value)
 					? 'tags'
@@ -261,7 +257,7 @@
 			>
 				{#each items as item, i (item.kind + item.value)}
 					{@const selected =
-						item.kind === 'commit' ? same(item.value, value) : item.value === value}
+						item.kind === 'commit' ? sameSha(item.value, value) : item.value === value}
 					{#if item.group}
 						<p
 							role="presentation"
