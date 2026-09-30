@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Layout } from '$lib/diff/split';
-	import type { ChangeMode } from '$lib/diff/types';
-	import type { ChangeSummary } from '$lib/server/changes';
+	import type { ChangeMode, ChangeSummary } from '$lib/diff/types';
 	import LayoutToggle from './LayoutToggle.svelte';
 
 	interface Props {

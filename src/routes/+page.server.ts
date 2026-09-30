@@ -3,7 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import { parseDiff } from '$lib/diff/parse';
 import { lineStats } from '$lib/diff/hunks';
 import type { Layout } from '$lib/diff/split';
-import type { ChangeMode, DiffFile } from '$lib/diff/types';
+import type { ChangeMode, ChangeSummary, DiffFile } from '$lib/diff/types';
 import type { Scope, Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
@@ -30,7 +30,7 @@ import {
 } from '$lib/server/git';
 import { dev } from '$app/environment';
 import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
-import { annotateChanges, type ChangeSummary } from '$lib/server/changes';
+import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { highlightFile } from '$lib/server/highlight';
 import { loadThreads, prepareThreads } from '$lib/server/threads';

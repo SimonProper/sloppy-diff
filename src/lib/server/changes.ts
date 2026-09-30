@@ -1,5 +1,5 @@
 import { isGenerated } from '$lib/diff/path';
-import type { ChangeMode, DiffFile, DiffLine, Hunk } from '$lib/diff/types';
+import type { ChangeMode, ChangeSummary, DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 import { detectLanguage, tokenRanges, type Language } from './highlight';
 
 /**
@@ -20,12 +20,6 @@ import { detectLanguage, tokenRanges, type Language } from './highlight';
  * false "reformatted" or "formatting only" hides a real change from the
  * reviewer, so when in doubt a line stays a change.
  */
-
-export interface ChangeSummary {
-	mode: ChangeMode;
-	/** files with nothing new in them */
-	formattingOnly: number;
-}
 
 export function annotateChanges(files: DiffFile[], mode: ChangeMode): ChangeSummary {
 	const summary: ChangeSummary = { mode, formattingOnly: 0 };

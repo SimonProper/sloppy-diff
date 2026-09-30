@@ -33,6 +33,12 @@ export interface Hunk {
 /** How changes within lines are shown: whole lines, or down to the changed tokens. */
 export type ChangeMode = 'lines' | 'tokens';
 
+export interface ChangeSummary {
+	mode: ChangeMode;
+	/** files with nothing new in them */
+	formattingOnly: number;
+}
+
 export interface FileChanges {
 	/** nothing new, the file was only reformatted: re-indented, re-wrapped, respaced */
 	formattingOnly: boolean;
