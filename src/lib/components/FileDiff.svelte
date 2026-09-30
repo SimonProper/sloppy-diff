@@ -10,7 +10,7 @@
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
 	import { lineStats, tinted } from '$lib/diff/hunks';
-	import { chunk } from '$lib/lazy';
+	import { chunk } from '$lib/chunk';
 	import StatusBadge from './StatusBadge.svelte';
 	import ChangeBar from './ChangeBar.svelte';
 	import LazyBlock from './LazyBlock.svelte';

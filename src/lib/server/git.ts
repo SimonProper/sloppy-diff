@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { chunk } from '$lib/lazy';
+import { chunk } from '$lib/chunk';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 
 const exec = promisify(execFile);
