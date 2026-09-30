@@ -13,6 +13,7 @@
 	import { typing } from '$lib/keys';
 	import { timeAgo } from '$lib/refs';
 	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
+	import { readJson, writeJson } from '$lib/storage';
 	import FileDiff from './FileDiff.svelte';
 	import Popover from './Popover.svelte';
 
@@ -85,15 +86,7 @@
 	const guideKey = $derived(`${guide.repo}:${guide.start}..${guide.stop}:${guide.createdAt}`);
 	const storageKey = $derived(`sloppy-diff:reviewed:${guideKey}`);
 	// read while rendering, so reviewed steps are collapsed before the page scrolls to a step
-	let reviewed = $derived(load(storageKey));
-
-	function load(key: string): string[] {
-		try {
-			return JSON.parse(localStorage.getItem(key) ?? '[]');
-		} catch {
-			return [];
-		}
-	}
+	let reviewed = $derived(readJson<string[]>(storageKey, []));
 
 	// a step is reviewed with the hunks it had then, one they've changed in since isn't
 	const mark = (section: GuideSection) => `${section.id} ${section.hunks.join(' ')}`;
@@ -103,11 +96,7 @@
 		reviewed = isReviewed(section)
 			? reviewed.filter((r) => r !== mark(section))
 			: [...reviewed, mark(section)];
-		try {
-			localStorage.setItem(storageKey, JSON.stringify(reviewed));
-		} catch {
-			// private windows can refuse storage, the state still works for this visit
-		}
+		writeJson(storageKey, reviewed);
 	}
 
 	const FOLD = 240;
