@@ -53,6 +53,7 @@ describe('saved guides', () => {
 // three hunks in two files, what a model's draft is checked against
 const files = parseDiff(
 	[
+		'diff --git a/a.ts b/a.ts',
 		'--- a/a.ts',
 		'+++ b/a.ts',
 		'@@ -1 +1 @@',
@@ -61,6 +62,7 @@ const files = parseDiff(
 		'@@ -10 +10 @@',
 		'-two',
 		'+dos',
+		'diff --git a/b.ts b/b.ts',
 		'--- a/b.ts',
 		'+++ b/b.ts',
 		'@@ -1 +1 @@',
@@ -136,6 +138,7 @@ describe('prepareGuide', () => {
 		// h2 changed since, a.ts's second hunk is now "-two +deux"
 		const now = parseDiff(
 			[
+				'diff --git a/a.ts b/a.ts',
 				'--- a/a.ts',
 				'+++ b/a.ts',
 				'@@ -1 +1 @@',
@@ -144,6 +147,7 @@ describe('prepareGuide', () => {
 				'@@ -10 +10 @@',
 				'-two',
 				'+deux',
+				'diff --git a/b.ts b/b.ts',
 				'--- a/b.ts',
 				'+++ b/b.ts',
 				'@@ -1 +1 @@',

@@ -3,7 +3,7 @@ import type { DiffFile, Hunk } from './types';
 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
 
-/** Parses unified diff output (git or plain `diff -u`) into files and hunks. */
+/** Parses `git diff` output into files and hunks. */
 export function parseDiff(patch: string): DiffFile[] {
 	const files: DiffFile[] = [];
 	const lines = patch.split('\n');
@@ -19,13 +19,6 @@ export function parseDiff(patch: string): DiffFile[] {
 			files.push(file);
 			i++;
 			continue;
-		}
-
-		// plain unified diffs have no `diff --git` line, a new ---/+++ pair starts the next file
-		const startsPlainFile = line.startsWith('--- ') && lines[i + 1]?.startsWith('+++ ');
-		if (startsPlainFile && (!file || file.hunks.length > 0)) {
-			file = createFile('', '');
-			files.push(file);
 		}
 
 		if (!file) {

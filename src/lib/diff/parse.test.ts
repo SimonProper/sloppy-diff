@@ -76,7 +76,15 @@ describe('file headers', () => {
 describe('hunks', () => {
 	test('a removed line that looks like a file header stays in the hunk', () => {
 		const [file] = parseDiff(
-			['--- a/f.md', '+++ b/f.md', '@@ -1,2 +1 @@', '--- a/not-a-header', ' kept', ''].join('\n')
+			[
+				'diff --git a/f.md b/f.md',
+				'--- a/f.md',
+				'+++ b/f.md',
+				'@@ -1,2 +1 @@',
+				'--- a/not-a-header',
+				' kept',
+				''
+			].join('\n')
 		);
 		expect(file.hunks[0].lines.map((l) => [l.kind, l.text])).toEqual([
 			['del', '-- a/not-a-header'],
@@ -86,9 +94,16 @@ describe('hunks', () => {
 
 	test('no newline at end of file, and headers without counts', () => {
 		const [file] = parseDiff(
-			['--- a/f', '+++ b/f', '@@ -1 +1 @@', '-a', '\\ No newline at end of file', '+b', ''].join(
-				'\n'
-			)
+			[
+				'diff --git a/f b/f',
+				'--- a/f',
+				'+++ b/f',
+				'@@ -1 +1 @@',
+				'-a',
+				'\\ No newline at end of file',
+				'+b',
+				''
+			].join('\n')
 		);
 		expect(file.hunks[0].lines.map((l) => [l.kind, l.noNewline ?? false])).toEqual([
 			['del', true],
@@ -99,6 +114,7 @@ describe('hunks', () => {
 	test('hunk ids stay the same when the hunk shifts, and repeats get a suffix', () => {
 		const patch = (start: number) =>
 			[
+				'diff --git a/f b/f',
 				'--- a/f',
 				'+++ b/f',
 				`@@ -${start},1 +${start},1 @@`,
