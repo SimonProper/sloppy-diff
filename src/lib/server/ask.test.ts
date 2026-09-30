@@ -1,4 +1,12 @@
-import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chmodSync,
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -58,6 +66,7 @@ run="${runs}/$n"
 mkdir -p "$run"
 printf '%s\\n' "$@" > "$run/args"
 pwd > "$run/cwd"
+cat ./*.diff > "$run/diff" 2>/dev/null
 cat > "$run/prompt"
 args="$*"
 answer() {
@@ -110,6 +119,8 @@ const run = (n: number) => ({
 		.trim()
 		.split('\n'),
 	cwd: readFileSync(join(runs, String(n), 'cwd'), 'utf8').trim(),
+	/** the whole change's diff, as it was in claude's folder while it ran */
+	diff: readFileSync(join(runs, String(n), 'diff'), 'utf8'),
 	prompt: readFileSync(join(runs, String(n), 'prompt'), 'utf8')
 });
 
@@ -173,6 +184,10 @@ describe('asking about lines', () => {
 		// sessions stay out of the reviewed repo's own session list
 		expect(first.cwd).not.toBe(fixture.root);
 		expect(first.cwd.endsWith('/sessions')).toBe(true);
+		// the whole change was there to read while it answered, and is gone once it's in
+		expect(first.diff).toContain('src/cart.ts');
+		expect(first.prompt).toContain(`${first.cwd}/${thread.id}.diff`);
+		await vi.waitFor(() => expect(existsSync(`${first.cwd}/${thread.id}.diff`)).toBe(false));
 
 		await deleteThread(fixture.root, source.scope, thread.id);
 	});

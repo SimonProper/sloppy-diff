@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import type { AskEvent, LineSpan, Message, Scope, Step, Thread } from '$lib/ask/types';
@@ -129,16 +129,20 @@ async function answer(
 	const started = Date.now();
 	const question = thread.messages.at(-1)!.text;
 	const cwd = join(repoDir(root), 'sessions');
+	// the whole change, for Claude to read and search: it has no git to see it with. Written
+	// for each answer, a follow-up sees the diff as it is now, and gone once the answer is in
+	const diffPath = join(cwd, `${thread.id}.diff`);
 
 	/** A full prompt for a new session, with the earlier questions and answers when there are any. */
 	const fresh = async () => {
 		files ??= parseDiff(await readDiff(root, source.from, source.to));
-		return firstPrompt(source, before, question, files, section);
+		return firstPrompt(source, before, question, files, section, diffPath);
 	};
 
 	try {
 		jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
 		await mkdir(cwd, { recursive: true });
+		await writeFile(diffPath, await readDiff(root, source.from, source.to));
 
 		let resume = before.sessionId;
 		let thinking = true;
@@ -197,6 +201,8 @@ async function answer(
 			startedAt: started
 		}).catch(() => {});
 		throw error;
+	} finally {
+		await rm(diffPath, { force: true });
 	}
 }
 
@@ -369,7 +375,9 @@ async function firstPrompt(
 	thread: Thread,
 	question: string,
 	files: DiffFile[],
-	section: string | undefined
+	section: string | undefined,
+	/** the whole change's diff, while Claude answers */
+	diffPath: string
 ): Promise<string> {
 	const { root, from, to } = source;
 	const { anchor } = thread;
@@ -416,6 +424,9 @@ async function firstPrompt(
 		);
 	}
 
+	parts.push(
+		`The diff of the whole change is in ${diffPath}, to search and read in parts when the question reaches beyond this file.`
+	);
 	parts.push(`<question>\n${question}\n</question>`);
 	parts.push(
 		`Answer the question about the selected lines. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
