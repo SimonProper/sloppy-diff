@@ -7,13 +7,57 @@ import { refState } from './git';
  * two fixed commits never change at all.
  */
 
+/**
+ * Least recently used first out, once past `maxEntries` or past `maxWeight`
+ * summed over the entries. The newest entry is always kept.
+ */
+function lru<V>(maxEntries: number, maxWeight = Infinity) {
+	const entries = new Map<string, { value: V; weight: number }>();
+	let total = 0;
+	const forget = (key: string) => {
+		const old = entries.get(key);
+		if (!old) return;
+		entries.delete(key);
+		total -= old.weight;
+	};
+	return {
+		get(key: string): V | undefined {
+			const hit = entries.get(key);
+			if (!hit) return undefined;
+			// re-inserted on every use, so the oldest in the map is the least recently used
+			entries.delete(key);
+			entries.set(key, hit);
+			return hit.value;
+		},
+		set(key: string, value: V, weight = 0) {
+			forget(key);
+			entries.set(key, { value, weight });
+			total += weight;
+			while (entries.size > 1 && (entries.size > maxEntries || total > maxWeight)) {
+				forget(entries.keys().next().value!);
+			}
+		},
+		delete: forget,
+		clear() {
+			entries.clear();
+			total = 0;
+		}
+	};
+}
+
+/** Entries kept at most, each distinct url adds a few. */
+const MEMO_LIMIT = 500;
+const DIFF_LIMIT = 40;
+/** Lines across all kept diffs, a few huge ones shouldn't hold the server's memory. */
+const DIFF_LINES = 300_000;
+
 const store = globalThis as {
-	__memo?: Map<string, { version: string; value: Promise<unknown> }>;
-	__diffCache?: { entries: Map<string, { value: unknown; weight: number }>; lines: number };
+	__memoLru?: ReturnType<typeof lru<{ version: string; value: Promise<unknown> }>>;
+	__diffLru?: ReturnType<typeof lru<unknown>>;
 };
 // on globalThis so a dev server module reload keeps them
-const memo = (store.__memo ??= new Map());
-const diffs = (store.__diffCache ??= { entries: new Map(), lines: 0 });
+const memo = (store.__memoLru ??= lru(MEMO_LIMIT));
+const diffs = (store.__diffLru ??= lru(DIFF_LIMIT, DIFF_LINES));
 
 /**
  * Changes whenever a branch, tag, remote or HEAD moves, however it happened:
@@ -26,55 +70,27 @@ export async function repoVersion(root: string): Promise<string> {
 		.digest('hex');
 }
 
-/** Entries kept at most, each distinct url adds a few. */
-const MEMO_LIMIT = 500;
-
 /** `compute` once per `version` of `key`, failures aren't kept. */
 export function remember<T>(key: string, version: string, compute: () => Promise<T>): Promise<T> {
 	const hit = memo.get(key);
-	// re-inserted on every use, so the oldest in the map is the least recently used
-	memo.delete(key);
-	if (hit && hit.version === version) {
-		memo.set(key, hit);
-		return hit.value as Promise<T>;
-	}
+	if (hit && hit.version === version) return hit.value as Promise<T>;
 	const value = compute();
 	memo.set(key, { version, value });
 	value.catch(() => memo.delete(key));
-	if (memo.size > MEMO_LIMIT) memo.delete(memo.keys().next().value!);
 	return value;
 }
 
-const DIFF_LIMIT = 40;
-/** Lines across all kept diffs, a few huge ones shouldn't hold the server's memory. */
-const DIFF_LINES = 300_000;
-
 /** A finished diff between two fixed commits, most recently used kept. */
 export function cachedDiff<T>(key: string): T | undefined {
-	const hit = diffs.entries.get(key);
-	if (!hit) return undefined;
-	diffs.entries.delete(key);
-	diffs.entries.set(key, hit);
-	return hit.value as T;
+	return diffs.get(key) as T | undefined;
 }
 
 /** Forgets every kept diff, for when the code that builds them changed. */
 export function clearDiffs() {
-	diffs.entries.clear();
-	diffs.lines = 0;
+	diffs.clear();
 }
 
 /** Keeps a diff, `weight` is its number of lines. */
 export function storeDiff(key: string, value: unknown, weight: number) {
-	const { entries } = diffs;
-	const old = entries.get(key);
-	if (old) diffs.lines -= old.weight;
-	entries.delete(key);
-	entries.set(key, { value, weight });
-	diffs.lines += weight;
-	while (entries.size > 1 && (entries.size > DIFF_LIMIT || diffs.lines > DIFF_LINES)) {
-		const [oldest, entry] = entries.entries().next().value!;
-		entries.delete(oldest);
-		diffs.lines -= entry.weight;
-	}
+	diffs.set(key, value, weight);
 }
