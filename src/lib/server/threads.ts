@@ -98,6 +98,15 @@ export function findHunk(files: DiffFile[], id: string): { file: DiffFile; hunk:
 
 const marker = (line: DiffLine) => (line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ');
 
+/** A hunk as prompt text, its header then up to `maxLines` marked lines. */
+export function hunkText(hunk: Hunk, maxLines = Infinity): string {
+	const body = hunk.lines.slice(0, maxLines).map((l) => marker(l) + l.text);
+	if (hunk.lines.length > maxLines) {
+		body.push(`… ${hunk.lines.length - maxLines} more lines, read the file to see them`);
+	}
+	return `${hunk.header}\n${body.join('\n')}`;
+}
+
 /** Checks a span against the diff and describes it, or throws when it doesn't fit. */
 export function anchorFor(files: DiffFile[], span: LineSpan): Anchor {
 	const found = findHunk(files, span.hunk);

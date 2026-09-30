@@ -6,6 +6,7 @@ import { describeTool, runClaude } from './claude';
 import { commitLog, readDiff } from './git';
 import { reconcile, saveGuide } from './guides';
 import { jobQueue, type Job } from './jobs';
+import { hunkText } from './threads';
 
 /** The structured output Claude must return. */
 const GUIDE_SCHEMA = {
@@ -189,14 +190,6 @@ function renderFile(file: DiffFile, maxLines: number): string {
 	const path = file.oldPath !== file.newPath ? `${file.oldPath} → ${file.newPath}` : file.newPath;
 	const head = `### ${path} (${file.status})`;
 	if (file.binary) return `${head}\nbinary file`;
-	const hunks = file.hunks.map((hunk) => {
-		const body = hunk.lines
-			.slice(0, maxLines)
-			.map((l) => (l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ' ') + l.text);
-		if (hunk.lines.length > maxLines) {
-			body.push(`… ${hunk.lines.length - maxLines} more lines, read the file to see them`);
-		}
-		return `[${hunk.id}] ${hunk.header}\n${body.join('\n')}`;
-	});
+	const hunks = file.hunks.map((hunk) => `[${hunk.id}] ${hunkText(hunk, maxLines)}`);
 	return [head, ...hunks].join('\n');
 }

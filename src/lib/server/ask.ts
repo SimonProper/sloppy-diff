@@ -13,6 +13,7 @@ import {
 	checkScope,
 	checkThreadId,
 	findHunk,
+	hunkText,
 	loadThreads,
 	newThreadId,
 	renderThread,
@@ -425,13 +426,7 @@ async function firstPrompt(
 
 /** A file's diff for the prompt, cut down to one hunk when it's very long. */
 function fileDiff(file: DiffFile, hunk: string): string {
-	const render = (hunks: DiffFile['hunks']) =>
-		hunks
-			.map(
-				(h) =>
-					`${h.header}\n${h.lines.map((l) => (l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ' ') + l.text).join('\n')}`
-			)
-			.join('\n');
+	const render = (hunks: DiffFile['hunks']) => hunks.map((h) => hunkText(h)).join('\n');
 	const whole = render(file.hunks);
 	if (whole.length <= MAX_FILE_DIFF_CHARS) return whole;
 	const only = file.hunks.filter((h) => h.id === hunk);
