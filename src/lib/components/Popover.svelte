@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements';
 
 	interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -38,8 +38,6 @@
 	const id = $props.id();
 	const triggerId = `${id}-trigger`;
 	const contentId = `${id}-content`;
-	/** CSS anchor name tying the content's position to the trigger */
-	const anchor = `--${id}`;
 
 	let content = $state<HTMLDivElement>();
 
@@ -51,31 +49,14 @@
 		popovertarget: contentId,
 		'aria-haspopup': 'dialog',
 		'aria-expanded': open,
-		'aria-controls': contentId,
-		style: `anchor-name: ${anchor}`
+		'aria-controls': contentId
 	});
 
-	// CSS anchor positioning where the browser has it, measured coordinates otherwise
-	let anchored = $state(false);
+	// measured rather than CSS anchor positioning, which not every browser has
 	let placed = $state<{ top: number; left: number } | null>(null);
-
-	onMount(() => {
-		anchored = CSS.supports('anchor-name: --a');
-	});
-
-	const style = $derived.by(() => {
-		if (anchored) {
-			return [
-				`position-anchor: ${anchor}`,
-				'top: anchor(bottom)',
-				align === 'end' ? 'right: anchor(right)' : 'left: anchor(left)',
-				`margin-top: ${offset}px`,
-				// flips above the trigger when there is no room below
-				'position-try-fallbacks: flip-block, flip-inline'
-			].join(';');
-		}
-		return placed ? `top: ${placed.top}px; left: ${placed.left}px` : 'visibility: hidden';
-	});
+	const style = $derived(
+		placed ? `top: ${placed.top}px; left: ${placed.left}px` : 'visibility: hidden'
+	);
 
 	// the state can change from outside (a pick closes it), keep the element in step
 	$effect(() => {
@@ -91,11 +72,15 @@
 	}
 
 	$effect(() => {
-		if (!open || anchored) return;
+		if (!open || !content) return;
 		place();
+		// the content changes size too, a filtered list shrinks
+		const observer = new ResizeObserver(place);
+		observer.observe(content);
 		window.addEventListener('scroll', place, true);
 		window.addEventListener('resize', place);
 		return () => {
+			observer.disconnect();
 			window.removeEventListener('scroll', place, true);
 			window.removeEventListener('resize', place);
 			placed = null;
