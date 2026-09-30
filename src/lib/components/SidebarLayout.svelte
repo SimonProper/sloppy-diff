@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { Layout } from '$lib/diff/split';
 	import { typing } from '$lib/keys';
+	import { readText, writeText } from '$lib/storage';
 	import ResizeHandle from './ResizeHandle.svelte';
 
 	interface Props {
@@ -47,7 +48,7 @@
 
 	const DOCKED_KEY = 'sidebar-docked';
 	/** kept beside the diffs when they're narrow, their long lines wrapping instead */
-	let docked = $state(readDocked());
+	let docked = $state(readText(DOCKED_KEY) === 'true');
 
 	// the diff's minimum wins over a wide sidebar, in a narrow window or when switching to
 	// split. Docked, lines wrap anyway, so the diff only keeps three quarters of it
@@ -78,14 +79,6 @@
 		if (!next && panel?.contains(document.activeElement)) toggleButton?.focus();
 	}
 
-	function readDocked(): boolean {
-		try {
-			return localStorage.getItem(DOCKED_KEY) === 'true';
-		} catch {
-			return false;
-		}
-	}
-
 	/** docking or folding right now: the column and the panel ease to their new width */
 	let moving = $state(false);
 	let moveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -101,12 +94,7 @@
 			clearTimeout(moveTimer);
 			moveTimer = setTimeout(() => (moving = false), 220);
 		}
-		try {
-			if (next) localStorage.setItem(DOCKED_KEY, 'true');
-			else localStorage.removeItem(DOCKED_KEY);
-		} catch {
-			// private windows and blocked storage just don't remember it
-		}
+		writeText(DOCKED_KEY, next ? 'true' : null);
 	}
 
 	// s opens and closes the rail, Escape closes it
@@ -174,23 +162,14 @@
 	});
 
 	function read(): number | null {
-		try {
-			const value = Number(localStorage.getItem(KEY));
-			return value > 0 ? value : null;
-		} catch {
-			return null;
-		}
+		const value = Number(readText(KEY));
+		return value > 0 ? value : null;
 	}
 
 	$effect(() => {
 		// saved once a drag ends, not on every move
 		if (dragging) return;
-		try {
-			if (stored === null) localStorage.removeItem(KEY);
-			else localStorage.setItem(KEY, String(stored));
-		} catch {
-			// private windows and blocked storage just don't remember it
-		}
+		writeText(KEY, stored === null ? null : String(stored));
 	});
 </script>
 

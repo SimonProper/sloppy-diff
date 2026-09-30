@@ -20,6 +20,7 @@
 	import RepoButton from '$lib/components/RepoButton.svelte';
 	import RepoList from '$lib/components/RepoList.svelte';
 	import ResizeHandle from '$lib/components/ResizeHandle.svelte';
+	import { readText, writeText } from '$lib/storage';
 	import SidebarLayout from '$lib/components/SidebarLayout.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
@@ -105,12 +106,8 @@
 	let commitsHeight = $state<number | null>(readSplit());
 
 	function readSplit(): number | null {
-		try {
-			const value = Number(localStorage.getItem(SPLIT_KEY));
-			return value > 0 ? value : null;
-		} catch {
-			return null;
-		}
+		const value = Number(readText(SPLIT_KEY));
+		return value > 0 ? value : null;
 	}
 
 	let splitDragging = $state(false);
@@ -118,12 +115,7 @@
 	$effect(() => {
 		// saved once a drag ends, not on every move
 		if (splitDragging) return;
-		try {
-			if (commitsHeight === null) localStorage.removeItem(SPLIT_KEY);
-			else localStorage.setItem(SPLIT_KEY, String(commitsHeight));
-		} catch {
-			// private windows and blocked storage just don't remember it
-		}
+		writeText(SPLIT_KEY, commitsHeight === null ? null : String(commitsHeight));
 	});
 
 	const loading = slowNavigation();

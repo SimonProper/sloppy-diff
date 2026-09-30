@@ -4,6 +4,7 @@
 	import { displayPath, splitPath } from '$lib/diff/path';
 	import { fileTree, type TreeNode } from '$lib/diff/tree';
 	import { reveal } from '$lib/scroll-spy.svelte';
+	import { readText, writeText } from '$lib/storage';
 	import StatusBadge from './StatusBadge.svelte';
 
 	interface Props {
@@ -19,26 +20,14 @@
 	const KEY = 'file-list-view';
 
 	// a per-browser preference, the list when nothing is stored
-	let view = $state<View>(read());
+	let view = $state<View>(readText(KEY) === 'tree' ? 'tree' : 'list');
 	const tree = $derived(view === 'tree' ? fileTree(files) : []);
 	/** folders folded shut, by path, for this visit */
 	const folded = new SvelteSet<string>();
 
-	function read(): View {
-		try {
-			return localStorage.getItem(KEY) === 'tree' ? 'tree' : 'list';
-		} catch {
-			return 'list';
-		}
-	}
-
 	function choose(next: View) {
 		view = next;
-		try {
-			localStorage.setItem(KEY, next);
-		} catch {
-			// not remembered in private windows, still switches
-		}
+		writeText(KEY, next);
 	}
 
 	function fold(path: string) {

@@ -1,5 +1,6 @@
 import { isHttpError } from '@sveltejs/kit';
 import { errorText } from '$lib/errors';
+import { readJson, writeJson } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
 import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
 import type { LineSpan, Scope, Side, Thread } from './types';
@@ -229,21 +230,4 @@ export class Threads {
 /** Answers that came back, failed ones not counted. */
 function answers(thread: Thread): number {
 	return thread.messages.filter((m) => m.role === 'assistant' && !m.error).length;
-}
-
-function readJson<T>(key: string, fallback: T): T {
-	try {
-		const value = localStorage.getItem(key);
-		return value === null ? fallback : JSON.parse(value);
-	} catch {
-		return fallback;
-	}
-}
-
-function writeJson(key: string, value: unknown) {
-	try {
-		localStorage.setItem(key, JSON.stringify(value));
-	} catch {
-		// private windows can refuse storage, it still works for this visit
-	}
 }

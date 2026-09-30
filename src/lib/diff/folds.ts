@@ -4,6 +4,8 @@
  * diff, a guide's step for the files it shows. Only choices that differ from how
  * the file starts are kept, the oldest dropped past a limit.
  */
+import { readJson, writeJson } from '$lib/storage';
+
 const KEY = 'file-folds';
 const LIMIT = 1000;
 
@@ -11,12 +13,7 @@ const LIMIT = 1000;
 let folds: Map<string, boolean> | null = null;
 
 function load(): Map<string, boolean> {
-	if (folds) return folds;
-	try {
-		folds = new Map(JSON.parse(localStorage.getItem(KEY) ?? '[]'));
-	} catch {
-		folds = new Map();
-	}
+	folds ??= new Map(readJson<[string, boolean][]>(KEY, []));
 	return folds;
 }
 
@@ -36,9 +33,5 @@ export function storeOpen(scope: string, path: string, open: boolean, startsOpen
 		if (all.size <= LIMIT) break;
 		all.delete(key);
 	}
-	try {
-		localStorage.setItem(KEY, JSON.stringify([...all]));
-	} catch {
-		// private windows and blocked storage just don't remember it
-	}
+	writeJson(KEY, [...all]);
 }
