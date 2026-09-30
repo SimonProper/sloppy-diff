@@ -16,6 +16,7 @@ import {
 	currentBranch,
 	defaultBranch,
 	errorMessage,
+	formerTips,
 	isDefaultBranch,
 	listBranches,
 	listCommits,
@@ -29,7 +30,7 @@ import {
 import { dev } from '$app/environment';
 import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
 import { annotateChanges, type ChangeSummary } from '$lib/server/changes';
-import { listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
+import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { highlightFile } from '$lib/server/highlight';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
@@ -230,7 +231,15 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		? `${selection.range.from}..${selection.range.to}`
 		: 'worktree';
 	const [guide, threads] = await Promise.all([
-		timing.measure('guide', guideFor(root, selection.range, files)),
+		timing.measure(
+			'guide',
+			guideFor(
+				root,
+				selection.range,
+				files,
+				selection.branch && !selection.branch.first ? selection.branch.name : null
+			)
+		),
 		timing.measure(
 			'threads',
 			loadThreads(root, scope).then((t) => prepareThreads(t, files))
@@ -329,16 +338,24 @@ async function laneOf(root: string, name: string, defaultBase: string | null): P
 	return { name, base: base.name, commits, earlier };
 }
 
-/** The stored guide for exactly this commit range, checked against the diff. */
+/**
+ * The stored guide for exactly this commit range, checked against the diff.
+ * For a whole `branch` without one, the guide for where it pointed before, so
+ * a guide isn't lost when the branch is rebased or gets another commit.
+ */
 async function guideFor(
 	root: string,
 	range: Selection['range'],
-	files: DiffFile[]
+	files: DiffFile[],
+	branch: string | null
 ): Promise<Guide | null> {
 	// guides cover commit ranges, the working tree has no stable identity
 	if (!range) return null;
 	const guide = await loadGuide(root, range.from, range.to);
-	return guide && prepareGuide(guide, files);
+	if (guide) return prepareGuide(guide, files);
+	if (!branch) return null;
+	const earlier = await guideEndingAt(root, await formerTips(root, branch));
+	return earlier && { ...prepareGuide(earlier, files), earlier: true };
 }
 
 function lineCount(files: DiffFile[]): number {

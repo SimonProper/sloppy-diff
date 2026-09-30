@@ -45,6 +45,22 @@ export async function deleteGuide(root: string, start: string, stop: string): Pr
 	await rm(guidePath(root, start, stop), { force: true });
 }
 
+/**
+ * The saved guide ending at the first of `tips` that has one, whatever it starts
+ * at: a rebase moves where a branch split off as well as its commits.
+ */
+export async function guideEndingAt(root: string, tips: string[]): Promise<Guide | null> {
+	const names = await readdir(repoDir(root)).catch(() => [] as string[]);
+	const ranges = names
+		.map((n) => /^([0-9a-f]+)\.\.([0-9a-f]+)\.json$/.exec(n))
+		.filter((m) => m !== null);
+	for (const tip of tips) {
+		const range = ranges.find(([, , stop]) => tip.startsWith(stop));
+		if (range) return loadGuide(root, range[1], range[2]);
+	}
+	return null;
+}
+
 /** Saved guides for every repo, newest first. */
 export async function listGuides(): Promise<GuideListing[]> {
 	const root = guidesDir();
@@ -116,11 +132,23 @@ export function reconcile(draft: GuideDraft, files: DiffFile[]): GuideSection[] 
 	return sections;
 }
 
-/** Re-checks a stored guide against the current diff and renders its markdown. */
+/**
+ * Re-checks a stored guide against the current diff and renders its markdown.
+ * A step that lost hunks, or new ones left over, is marked changed.
+ */
 export function prepareGuide(guide: Guide, files: DiffFile[]): Guide {
-	const sections = reconcile(guide, files).map((s) => ({
-		...s,
-		html: markdown.render(s.rationale)
-	}));
-	return { ...guide, sections, summaryHtml: markdown.render(guide.summary) };
+	// reconcile numbers the stored sections in order, dropped ones included
+	const stored = new Map(guide.sections.map((s, i) => [`s${i + 1}`, s.hunks.join(' ')]));
+	const sections = reconcile(guide, files);
+	const kept = new Map(sections.map((s) => [s.id, s.hunks.join(' ')]));
+	return {
+		...guide,
+		sections: sections.map((s) => ({
+			...s,
+			changed: stored.get(s.id) !== s.hunks.join(' '),
+			html: markdown.render(s.rationale)
+		})),
+		changed: [...stored].filter(([id, hunks]) => kept.get(id) !== hunks).length,
+		summaryHtml: markdown.render(guide.summary)
+	};
 }

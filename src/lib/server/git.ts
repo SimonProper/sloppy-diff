@@ -337,6 +337,13 @@ async function takenOff(root: string, other: Creation, started: Creation): Promi
 	return isAncestor(root, started.sha, other.sha);
 }
 
+/** The commits `name` pointed at, newest first, from its reflog. Empty without one. */
+export async function formerTips(root: string, name: string): Promise<string[]> {
+	checkRev(name);
+	const out = await git(root, ['log', '-g', '--format=%H', name, '--']).catch(() => '');
+	return [...new Set(out.split('\n').filter(Boolean))];
+}
+
 async function isAncestor(root: string, ancestor: string, of: string): Promise<boolean> {
 	return git(root, ['merge-base', '--is-ancestor', ancestor, of]).then(
 		() => true,

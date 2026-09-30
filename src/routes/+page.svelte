@@ -658,13 +658,14 @@
 			{layout}
 			{virtualize}
 			threads={asking}
+			onregenerate={() => (dialogOpen = true)}
 		/>
 	{:else if data.view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			<p class="text-[13px] font-medium">No guide for this range yet</p>
 			<p class="mt-1 max-w-sm text-[12px] text-muted">
 				Claude Code can split these changes into sections to review in order. Guides are saved per
-				commit range, so a branch with new commits needs a new one.
+				commit range, a branch keeps its guide through new commits and rebases.
 			</p>
 			<button
 				type="button"

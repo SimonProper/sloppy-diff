@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { branchBase, nearestBranch, resolveCommit } from './git';
+import { branchBase, formerTips, nearestBranch, resolveCommit } from './git';
 
 interface Repo {
 	root: string;
@@ -238,6 +238,15 @@ describe('with remotes', () => {
 	test('the default branch named by its remote still means the local copy', async () => {
 		expect(await nearestBranch(r.root, 'm1', 'origin/main')).toBe('main');
 	});
+});
+
+test('a rebased branch still knows where it pointed before', async () => {
+	const r = graph();
+	const before = r.git('rev-parse', 'feature');
+	r.git('rebase', '-q', 'main', 'feature');
+	const tips = await formerTips(r.root, 'feature');
+	expect(tips[0]).toBe(r.git('rev-parse', 'feature'));
+	expect(tips).toContain(before);
 });
 
 describe('nearestBranch', () => {

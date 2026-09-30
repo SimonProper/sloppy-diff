@@ -8,7 +8,8 @@ import type { Guide, GuideDraft } from '$lib/guide/types';
 const dir = realpathSync(mkdtempSync(join(tmpdir(), 'sloppy-diff-guides-')));
 vi.mock('$env/dynamic/private', () => ({ env: { ...process.env, GUIDES_DIR: dir } }));
 
-const { deleteGuide, listGuides, prepareGuide, reconcile, saveGuide } = await import('./guides');
+const { deleteGuide, guideEndingAt, listGuides, prepareGuide, reconcile, saveGuide } =
+	await import('./guides');
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 const guide = (repo: string, start: string, stop: string) =>
@@ -38,6 +39,14 @@ describe('saved guides', () => {
 			'Invalid commit'
 		);
 		expect(await listGuides()).toHaveLength(before);
+	});
+
+	test('a guide is found by where it ends, the first former tip that has one', async () => {
+		await saveGuide(guide('/work/three', 'aaaaaaaaaaaa', 'bbbbbbbbbbbb'));
+		await saveGuide(guide('/work/three', 'cccccccccccc', 'dddddddddddd'));
+		const tips = ['e'.repeat(40), 'd'.repeat(40), 'b'.repeat(40)];
+		expect((await guideEndingAt('/work/three', tips))?.start).toBe('cccccccccccc');
+		expect(await guideEndingAt('/work/three', ['e'.repeat(40)])).toBeNull();
 	});
 });
 
@@ -115,6 +124,42 @@ describe('reconcile', () => {
 		const once = reconcile(draft([{ hunks: [h2] }]), files);
 		const twice = reconcile({ title: 't', summary: 's', sections: once }, files);
 		expect(twice.map((s) => s.hunks)).toEqual(once.map((s) => s.hunks));
+	});
+});
+
+describe('prepareGuide', () => {
+	test('a step that lost hunks, and new ones left over, are marked changed', () => {
+		const saved = {
+			...guide('/work/r', 'a', 'b'),
+			sections: reconcile(draft([{ hunks: [h1] }, { hunks: [h2, h3] }]), files)
+		};
+		// h2 changed since, a.ts's second hunk is now "-two +deux"
+		const now = parseDiff(
+			[
+				'--- a/a.ts',
+				'+++ b/a.ts',
+				'@@ -1 +1 @@',
+				'-one',
+				'+uno',
+				'@@ -10 +10 @@',
+				'-two',
+				'+deux',
+				'--- a/b.ts',
+				'+++ b/b.ts',
+				'@@ -1 +1 @@',
+				'-three',
+				'+tres',
+				''
+			].join('\n')
+		);
+		const prepared = prepareGuide(saved, now);
+		expect(prepared.sections.map((s) => [s.title, s.changed])).toEqual([
+			['section 1', false],
+			['section 2', true],
+			['Other changes', true]
+		]);
+		expect(prepared.changed).toBe(1);
+		expect(prepareGuide(saved, files).changed).toBe(0);
 	});
 });
 

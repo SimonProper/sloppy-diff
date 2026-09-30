@@ -16,6 +16,8 @@ export interface GuideSection {
 	/** hunk ids, in reading order */
 	hunks: string[];
 	notes: GuideNote[];
+	/** its hunks differ from when the guide was written, filled in when it's loaded */
+	changed?: boolean;
 	/** rendered rationale, filled in when the guide is loaded */
 	html?: string;
 }
@@ -35,6 +37,10 @@ export interface Guide extends Omit<GuideDraft, 'sections'> {
 	createdAt: string;
 	model: string;
 	sections: GuideSection[];
+	/** written for an earlier version of the branch, found through its reflog */
+	earlier?: boolean;
+	/** how many of its steps lost hunks since, filled in when it's loaded */
+	changed?: number;
 	/** rendered summary, filled in when the guide is loaded */
 	summaryHtml?: string;
 }

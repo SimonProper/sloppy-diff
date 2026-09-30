@@ -23,9 +23,19 @@
 		virtualize?: boolean;
 		/** questions to Claude about lines of the diff */
 		threads?: Threads;
+		/** writes a new guide, offered when this one was for an earlier version */
+		onregenerate?: () => void;
 	}
 
-	let { guide, files, toolbar, layout = 'unified', virtualize = false, threads }: Props = $props();
+	let {
+		guide,
+		files,
+		toolbar,
+		layout = 'unified',
+		virtualize = false,
+		threads,
+		onregenerate
+	}: Props = $props();
 
 	// sections read core first, whatever order they were written in
 	const sections = $derived(orderSections(guide.sections));
@@ -90,8 +100,16 @@
 		}
 	}
 
-	function toggleReviewed(id: string) {
-		reviewed = reviewed.includes(id) ? reviewed.filter((r) => r !== id) : [...reviewed, id];
+	// a step is reviewed with the hunks it had then, one they've changed in since isn't.
+	// Marks from before were only the id, they hold while the hunks haven't changed
+	const mark = (section: GuideSection) => `${section.id} ${section.hunks.join(' ')}`;
+	const isReviewed = (section: GuideSection) =>
+		reviewed.includes(mark(section)) || (!section.changed && reviewed.includes(section.id));
+
+	function toggleReviewed(section: GuideSection) {
+		reviewed = isReviewed(section)
+			? reviewed.filter((r) => r !== mark(section) && r !== section.id)
+			: [...reviewed, mark(section)];
 		try {
 			localStorage.setItem(storageKey, JSON.stringify(reviewed));
 		} catch {
@@ -188,11 +206,12 @@
 	// its ⓘ is gone once the description is back in view or the step is reviewed, and
 	// the panel mustn't pop open again by itself when the ⓘ returns
 	$effect(() => {
-		if (described && (!past[described] || reviewed.includes(described))) described = null;
+		const open = sections.find((s) => s.id === described);
+		if (open && (!past[open.id] || isReviewed(open))) described = null;
 	});
 
 	const progress = $derived(
-		sections.length ? sections.filter((s) => reviewed.includes(s.id)).length / sections.length : 0
+		sections.length ? sections.filter(isReviewed).length / sections.length : 0
 	);
 
 	// j / k step through sections
@@ -248,7 +267,7 @@
 							{label}
 						</p>
 						{#each group as section (section.id)}
-							{@const done = reviewed.includes(section.id)}
+							{@const done = isReviewed(section)}
 							{@const c = counts(section)}
 							{@const here = section.id === reading.current}
 							<div
@@ -270,7 +289,7 @@
 									title={done ? 'Mark as not reviewed' : 'Mark reviewed'}
 									aria-label="{done ? 'Mark as not reviewed' : 'Mark reviewed'}: {section.title}"
 									aria-pressed={done}
-									onclick={() => toggleReviewed(section.id)}
+									onclick={() => toggleReviewed(section)}
 								>
 									{#if done}
 										{@render checkmark('')}
@@ -325,7 +344,7 @@
 			{#if group.length}
 				<span class="my-1 h-px w-4 shrink-0 bg-line" data-tip={label}></span>
 				{#each group as section (section.id)}
-					{@const done = reviewed.includes(section.id)}
+					{@const done = isReviewed(section)}
 					{@const here = section.id === reading.current}
 					<button
 						type="button"
@@ -352,6 +371,20 @@
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
 		{@render toolbar?.()}
 		<div class="-mt-4 rounded-xl border border-line bg-surface p-5">
+			{#if guide.earlier}
+				<p class="mb-3 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
+					Written for an earlier version of this branch{guide.changed
+						? `, ${guide.changed} ${guide.changed === 1 ? 'step has' : 'steps have'} changed since`
+						: ''}.
+					{#if onregenerate}
+						<button
+							type="button"
+							class="font-medium text-accent hover:underline"
+							onclick={onregenerate}>Regenerate</button
+						>
+					{/if}
+				</p>
+			{/if}
 			<h1 class="text-[17px] font-semibold tracking-tight">{guide.title}</h1>
 			<div class="prose mt-2 text-[13.5px] leading-relaxed text-muted">
 				{@html guide.summaryHtml}
@@ -365,7 +398,7 @@
 		</div>
 
 		{#each sections as section (section.id)}
-			{@const done = reviewed.includes(section.id)}
+			{@const done = isReviewed(section)}
 			<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
 			<article id={section.id} class="flex scroll-mt-23 flex-col">
 				<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
@@ -425,6 +458,13 @@
 						</Popover>
 					{/if}
 					<span class="flex-1"></span>
+					{#if guide.earlier && section.changed}
+						<span
+							class="shrink-0 rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+							title="Its code changed since the guide was written, the description may be out of date"
+							>changed</span
+						>
+					{/if}
 					<span
 						class={[
 							'shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium',
@@ -441,7 +481,7 @@
 								? 'border-add/40 bg-add/10 text-add'
 								: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
 						]}
-						onclick={() => toggleReviewed(section.id)}
+						onclick={() => toggleReviewed(section)}
 					>
 						<svg
 							viewBox="0 0 16 16"
