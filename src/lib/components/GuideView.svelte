@@ -406,7 +406,7 @@
 					{#if onregenerate}
 						<button
 							type="button"
-							class="flex h-6 shrink-0 items-center rounded-md bg-accent/10 px-2 text-[11.5px] font-medium text-accent transition-transform hover:bg-accent/15 active:scale-[0.97]"
+							class="flex h-6 shrink-0 items-center rounded-md border border-line bg-surface px-2 text-[11.5px] font-medium text-muted transition-transform hover:border-muted hover:text-fg active:scale-[0.97]"
 							onclick={onregenerate}>Regenerate</button
 						>
 					{/if}
