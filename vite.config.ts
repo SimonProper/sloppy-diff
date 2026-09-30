@@ -1,5 +1,4 @@
 import tailwindcss from '@tailwindcss/vite';
-import adapter from '@sveltejs/adapter-auto';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
@@ -14,9 +13,7 @@ export default defineConfig({
 			},
 
 			// the page talks to the server through remote functions, *.remote.ts
-			experimental: { remoteFunctions: true },
-
-			adapter: adapter()
+			experimental: { remoteFunctions: true }
 		})
 	],
 	test: {
