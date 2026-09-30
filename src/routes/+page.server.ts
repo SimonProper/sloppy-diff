@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { redirect } from '@sveltejs/kit';
 import { parseDiff } from '$lib/diff/parse';
+import { lineStats } from '$lib/diff/hunks';
 import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, DiffFile } from '$lib/diff/types';
 import type { Scope, Thread } from '$lib/ask/types';
@@ -200,7 +201,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 			annotateChanges(files, changeMode)
 		);
 		await timing.measure('highlight', async () => void files.forEach(highlightFile));
-		if (key) storeDiff(key, { files, changes }, lineCount(files));
+		if (key) storeDiff(key, { files, changes }, lineStats(files.flatMap((f) => f.hunks)).lines);
 		return { selection, lane, files, changes };
 	});
 
@@ -356,10 +357,6 @@ async function guideFor(
 	if (!branch) return null;
 	const earlier = await guideEndingAt(root, await formerTips(root, branch));
 	return earlier && { ...prepareGuide(earlier, files), earlier: true };
-}
-
-function lineCount(files: DiffFile[]): number {
-	return files.reduce((sum, f) => sum + f.hunks.reduce((n, h) => n + h.lines.length, 0), 0);
 }
 
 async function hasCommits(root: string): Promise<boolean> {

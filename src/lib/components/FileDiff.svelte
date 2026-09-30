@@ -9,6 +9,7 @@
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
+	import { lineStats } from '$lib/diff/hunks';
 	import { chunk } from '$lib/lazy';
 	import StatusBadge from './StatusBadge.svelte';
 	import ChangeBar from './ChangeBar.svelte';
@@ -102,20 +103,7 @@
 
 	const path = $derived(splitPath(displayPath(file)));
 	const hunks = $derived(only ? file.hunks.filter((h) => only.includes(h.id)) : file.hunks);
-	const counts = $derived(
-		only
-			? hunks.reduce(
-					(sum, h) => {
-						for (const l of h.lines) {
-							if (l.kind === 'add') sum.additions++;
-							else if (l.kind === 'del') sum.deletions++;
-						}
-						return sum;
-					},
-					{ additions: 0, deletions: 0 }
-				)
-			: { additions: file.additions, deletions: file.deletions }
-	);
+	const counts = $derived(lineStats(hunks));
 
 	// asking Claude: lines are picked by dragging over their numbers, or by selecting
 	// text and taking up the offer that shows up under it. Rows carry their hunk and

@@ -7,6 +7,7 @@
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Layout } from '$lib/diff/split';
 	import type { DiffFile } from '$lib/diff/types';
+	import { lineStats } from '$lib/diff/hunks';
 	import { KINDS, orderSections } from '$lib/guide/order';
 	import type { Guide, GuideSection } from '$lib/guide/types';
 	import { timeAgo } from '$lib/refs';
@@ -66,16 +67,9 @@
 	}
 
 	function counts(section: GuideSection) {
-		let additions = 0;
-		let deletions = 0;
-		for (const id of section.hunks) {
-			const hunk = hunkFile.get(id)?.hunks.find((h) => h.id === id);
-			for (const l of hunk?.lines ?? []) {
-				if (l.kind === 'add') additions++;
-				else if (l.kind === 'del') deletions++;
-			}
-		}
-		return { additions, deletions };
+		return lineStats(
+			section.hunks.flatMap((id) => hunkFile.get(id)?.hunks.find((h) => h.id === id) ?? [])
+		);
 	}
 
 	function fileHref(file: DiffFile) {

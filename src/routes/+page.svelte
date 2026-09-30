@@ -21,26 +21,16 @@
 	import SidebarLayout from '$lib/components/SidebarLayout.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
+	import { lineStats } from '$lib/diff/hunks';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
 
 	let { data } = $props();
 
-	const totals = $derived(
-		data.files.reduce(
-			(sum, f) => ({
-				additions: sum.additions + f.additions,
-				deletions: sum.deletions + f.deletions
-			}),
-			{ additions: 0, deletions: 0 }
-		)
-	);
+	const totals = $derived(lineStats(data.files.flatMap((f) => f.hunks)));
 	// below this many lines everything renders, so the browser's find sees all of it.
 	// Beyond, only lines near the viewport exist
 	const VIRTUALIZE_LINES = 4000;
-	const virtualize = $derived(
-		data.files.reduce((n, f) => n + f.hunks.reduce((m, h) => m + h.lines.length, 0), 0) >
-			VIRTUALIZE_LINES
-	);
+	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps
 	const reading = scrollSpy(() => (data.view === 'guide' ? [] : data.files.map((f) => f.id)));
 	const repoName = $derived(data.repo.split('/').filter(Boolean).pop() ?? data.repo);
