@@ -79,6 +79,12 @@ async function untracked(root: string): Promise<string> {
 	return diffs.join('');
 }
 
+/** A file's content at `rev`, or in the working tree when `rev` is empty; null when it isn't there. */
+export async function readFileAt(root: string, rev: string, path: string): Promise<string | null> {
+	if (!rev) return readFile(join(root, path), 'utf8').catch(() => null);
+	return git(root, ['cat-file', 'blob', `${rev}:${path}`]).catch(() => null);
+}
+
 /** Local branches, remote branches and tags, most recently touched first. */
 export async function listBranches(root: string): Promise<Branch[]> {
 	const format = [

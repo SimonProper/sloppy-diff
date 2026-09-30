@@ -6,7 +6,7 @@ import { parseDiff } from '$lib/diff/parse';
 import type { ChangeMode, DiffFile, DiffLine } from '$lib/diff/types';
 import { annotateChanges } from '../changes';
 import { readDiff } from '../git';
-import { highlightFile } from '../highlight';
+import { highlightFiles } from '../highlight';
 
 /**
  * A throwaway repo with one commit on `main` and one on `change`, where every
@@ -135,7 +135,7 @@ export function createFixture(): Fixture {
 		async run(mode, to = 'change') {
 			const files = parseDiff(await readDiff(root, 'main', to));
 			const summary = annotateChanges(files, mode);
-			files.forEach(highlightFile);
+			await highlightFiles(root, 'main', to, files);
 
 			const file = (path: string) => {
 				const found = files.find((f) => f.newPath === path);

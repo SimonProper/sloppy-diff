@@ -32,7 +32,7 @@ import { dev } from '$app/environment';
 import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
-import { highlightFile } from '$lib/server/highlight';
+import { highlightFiles } from '$lib/server/highlight';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
@@ -200,7 +200,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		const changes = await timing.measure(`changes-${changeMode}`, async () =>
 			annotateChanges(files, changeMode)
 		);
-		await timing.measure('highlight', async () => void files.forEach(highlightFile));
+		await timing.measure('highlight', highlightFiles(root, from, to, files));
 		if (key) storeDiff(key, { files, changes }, lineStats(files.flatMap((f) => f.hunks)).lines);
 		return { selection, lane, files, changes };
 	});

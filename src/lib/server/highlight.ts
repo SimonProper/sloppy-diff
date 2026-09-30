@@ -15,6 +15,8 @@ import * as typescript from '@twinkleplop/typescript';
 import * as yaml from '@twinkleplop/yaml';
 import type { RenderOptions, TokenizeResult } from '@twinkleplop/core';
 import type { DiffFile, DiffLine } from '$lib/diff/types';
+import { chunk } from '$lib/chunk';
+import { readFileAt } from '$lib/server/git';
 import { markdown as md } from '$lib/server/markdown';
 
 type Highlighter = (input: string, render?: RenderOptions) => string;
@@ -118,11 +120,12 @@ const LINE_CLOSE = '</span>';
  * line of its output is self-contained and safe to render on its own.
  * Changed pieces become overlays, which wrap the tokens they touch in
  * `<span class="tok novel">` and keep the syntax colours underneath.
+ * `lead` is a line put in front for context and dropped from the result.
  */
-function highlightLines(lines: DiffLine[], lang: Language): string[] | null {
+function highlightLines(lines: DiffLine[], lang: Language, lead = ''): string[] | null {
 	if (lines.length === 0) return [];
 	const overlays: NonNullable<RenderOptions['overlays']> = [];
-	let offset = 0;
+	let offset = lead.length;
 	for (const line of lines) {
 		for (const [start, end] of line.spans ?? []) {
 			overlays.push({ start: offset + start, end: offset + end, class: 'novel' });
@@ -131,14 +134,62 @@ function highlightLines(lines: DiffLine[], lang: Language): string[] | null {
 	}
 	try {
 		const out = highlighter(lang)(
-			lines.map((l) => l.text).join('\n'),
+			lead + lines.map((l) => l.text).join('\n'),
 			overlays.length ? { overlays } : undefined
 		);
 		const code = out.slice(out.indexOf('<code>') + 6, out.lastIndexOf('</code>'));
-		const rows = code.split('\n').map((row) => row.slice(LINE_OPEN.length, -LINE_CLOSE.length));
+		const rows = code
+			.split('\n')
+			.slice(lead ? 1 : 0)
+			.map((row) => row.slice(LINE_OPEN.length, -LINE_CLOSE.length));
 		return rows.length === lines.length ? rows : null;
 	} catch {
 		return null;
+	}
+}
+
+/** Languages whose `<script>` and `<style>` blocks switch to another grammar. */
+const EMBEDDING = new Set<Language>(['svelte', 'html']);
+
+/** Each side's full text, for files whose hunks can start inside an embedded block. */
+export interface Sources {
+	old: string | null;
+	new: string | null;
+}
+
+/**
+ * The `<script>` or `<style>` tag still open at the start of line `line` (1-based),
+ * on a line of its own. Without it a hunk from the middle of a block reads as markup.
+ */
+export function openBlock(source: string | null, line: number): string {
+	if (!source) return '';
+	const before = source.split('\n', line - 1).join('\n');
+	let open = '';
+	for (const [tag, close] of before.matchAll(/<(\/?)(?:script|style)\b[^>]*>/gi)) {
+		open = close ? '' : tag.replace(/\s+/g, ' ');
+	}
+	return open && open + '\n';
+}
+
+/** Highlights every file, reading the sources the embedding languages need. */
+export async function highlightFiles(
+	root: string,
+	from: string,
+	to: string,
+	files: DiffFile[]
+): Promise<void> {
+	for (const run of chunk(files, 16)) {
+		await Promise.all(
+			run.map(async (file) => {
+				const lang = detectLanguage(file.newPath);
+				if (!lang || !EMBEDDING.has(lang) || file.binary) return highlightFile(file);
+				const [old, now] = await Promise.all([
+					file.status === 'added' ? null : readFileAt(root, from || 'HEAD', file.oldPath),
+					file.status === 'deleted' ? null : readFileAt(root, to, file.newPath)
+				]);
+				highlightFile(file, { old, new: now });
+			})
+		);
 	}
 }
 
@@ -147,15 +198,17 @@ function highlightLines(lines: DiffLine[], lang: Language): string[] | null {
  * new side (context + additions) of each hunk are highlighted separately so
  * the tokenizer always sees code that actually existed at some point.
  */
-export function highlightFile(file: DiffFile): DiffFile {
+export function highlightFile(file: DiffFile, sources?: Sources): DiffFile {
 	const lang = detectLanguage(file.newPath);
 	file.language = lang;
 
 	for (const hunk of file.hunks) {
 		const oldSide = hunk.lines.filter((l) => l.kind !== 'add');
 		const newSide = hunk.lines.filter((l) => l.kind !== 'del');
-		const oldHtml = lang ? highlightLines(oldSide, lang) : null;
-		const newHtml = lang ? highlightLines(newSide, lang) : null;
+		const oldLead = openBlock(sources?.old ?? null, hunk.oldStart);
+		const newLead = openBlock(sources?.new ?? null, hunk.newStart);
+		const oldHtml = lang ? highlightLines(oldSide, lang, oldLead) : null;
+		const newHtml = lang ? highlightLines(newSide, lang, newLead) : null;
 
 		oldSide.forEach((line, i) => {
 			if (line.kind === 'del') line.html = oldHtml?.[i] ?? plain(line);
