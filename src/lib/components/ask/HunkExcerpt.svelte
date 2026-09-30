@@ -3,7 +3,7 @@
 	import type { Thread } from '$lib/ask/types';
 	import type { DiffFile, DiffLine } from '$lib/diff/types';
 	import { displayPath } from '$lib/diff/path';
-	import { tinted } from '$lib/diff/hunks';
+	import { findHunk, tinted } from '$lib/diff/hunks';
 
 	interface Props {
 		thread: Thread;
@@ -19,13 +19,7 @@
 	let { thread, files, section, compact = false, onclose, onreveal }: Props = $props();
 
 	const anchor = $derived(thread.anchor);
-	const found = $derived.by(() => {
-		for (const file of files) {
-			const hunk = file.hunks.find((h) => h.id === anchor.hunk);
-			if (hunk) return { file, hunk };
-		}
-		return null;
-	});
+	const found = $derived(findHunk(files, anchor.hunk));
 	const name = $derived(anchor.path.split('/').pop() ?? anchor.path);
 
 	let whole = $state(false);

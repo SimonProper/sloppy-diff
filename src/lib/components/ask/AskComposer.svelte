@@ -4,6 +4,7 @@
 	import { rowOf } from '$lib/ask/rows';
 	import { spanLabel } from '$lib/ask/span';
 	import type { Threads } from '$lib/ask/threads.svelte';
+	import { findHunk } from '$lib/diff/hunks';
 	import type { DiffFile } from '$lib/diff/types';
 	import { errorText } from '$lib/errors';
 	import type { Guide } from '$lib/guide/types';
@@ -20,19 +21,13 @@
 	const draft = $derived(threads.composing && !threads.open ? threads.draft : null);
 
 	const context = $derived.by(() => {
-		if (!draft) return '';
-		for (const file of files) {
-			const hunk = file.hunks.find((h) => h.id === draft.span.hunk);
-			if (!hunk) continue;
-			const section = sectionLabel(guide, hunk.id);
-			return [
-				`${shortLines(spanLabel(hunk, draft.span))} ${file.newPath.split('/').pop()}`,
-				section
-			]
-				.filter(Boolean)
-				.join(' · ');
-		}
-		return '';
+		const found = draft && findHunk(files, draft.span.hunk);
+		if (!found) return '';
+		const { file, hunk } = found;
+		const section = sectionLabel(guide, hunk.id);
+		return [`${shortLines(spanLabel(hunk, draft.span))} ${file.newPath.split('/').pop()}`, section]
+			.filter(Boolean)
+			.join(' · ');
 	});
 
 	/** where it floats: under the last picked line, lined up with the code */

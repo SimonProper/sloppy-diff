@@ -1,4 +1,13 @@
-import type { DiffLine, Hunk } from './types';
+import type { DiffFile, DiffLine, Hunk } from './types';
+
+/** the file and hunk with this id, null once it's gone from the diff */
+export function findHunk(files: DiffFile[], id: string): { file: DiffFile; hunk: Hunk } | null {
+	for (const file of files) {
+		const hunk = file.hunks.find((h) => h.id === id);
+		if (hunk) return { file, hunk };
+	}
+	return null;
+}
 
 /** added, deleted and all lines across some hunks */
 export function lineStats(hunks: Hunk[]) {

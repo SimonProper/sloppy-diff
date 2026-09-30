@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import type { AskEvent, LineSpan, Message, Scope, Step, Thread } from '$lib/ask/types';
+import { findHunk } from '$lib/diff/hunks';
 import { parseDiff } from '$lib/diff/parse';
 import type { DiffFile } from '$lib/diff/types';
 import { describeTool, runClaude, type ClaudeMessage } from './claude';
@@ -12,7 +13,6 @@ import {
 	anchorFor,
 	checkScope,
 	checkThreadId,
-	findHunk,
 	hunkText,
 	loadThreads,
 	newThreadId,

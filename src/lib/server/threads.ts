@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Anchor, LineSpan, Scope, Thread } from '$lib/ask/types';
 import { spanLabel, spanLines } from '$lib/ask/span';
+import { findHunk } from '$lib/diff/hunks';
 import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 import { repoDir } from './guides';
 import { markdown } from './markdown';
@@ -88,14 +89,6 @@ export async function deleteThread(root: string, scope: Scope, id: string) {
 }
 
 /** The file and hunk with this id, if the diff still has it. */
-export function findHunk(files: DiffFile[], id: string): { file: DiffFile; hunk: Hunk } | null {
-	for (const file of files) {
-		const hunk = file.hunks.find((h) => h.id === id);
-		if (hunk) return { file, hunk };
-	}
-	return null;
-}
-
 const marker = (line: DiffLine) => (line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' ');
 
 /** A hunk as prompt text, its header then up to `maxLines` marked lines. */
