@@ -138,6 +138,10 @@
 		}
 	}
 
+	// closing leaves the generation running on the server, reopening picks it up again
+	let closed = false;
+	$effect(() => () => (closed = true));
+
 	async function follow(startSha: string, stopSha: string) {
 		generating = true;
 		failure = '';
@@ -145,6 +149,7 @@
 		try {
 			const follow = crypto.randomUUID();
 			for await (const next of followGuide({ repo, start: startSha, stop: stopSha, follow })) {
+				if (closed) break;
 				progress = next;
 				if (next.done) open(next.done.start, next.done.stop);
 				if (next.error) failure = next.error;
@@ -166,10 +171,10 @@
 	{@attach (el) => el.showModal()}
 	oncancel={(e) => {
 		e.preventDefault();
-		if (!generating) onclose();
+		onclose();
 	}}
 	onclick={(e) => {
-		if (e.target === e.currentTarget && !generating) onclose();
+		if (e.target === e.currentTarget) onclose();
 	}}
 	class="m-auto w-[36rem] max-w-[calc(100vw-2rem)] overflow-visible rounded-2xl border border-line bg-surface p-0 text-fg shadow-[0_24px_80px_-24px_rgb(0_0_0/0.35)] backdrop:bg-black/25 backdrop:backdrop-blur-[2px]"
 >
@@ -184,7 +189,6 @@
 			type="button"
 			class="grid size-7 shrink-0 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg disabled:opacity-40"
 			aria-label="Close"
-			disabled={generating}
 			onclick={onclose}
 		>
 			<svg
@@ -204,6 +208,50 @@
 				? ', or open a saved one below'
 				: ''}.
 		</p>
+	{:else if generating}
+		<div class="flex flex-col gap-3 px-5 py-5" role="status" aria-live="polite">
+			<div class="flex items-center gap-2.5">
+				<span
+					class="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"
+				></span>
+				<div class="min-w-0">
+					<p class="truncate text-[13px] font-medium">
+						{progress?.status || 'Starting Claude Code…'}
+					</p>
+					{#if range}
+						<p class="font-mono text-[11px] text-faint">
+							{range.start.slice(0, 7)}..{range.stop.slice(0, 7)} · {range.commits.length}
+							{range.commits.length === 1 ? 'commit' : 'commits'}
+						</p>
+					{/if}
+				</div>
+			</div>
+			{#if tools.length}
+				<ul
+					class="flex h-36 flex-col justify-end gap-0.5 overflow-hidden rounded-xl border border-line bg-subtle/60 px-3 py-2.5"
+				>
+					{#each tools as tool, i (i)}
+						<li
+							class={[
+								'truncate font-mono text-[11px]',
+								i === tools.length - 1 ? 'text-fg' : 'text-muted'
+							]}
+						>
+							{tool}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+
+		<div class="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
+			<p class="text-[11.5px] text-faint">Closing keeps it running in the background.</p>
+			<button
+				type="button"
+				class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted hover:border-del/50 hover:text-del"
+				onclick={cancel}>Cancel</button
+			>
+		</div>
 	{:else}
 		<div class="flex flex-col gap-4 px-5 py-4">
 			<div class="flex items-center gap-2">
@@ -215,7 +263,6 @@
 								'h-7 rounded-md px-2.5 text-[12px]',
 								tab === option.tab ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
 							]}
-							disabled={generating}
 							onclick={() => setTab(option.tab)}>{option.label}</button
 						>
 					{/each}
@@ -346,27 +393,7 @@
 				</p>
 			{/if}
 
-			{#if generating || progress}
-				<div class="rounded-xl border border-line bg-subtle/60 px-3 py-2.5">
-					<p class="flex items-center gap-2 text-[12.5px] font-medium">
-						{#if generating}
-							<span
-								class="size-3 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent"
-							></span>
-						{:else if failure}
-							<span class="size-1.5 rounded-full bg-del"></span>
-						{/if}
-						{failure || progress?.status || 'Working'}
-					</p>
-					{#if tools.length}
-						<ul class="mt-1.5 flex flex-col gap-0.5 pl-5">
-							{#each tools as tool, i (i)}
-								<li class="truncate font-mono text-[11px] text-muted">{tool}</li>
-							{/each}
-						</ul>
-					{/if}
-				</div>
-			{:else if failure}
+			{#if failure}
 				<p class="flex items-center gap-1.5 text-[12px] text-del">
 					<span class="size-1.5 rounded-full bg-del"></span>{failure}
 				</p>
@@ -374,29 +401,21 @@
 		</div>
 
 		<div class="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-			{#if generating}
+			{#if range?.hasGuide}
 				<button
 					type="button"
-					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted hover:border-del/50 hover:text-del"
-					onclick={cancel}>Cancel</button
+					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium hover:border-muted"
+					onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
 				>
-			{:else}
-				{#if range?.hasGuide}
-					<button
-						type="button"
-						class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium hover:border-muted"
-						onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
-					>
-				{/if}
-				<button
-					type="button"
-					class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
-					disabled={!target || !range || range.commits.length === 0}
-					onclick={generate}
-				>
-					{range?.hasGuide ? 'Regenerate' : 'Generate guide'}
-				</button>
 			{/if}
+			<button
+				type="button"
+				class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
+				disabled={!target || !range || range.commits.length === 0}
+				onclick={generate}
+			>
+				{range?.hasGuide ? 'Regenerate' : 'Generate guide'}
+			</button>
 		</div>
 	{/if}
 
