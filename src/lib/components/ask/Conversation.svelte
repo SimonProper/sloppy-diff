@@ -187,7 +187,7 @@
 
 		{#if live}
 			<div class="mt-3.5">
-				<Trail steps={live.steps} {live} preferOpen={threads.trailOpen} />
+				<Trail steps={live.steps} {live} {now} preferOpen={threads.trailOpen} />
 				{#if live.text}
 					<p class="text-[13.5px] leading-relaxed whitespace-pre-wrap">
 						{live.text}<span class="caret"></span>

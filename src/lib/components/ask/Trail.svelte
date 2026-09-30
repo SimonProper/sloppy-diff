@@ -6,13 +6,15 @@
 		steps: Step[];
 		/** the answer being written, when it still is */
 		live?: Live;
+		/** the parent's ticking clock, for the elapsed time of `live` */
+		now?: number;
 		thinkingMs?: number;
 		thinkingTokens?: number;
 		/** answered trails start open or folded, the reader's preference */
 		preferOpen: boolean;
 	}
 
-	let { steps, live, thinkingMs, thinkingTokens = 0, preferOpen }: Props = $props();
+	let { steps, live, now = 0, thinkingMs, thinkingTokens = 0, preferOpen }: Props = $props();
 
 	/** set once the reader opens or folds this trail themselves */
 	let chosen = $state<boolean | null>(null);
@@ -20,12 +22,6 @@
 	const working = $derived(live !== undefined && !live.text);
 	const open = $derived(working || (chosen ?? preferOpen));
 
-	let now = $state(Date.now());
-	$effect(() => {
-		if (!live) return;
-		const timer = setInterval(() => (now = Date.now()), 500);
-		return () => clearInterval(timer);
-	});
 	const elapsed = $derived(live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0);
 
 	const reads = $derived(steps.filter((s) => s.type === 'tool' && s.text.startsWith('Reading')));
