@@ -73,36 +73,16 @@ export class Threads {
 	/** answered trails start open, remembered per browser */
 	trailOpen = $state(readJson<boolean>('sloppy-diff:ask-trail', false));
 
-	/** threads still anchored in the diff, by hunk and their first line */
-	placed = $derived.by(() => {
-		const map = new Map<string, Thread[]>();
-		for (const thread of this.list) {
-			if (thread.outdated) continue;
-			const key = `${thread.anchor.hunk}:${thread.anchor.start}`;
-			map.set(key, [...(map.get(key) ?? []), thread]);
-		}
-		return map;
-	});
-	outdated = $derived(this.list.filter((t) => t.outdated));
 	running = $derived(Object.keys(this.live).length);
 
 	constructor(config: () => Config) {
 		this.#config = config;
 	}
 
-	/** Threads whose lines start at line `index` of a hunk. */
-	at(hunk: string, index: number): Thread[] {
-		return this.placed.get(`${hunk}:${index}`) ?? [];
-	}
-
 	/** Threads anchored to lines in any of these hunks. */
 	in(hunks: string[]): Thread[] {
 		const ids = new Set(hunks);
 		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk));
-	}
-
-	count(hunks: string[]): number {
-		return this.in(hunks).length;
 	}
 
 	get(id: string | null): Thread | undefined {
