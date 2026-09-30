@@ -76,25 +76,22 @@ const filenames: Record<string, Language> = {
 	'.prettierrc': 'json'
 };
 
-const highlighters = new Map<Language, Highlighter>();
-const tokenizers = new Map<Language, Tokenizer>();
+// built on first use, per language and per kind
+const grammars = new Map<Language, { highlight?: Highlighter; tokenize?: Tokenizer }>();
+
+function grammar(lang: Language) {
+	let g = grammars.get(lang);
+	if (!g) grammars.set(lang, (g = {}));
+	return g;
+}
 
 function highlighter(lang: Language): Highlighter {
-	let fn = highlighters.get(lang);
-	if (!fn) {
-		fn = packages[lang].language();
-		highlighters.set(lang, fn);
-	}
-	return fn;
+	return (grammar(lang).highlight ??= packages[lang].language());
 }
 
 /** [start, end, type] of every token twinkleplop finds in `text`, in order. */
 export function tokenRanges(lang: Language, text: string): [number, number, string][] {
-	let fn = tokenizers.get(lang);
-	if (!fn) {
-		fn = packages[lang].tokenize();
-		tokenizers.set(lang, fn);
-	}
+	const fn = (grammar(lang).tokenize ??= packages[lang].tokenize());
 	// tokens are flat triples of [type, start, end], the type an index into token_types
 	const { tokens, token_types: types } = fn(text);
 	const ranges: [number, number, string][] = [];
@@ -134,7 +131,7 @@ function highlightLines(lines: DiffLine[], lang: Language): string[] | null {
 	}
 	try {
 		const out = highlighter(lang)(
-			texts(lines).join('\n'),
+			lines.map((l) => l.text).join('\n'),
 			overlays.length ? { overlays } : undefined
 		);
 		const code = out.slice(out.indexOf('<code>') + 6, out.lastIndexOf('</code>'));
@@ -168,10 +165,6 @@ export function highlightFile(file: DiffFile): DiffFile {
 		});
 	}
 	return file;
-}
-
-function texts(lines: DiffLine[]): string[] {
-	return lines.map((l) => l.text);
 }
 
 /** Escaped text for files without a grammar, changed pieces still marked. */
