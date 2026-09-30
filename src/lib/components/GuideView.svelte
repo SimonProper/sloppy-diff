@@ -14,7 +14,7 @@
 	import { timeAgo } from '$lib/refs';
 	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
 	import FileDiff from './FileDiff.svelte';
-	import { Popover, PopoverContent, PopoverTrigger } from './popover';
+	import Popover from './Popover.svelte';
 
 	interface Props {
 		guide: Guide;
@@ -447,35 +447,35 @@
 							bind:open={
 								() => described === section.id, (open) => (described = open ? section.id : null)
 							}
+							onpointerenter={(e) => hover(e, section.id)}
+							onpointerleave={(e) => hover(e, null)}
+							class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
 						>
-							<PopoverTrigger
-								onpointerenter={(e) => hover(e, section.id)}
-								onpointerleave={(e) => hover(e, null)}
-								onclick={(e) => {
-									// already open from hovering, the click keeps it open rather than closing it
-									if (described === section.id) e.preventDefault();
-								}}
-								class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
-								title="Show what this step is about"
-								aria-label="Show the description of {section.title}"
-							>
-								<svg
-									viewBox="0 0 16 16"
-									class="size-3.5"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-									><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+							{#snippet trigger(props)}
+								<button
+									{...props}
+									onpointerenter={(e) => hover(e, section.id)}
+									onpointerleave={(e) => hover(e, null)}
+									onclick={(e) => {
+										// already open from hovering, the click keeps it open rather than closing it
+										if (described === section.id) e.preventDefault();
+									}}
+									class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
+									title="Show what this step is about"
+									aria-label="Show the description of {section.title}"
 								>
-							</PopoverTrigger>
-							<PopoverContent
-								onpointerenter={(e) => hover(e, section.id)}
-								onpointerleave={(e) => hover(e, null)}
-								class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
-							>
-								{@render description(section)}
-							</PopoverContent>
+									<svg
+										viewBox="0 0 16 16"
+										class="size-3.5"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+									>
+								</button>
+							{/snippet}
+							{@render description(section)}
 						</Popover>
 					{/if}
 					<span class="flex-1"></span>
