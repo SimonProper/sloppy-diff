@@ -312,6 +312,11 @@
 									<span class="mt-0.5 flex items-center gap-1 font-mono text-[10.5px] tabular-nums">
 										<span class="text-add">+{c.additions}</span>
 										<span class="text-del">−{c.deletions}</span>
+										{#if guide.earlier && section.changed}
+											<span class="text-faint" title="Its code changed since the guide was written"
+												>· changed</span
+											>
+										{/if}
 										{#if threads}
 											{@const asked = threads.in(section.hunks)}
 											{#if asked.length}
@@ -372,18 +377,39 @@
 		{@render toolbar?.()}
 		<div class="-mt-4 rounded-xl border border-line bg-surface p-5">
 			{#if guide.earlier}
-				<p class="mb-3 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
-					Written for an earlier version of this branch{guide.changed
-						? `, ${guide.changed} ${guide.changed === 1 ? 'step has' : 'steps have'} changed since`
-						: ''}.
+				<!-- a band across the top of the card, set apart by its surface: hues mean the diff -->
+				<div
+					class="-mx-5 -mt-5 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-[11px] border-b border-line bg-subtle px-5 py-2 text-[12px] text-muted"
+				>
+					<svg
+						viewBox="0 0 16 16"
+						class="size-3.5 shrink-0 text-faint"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5V5H5" /><path
+							d="M8 5.5V8l1.75 1.25"
+						/></svg
+					>
+					<span>
+						<span class="font-medium text-fg">Written for an earlier version of this branch.</span>
+						{#if guide.changed}
+							{guide.changed}
+							{guide.changed === 1 ? 'step has' : 'steps have'} changed since, their descriptions may
+							be out of date.
+						{/if}
+					</span>
+					<span class="flex-1"></span>
 					{#if onregenerate}
 						<button
 							type="button"
-							class="font-medium text-accent hover:underline"
+							class="flex h-6 shrink-0 items-center rounded-md bg-accent/10 px-2 text-[11.5px] font-medium text-accent transition-transform hover:bg-accent/15 active:scale-[0.97]"
 							onclick={onregenerate}>Regenerate</button
 						>
 					{/if}
-				</p>
+				</div>
 			{/if}
 			<h1 class="text-[17px] font-semibold tracking-tight">{guide.title}</h1>
 			<div class="prose mt-2 text-[13.5px] leading-relaxed text-muted">
