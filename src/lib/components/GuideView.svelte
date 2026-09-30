@@ -375,11 +375,12 @@
 
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
 		{@render toolbar?.()}
-		<div class="-mt-4 rounded-xl border border-line bg-surface p-5">
+		<!-- clipped to its corners, so a header band can run edge to edge -->
+		<div class="-mt-4 overflow-clip rounded-xl border border-line bg-surface">
 			{#if guide.earlier}
 				<!-- a band across the top of the card, set apart by its surface: hues mean the diff -->
 				<div
-					class="-mx-5 -mt-5 mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-[11px] border-b border-line bg-subtle px-5 py-2 text-[12px] text-muted"
+					class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-subtle px-5 py-2 text-[12px] text-muted"
 				>
 					<svg
 						viewBox="0 0 16 16"
@@ -411,16 +412,18 @@
 					{/if}
 				</div>
 			{/if}
-			<h1 class="text-[17px] font-semibold tracking-tight">{guide.title}</h1>
-			<div class="prose mt-2 text-[13.5px] leading-relaxed text-muted">
-				{@html guide.summaryHtml}
+			<div class="p-5">
+				<h1 class="text-[17px] font-semibold tracking-tight">{guide.title}</h1>
+				<div class="prose mt-2 text-[13.5px] leading-relaxed text-muted">
+					{@html guide.summaryHtml}
+				</div>
+				<p class="mt-4 flex items-center gap-1.5 text-[11px] text-faint">
+					Use
+					<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">j</kbd>
+					<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">k</kbd>
+					to move between sections.
+				</p>
 			</div>
-			<p class="mt-4 flex items-center gap-1.5 text-[11px] text-faint">
-				Use
-				<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">j</kbd>
-				<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">k</kbd>
-				to move between sections.
-			</p>
 		</div>
 
 		{#each sections as section (section.id)}
