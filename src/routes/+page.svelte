@@ -20,7 +20,8 @@
 	import RepoButton from '$lib/components/RepoButton.svelte';
 	import RepoList from '$lib/components/RepoList.svelte';
 	import ResizeHandle, { storedSize } from '$lib/components/ResizeHandle.svelte';
-	import SidebarLayout from '$lib/components/SidebarLayout.svelte';
+	import SidebarLayout, { PANEL_DEFAULT, PANEL_KEY } from '$lib/components/SidebarLayout.svelte';
+	import AskLens from '$lib/components/ask/AskLens.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
 	import { lineStats } from '$lib/diff/hunks';
@@ -87,6 +88,10 @@
 		threads: data.threads
 	}));
 	const asking = $derived(data.scope !== null && data.selection !== null ? threads : undefined);
+	/** the question open in the panel docked at the right, beside the diff */
+	const docked = $derived(!!asking?.open && !asking.expanded);
+	let panelWidth = $state<number | null>(storedSize(PANEL_KEY));
+	const dock = $derived(docked ? (panelWidth ?? PANEL_DEFAULT) : 0);
 
 	// answers still being written when the page loaded carry on streaming
 	$effect(() => {
@@ -121,6 +126,21 @@
 	// switched in the browser only, so changing it never re-runs the diff
 	// svelte-ignore state_referenced_locally
 	let layout = $state(data.layout);
+
+	// a split diff beside the question panel needs a wide screen. Narrower, it reads
+	// unified while the panel is open, unless split is picked again meanwhile
+	/** the room split needs beside the panel, a knob for small screens */
+	const SPLIT_BESIDE_PANEL = 1200;
+	let innerWidth = $state(0);
+	let splitAnyway = $state(false);
+	$effect(() => {
+		if (!dock) splitAnyway = false;
+	});
+	const shownLayout = $derived(
+		layout === 'split' && dock && !splitAnyway && innerWidth - dock < SPLIT_BESIDE_PANEL
+			? 'unified'
+			: layout
+	);
 
 	const repoGuides = $derived(data.guides.filter((g) => g.repo === data.repo));
 
@@ -241,7 +261,7 @@
 	<title>{repoName(data.repo)} · sloppy diff</title>
 </svelte:head>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} bind:innerWidth />
 
 <div class="min-h-screen font-sans">
 	<header
@@ -538,7 +558,13 @@
 					mode={data.changeMode}
 					summary={data.changes}
 					onchange={setChanges}
-					bind:layout
+					bind:layout={
+						() => shownLayout,
+						(next) => {
+							layout = next;
+							splitAnyway = next === 'split';
+						}
+					}
 				/>
 			</div>
 			{#if asking && threads.list.length}
@@ -560,6 +586,17 @@
 				</button>
 			{/if}
 		</div>
+	{/snippet}
+
+	{#snippet askPanel()}
+		{#if asking}
+			<AskLens
+				threads={asking}
+				files={data.files}
+				guide={data.view === 'guide' ? data.guide : null}
+				docked
+			/>
+		{/if}
 	{/snippet}
 
 	{#snippet nothing()}
@@ -619,9 +656,11 @@
 			guide={data.guide}
 			files={data.files}
 			{toolbar}
-			{layout}
+			layout={shownLayout}
 			{virtualize}
 			threads={asking}
+			panel={docked ? askPanel : undefined}
+			bind:panelWidth
 			onregenerate={() => (dialogOpen = true)}
 		/>
 	{:else if data.view === 'guide'}
@@ -644,7 +683,7 @@
 			{@render saved()}
 		</div>
 	{:else}
-		<SidebarLayout {layout}>
+		<SidebarLayout layout={shownLayout} panel={docked ? askPanel : undefined} bind:panelWidth>
 			{#snippet aside()}
 				{#if sidebar}
 					<!-- sized to its content until the handle below is dragged -->
@@ -702,7 +741,13 @@
 					<CommitCard {commit} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
-					<FileDiff {file} {layout} {virtualize} threads={asking} remember={data.repo} />
+					<FileDiff
+						{file}
+						layout={shownLayout}
+						{virtualize}
+						threads={asking}
+						remember={data.repo}
+					/>
 				{:else}
 					<!-- the commit list stays, so an empty commit is one step on the way -->
 					<div class="flex flex-col items-center py-16 text-center">{@render nothing()}</div>

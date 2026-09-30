@@ -23,9 +23,10 @@
 	/** The guide section a hunk is read in, sent along as context for the question. */
 	const sectionOf = (hunk: string) => guide?.sections.find((s) => s.hunks.includes(hunk))?.id;
 
-	// a, q, and picking lines from the keyboard. The lens handles its own keys
+	// a, q, and picking lines from the keyboard, also while the panel is docked. The
+	// panel and the lens handle their own keys
 	function onkeydown(event: KeyboardEvent) {
-		if (threads.open || event.metaKey || event.ctrlKey || event.altKey) return;
+		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
 		if (typing(event)) return;
 
 		const cursor = threads.cursor;
@@ -54,12 +55,16 @@
 			} else {
 				threads.cursor = startCursor();
 			}
+		} else if (event.key === 'q' && threads.open) {
+			threads.close();
 		} else if (event.key === 'q' && threads.list.length) {
 			threads.openLens();
 		} else if (event.key === 'Escape' && threads.composing) {
 			threads.composing = false;
 		} else if (event.key === 'Escape' && threads.draft) {
 			threads.draft = null;
+		} else if (event.key === 'Escape' && threads.open) {
+			threads.close();
 		} else return;
 		event.preventDefault();
 	}
@@ -110,6 +115,7 @@
 
 <AskComposer {threads} {files} {guide} />
 <AskPeek {threads} />
+<!-- the lens over the whole page. Docked, the page places it in its layout -->
 <AskLens {threads} {files} {guide} />
 
 <style>

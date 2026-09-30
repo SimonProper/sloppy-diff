@@ -188,6 +188,15 @@ html:has(dialog:modal) {
 	text-decoration: underline;
 	text-underline-offset: 2px;
 }
+/* an answer's straight answer, the explanation below the rule */
+.prose > :first-child:has(+ hr) {
+	color: var(--fg);
+	font-weight: 500;
+}
+.prose hr {
+	margin: 0.9em 0;
+	border-color: var(--line);
+}
 .prose strong {
 	font-weight: 600;
 	color: var(--fg);

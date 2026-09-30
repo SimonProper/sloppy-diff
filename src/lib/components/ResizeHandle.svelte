@@ -26,6 +26,8 @@
 		dragging?: boolean;
 		/** saves the size in this browser under this key, read it back with `storedSize` */
 		key?: string;
+		/** the panel is after the handle, dragging towards it makes it smaller */
+		reverse?: boolean;
 	}
 
 	let {
@@ -37,7 +39,8 @@
 		max,
 		reserve = 96,
 		dragging = $bindable(false),
-		key
+		key,
+		reverse = false
 	}: Props = $props();
 
 	$effect(() => {
@@ -72,7 +75,8 @@
 	}
 
 	function pointermove(event: PointerEvent) {
-		if (dragging) size = limit(from + (vertical ? event.clientX : event.clientY) - origin);
+		const moved = (vertical ? event.clientX : event.clientY) - origin;
+		if (dragging) size = limit(from + (reverse ? -moved : moved));
 	}
 
 	function pointerup(event: PointerEvent) {
@@ -82,7 +86,8 @@
 
 	function keydown(event: KeyboardEvent) {
 		const step = event.shiftKey ? 64 : 16;
-		const [less, more] = vertical ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+		let [less, more] = vertical ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+		if (reverse) [less, more] = [more, less];
 		if (event.key === less) size = limit(current() - step);
 		else if (event.key === more) size = limit(current() + step);
 		else if (event.key === 'Home') size = limit(min);

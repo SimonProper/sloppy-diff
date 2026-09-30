@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+
 	interface Props {
 		value: string;
 		placeholder: string;
@@ -14,6 +16,8 @@
 		autofocus?: boolean;
 		/** frameless, when it sits in a floating shell that has the border */
 		bare?: boolean;
+		/** at the end of the bottom row, before send */
+		trailing?: Snippet;
 	}
 
 	let {
@@ -25,7 +29,8 @@
 		onsend,
 		onescape,
 		autofocus = false,
-		bare = false
+		bare = false,
+		trailing
 	}: Props = $props();
 
 	let textarea: HTMLTextAreaElement;
@@ -53,83 +58,73 @@
 	}
 </script>
 
-<!-- what it's about on its own line, the text under it, and send at the text's
-     bottom right however many lines it grows to -->
+<!-- the text on top, and under it a row inside the box: what it's about and the hint on
+     the left, send on the right, however many lines the text grows to -->
 <div
 	class={[
-		'flex flex-col gap-1 rounded-[10px] bg-surface py-1.5 pr-1.5 pl-2 transition-colors',
-		bare
-			? 'border border-transparent'
-			: 'border border-line focus-within:border-[color-mix(in_oklab,var(--fg)_28%,var(--line))]'
+		'field flex flex-col gap-2 rounded-xl px-3 pt-2.5 pb-2 transition-colors',
+		bare ? 'border border-transparent' : 'framed border'
 	]}
 >
-	{#if context}
-		<div class="flex h-5 items-center gap-2 pr-1">
-			<span
-				class="min-w-0 truncate rounded-md bg-subtle px-1.5 font-mono text-[11px] leading-5 text-muted"
-				>{context}</span
+	<textarea
+		bind:this={textarea}
+		bind:value
+		rows="1"
+		{placeholder}
+		class="h-[22px] max-h-[132px] min-h-[22px] min-w-0 resize-none border-0 bg-transparent p-0 text-[13.5px] leading-[22px] text-fg outline-none placeholder:text-[color-mix(in_oklab,var(--fg)_50%,transparent)]"
+		{onkeydown}
+		{@attach (el) => {
+			if (!autofocus) return;
+			// after the popover it may sit in has opened, a hidden field can't take focus
+			const frame = requestAnimationFrame(() => el.focus({ preventScroll: true }));
+			return () => cancelAnimationFrame(frame);
+		}}></textarea>
+	<div class="flex h-6 items-center gap-2 text-[11px] text-muted">
+		{#if context}
+			<span class="min-w-0 truncate rounded-md bg-subtle px-1.5 font-mono leading-5">{context}</span
 			>
-			<span class="flex-1"></span>
-			{@render hint()}
-		</div>
-	{/if}
-	<div class="flex items-end gap-2">
-		<textarea
-			bind:this={textarea}
-			bind:value
-			rows="1"
-			{placeholder}
-			class="h-[22px] max-h-[132px] min-h-[22px] min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-[13px] leading-[22px] text-fg outline-none placeholder:text-faint"
-			{onkeydown}
-			{@attach (el) => {
-				if (!autofocus) return;
-				// after the popover it may sit in has opened, a hidden field can't take focus
-				const frame = requestAnimationFrame(() => el.focus({ preventScroll: true }));
-				return () => cancelAnimationFrame(frame);
-			}}></textarea>
-		{#if !context}
-			{@render hint()}
 		{/if}
-		{@render send()}
+		<span class="shrink-0 whitespace-nowrap">{typed ? hints[1] : hints[0]}</span>
+		<span class="flex-1"></span>
+		{@render trailing?.()}
+		<button
+			type="button"
+			class={[
+				'grid size-6 shrink-0 place-items-center rounded-full transition-colors',
+				typed ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
+			]}
+			aria-label="Ask"
+			title="Ask  ↵"
+			disabled={!typed || busy}
+			onclick={() => onsend(value.trim(), false)}
+		>
+			{#if busy}
+				<span class="spin size-3 rounded-full border-[1.5px] border-surface/40 border-t-surface"
+				></span>
+			{:else}
+				<svg
+					viewBox="0 0 16 16"
+					class="size-3"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M8 12.5v-9M4 7l4-4 4 4" /></svg
+				>
+			{/if}
+		</button>
 	</div>
 </div>
 
-{#snippet hint()}
-	<span class="shrink-0 text-[11px] leading-[22px] whitespace-nowrap text-faint">
-		{typed ? hints[1] : hints[0]}
-	</span>
-{/snippet}
-
-{#snippet send()}
-	<button
-		type="button"
-		class={[
-			'grid size-[22px] shrink-0 place-items-center rounded-md bg-ink text-surface transition-opacity',
-			!typed && 'pointer-events-none opacity-0'
-		]}
-		aria-label="Ask"
-		title="Ask  ↵"
-		disabled={!typed || busy}
-		onclick={() => onsend(value.trim(), false)}
-	>
-		{#if busy}
-			<span class="spin size-3 rounded-full border-[1.5px] border-surface/40 border-t-surface"
-			></span>
-		{:else}
-			<svg
-				viewBox="0 0 16 16"
-				class="size-3"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"><path d="M8 12.5v-9M4 7l4-4 4 4" /></svg
-			>
-		{/if}
-	</button>
-{/snippet}
-
 <style>
+	/* lifted a little off the panel, like the prompt boxes of other chat apps */
+	.framed {
+		background: color-mix(in oklab, var(--fg) 3%, var(--surface));
+		border-color: color-mix(in oklab, var(--fg) 12%, var(--line));
+	}
+	.framed:focus-within {
+		border-color: color-mix(in oklab, var(--fg) 26%, var(--line));
+	}
 	.spin {
 		animation: spin 0.8s linear infinite;
 	}

@@ -418,7 +418,7 @@ async function firstPrompt(
 
 	parts.push(`<question>\n${question}\n</question>`);
 	parts.push(
-		`Answer the question about the selected lines. You may read and search files in the repository for context, paths are under ${root}. Be direct and concise, in markdown, and quote code only where it helps. Don't modify anything.`
+		`Answer the question about the selected lines. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
 	);
 	return parts.join('\n\n');
 }

@@ -18,7 +18,9 @@
 
 	let { threads, files, guide }: Props = $props();
 
-	const draft = $derived(threads.composing && !threads.open ? threads.draft : null);
+	const draft = $derived(
+		threads.composing && !(threads.open && threads.expanded) ? threads.draft : null
+	);
 
 	const context = $derived.by(() => {
 		const found = draft && findHunk(files, draft.span.hunk);

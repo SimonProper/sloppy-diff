@@ -1,3 +1,9 @@
+<script module lang="ts">
+	/** the right panel's width, saved under this key when dragged */
+	export const PANEL_KEY = 'ask-panel-width';
+	export const PANEL_DEFAULT = 440;
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Layout } from '$lib/diff/split';
@@ -16,9 +22,21 @@
 		rail?: Snippet;
 		children: Snippet;
 		asideClass?: string;
+		/** a column at the right beside the diffs, the question panel */
+		panel?: Snippet;
+		/** its width as dragged, null for the default */
+		panelWidth?: number | null;
 	}
 
-	let { layout, aside, rail: railContent, children, asideClass = '' }: Props = $props();
+	let {
+		layout,
+		aside,
+		rail: railContent,
+		children,
+		asideClass = '',
+		panel: panelContent,
+		panelWidth = $bindable(null)
+	}: Props = $props();
 
 	const KEY = 'sidebar-width';
 	const MIN = 200;
@@ -34,6 +52,15 @@
 	};
 
 	let total = $state(0);
+	let rightPanel = $state<HTMLElement>();
+	const PANEL_MIN = 360;
+	/** the widest the right panel gets, the diffs keep this much */
+	const PANEL_MAX = $derived(Math.max(PANEL_MIN, total - 480));
+	const panelSize = $derived(Math.min(Math.max(panelWidth ?? PANEL_DEFAULT, PANEL_MIN), PANEL_MAX));
+	/** the right column, 0 while the panel is closed so opening it can ease */
+	const right = $derived(panelContent ? panelSize : 0);
+	/** what's left for the sidebar and the diffs */
+	const room = $derived(total - right);
 	let stored = $state<number | null>(storedSize(KEY));
 	let panel = $state<HTMLElement>();
 	let toggleButton = $state<HTMLButtonElement>();
@@ -43,7 +70,7 @@
 
 	const diffMin = $derived(char * CHARS * (layout === 'split' ? 2 : 1) + CHROME[layout]);
 	/** no room for even the narrowest sidebar beside the diff */
-	const narrow = $derived(total > 0 && total - diffMin < MIN);
+	const narrow = $derived(total > 0 && room - diffMin < MIN);
 
 	const DOCKED_KEY = 'sidebar-docked';
 	/** kept beside the diffs when they're narrow, their long lines wrapping instead */
@@ -51,14 +78,18 @@
 
 	// the diff's minimum wins over a wide sidebar, in a narrow window or when switching to
 	// split. Docked, lines wrap anyway, so the diff only keeps three quarters of it
-	const max = $derived(Math.max(MIN, total - (narrow && docked ? diffMin * 0.75 : diffMin)));
+	const max = $derived(Math.max(MIN, room - (narrow && docked ? diffMin * 0.75 : diffMin)));
 	const width = $derived(Math.min(Math.max(stored ?? DEFAULT, MIN), max));
 
 	/** the rail's width */
 	const RAIL = 40;
+	const FOLDED_KEY = 'sidebar-folded';
+	/** folded into the rail by hand, where there's room for it */
+	let folded = $state(readText(FOLDED_KEY) === 'true');
+
 	// otherwise it folds into a rail, opening over the diffs at the width it would have had
-	const rail = $derived(narrow && !docked);
-	const expanded = $derived(Math.min(Math.max(stored ?? DEFAULT, MIN), total - RAIL));
+	const rail = $derived(narrow ? !docked : folded);
+	const expanded = $derived(Math.min(Math.max(stored ?? DEFAULT, MIN), room - RAIL));
 
 	let opened = $state(false);
 	const open = $derived(rail && opened);
@@ -84,16 +115,21 @@
 	/** over the diffs rather than in its column, as a rail and while it moves */
 	const floating = $derived(rail || moving);
 
+	/** Keeps the sidebar in its column, or folds it into the rail. */
 	function dock(next: boolean) {
-		docked = next;
-		opened = false;
+		// narrow, it's kept open against the diff's width. With room, only folded by hand
 		if (narrow) {
-			// the transitions' length, then it settles into its column
-			moving = true;
-			clearTimeout(moveTimer);
-			moveTimer = setTimeout(() => (moving = false), 220);
+			docked = next;
+			writeText(DOCKED_KEY, next ? 'true' : null);
+		} else {
+			folded = !next;
+			writeText(FOLDED_KEY, next ? null : 'true');
 		}
-		writeText(DOCKED_KEY, next ? 'true' : null);
+		opened = false;
+		// the transitions' length, then it settles into its column
+		moving = true;
+		clearTimeout(moveTimer);
+		moveTimer = setTimeout(() => (moving = false), 220);
 	}
 
 	// s opens and closes the rail, Escape closes it
@@ -151,7 +187,22 @@
 		tip = null;
 	}
 
-	$effect(() => () => (clearTimeout(tipTimer), clearTimeout(moveTimer)));
+	/** the right panel opening or closing, its column eases like the sidebar's */
+	let panelMoving = $state(false);
+	let panelTimer: ReturnType<typeof setTimeout> | undefined;
+	let panelWasOpen: boolean | null = null;
+	// before the DOM updates, so the transition is on when the column's width changes
+	$effect.pre(() => {
+		const isOpen = !!panelContent;
+		if (panelWasOpen !== null && isOpen !== panelWasOpen) {
+			panelMoving = true;
+			clearTimeout(panelTimer);
+			panelTimer = setTimeout(() => (panelMoving = false), 220);
+		}
+		panelWasOpen = isOpen;
+	});
+
+	$effect(() => () => (clearTimeout(tipTimer), clearTimeout(moveTimer), clearTimeout(panelTimer)));
 
 	$effect(() => {
 		const measure = () => (char = probe.getBoundingClientRect().width / CHARS || char);
@@ -165,8 +216,8 @@
 
 <!-- resizing live is cheap, diffs off screen aren't laid out (see LazyBlock) -->
 <div
-	class={['relative grid', moving && 'moving-column']}
-	style:grid-template-columns="{rail ? RAIL : width}px minmax(0, 1fr)"
+	class={['relative grid', (moving || panelMoving) && 'moving-column']}
+	style:grid-template-columns="{rail ? RAIL : width}px minmax(0, 1fr) {right}px"
 	bind:clientWidth={total}
 >
 	<!-- holds the sidebar's column, as a rail the sidebar floats over the diffs from here,
@@ -185,72 +236,72 @@
 				moving && 'moving',
 				instant && 'instant'
 			]}
-			style:width={rail ? `${open ? expanded : RAIL}px` : narrow ? `${width}px` : null}
+			style:width={rail ? `${open ? expanded : RAIL}px` : `${width}px`}
 			{onclick}
 			onpointerover={rail ? onpointerover : undefined}
 			onpointerleave={rail ? hideTip : undefined}
 			onscrollcapture={rail ? hideTip : undefined}
 		>
 			<div class="flex h-full min-h-0 flex-col" style:width={floating ? `${expanded}px` : null}>
-				{#if narrow}
-					<div class="flex h-10 shrink-0 items-center justify-between pr-2 pl-1">
-						{#if rail}
-							<button
-								bind:this={toggleButton}
-								type="button"
-								class="grid size-8 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg"
-								aria-label={open ? 'Close the sidebar' : 'Open the sidebar'}
-								aria-expanded={open}
-								aria-keyshortcuts="s"
-								data-tip="Open the sidebar · S"
-								onclick={() => setOpen(!open)}
+				<div class="flex h-10 shrink-0 items-center justify-between pr-2 pl-1">
+					{#if rail}
+						<button
+							bind:this={toggleButton}
+							type="button"
+							class="grid size-8 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg"
+							aria-label={open ? 'Close the sidebar' : 'Open the sidebar'}
+							aria-expanded={open}
+							aria-keyshortcuts="s"
+							data-tip="Open the sidebar · S"
+							onclick={() => setOpen(!open)}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-4"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M6 2.5v11" /></svg
 							>
-								<svg
-									viewBox="0 0 16 16"
-									class="size-4"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M6 2.5v11" /></svg
-								>
-							</button>
-						{:else}
-							<span></span>
-						{/if}
-						{#if open || docked}
-							<button
-								type="button"
-								class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
-								title={docked
-									? 'Fold into a rail, long lines keep their width'
-									: 'Keep the sidebar open, long lines wrap'}
-								onclick={() => dock(!docked)}
+						</button>
+					{:else}
+						<span></span>
+					{/if}
+					{#if !collapsed}
+						<button
+							type="button"
+							class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
+							title={rail
+								? narrow
+									? 'Keep the sidebar open, long lines wrap'
+									: 'Keep the sidebar open'
+								: 'Fold into a rail'}
+							onclick={() => dock(rail)}
+						>
+							<!-- the sidebar icon: its column filled to keep it, a chevron to fold it -->
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
 							>
-								<!-- the sidebar icon: its column filled to keep it, a chevron to fold it -->
-								<svg
-									viewBox="0 0 16 16"
-									class="size-3.5"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<rect x="2" y="2.5" width="12" height="11" rx="2" />
-									<path d="M6 2.5v11" />
-									{#if docked}
-										<path d="m11 6-2 2 2 2" />
-									{:else}
-										<path d="M4 5v6" stroke-width="2.5" />
-									{/if}
-								</svg>
-								{docked ? 'Fold' : 'Keep open'}
-							</button>
-						{/if}
-					</div>
-				{/if}
+								<rect x="2" y="2.5" width="12" height="11" rx="2" />
+								<path d="M6 2.5v11" />
+								{#if !rail}
+									<path d="m11 6-2 2 2 2" />
+								{:else}
+									<path d="M4 5v6" stroke-width="2.5" />
+								{/if}
+							</svg>
+							{rail ? 'Keep open' : 'Fold'}
+						</button>
+					{/if}
+				</div>
 				<div class={['flex min-h-0 flex-1 flex-col', asideClass, collapsed && 'invisible']}>
 					{@render aside()}
 				</div>
@@ -265,6 +316,28 @@
 		</aside>
 	</div>
 	{@render children()}
+
+	<!-- the question panel, a column of the page like the sidebar, resized from its left edge.
+	     Laid out at its full width, so opening only moves its edge and nothing in it reflows -->
+	<div bind:this={rightPanel} class="sticky top-12 h-[calc(100vh-3rem)] overflow-x-clip">
+		<div class="relative flex h-full flex-col" style:width="{panelSize}px">
+			{#if panelContent}
+				<div class="absolute inset-y-0 left-0 w-px">
+					<ResizeHandle
+						bind:size={panelWidth}
+						key={PANEL_KEY}
+						panel={rightPanel}
+						orientation="vertical"
+						reverse
+						label="Resize the question panel"
+						min={PANEL_MIN}
+						max={PANEL_MAX}
+					/>
+				</div>
+				{@render panelContent()}
+			{/if}
+		</div>
+	</div>
 
 	{#if !rail}
 		<!-- over the sidebar's border, the length of the page so it can be grabbed anywhere -->

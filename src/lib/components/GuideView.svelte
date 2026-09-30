@@ -28,6 +28,9 @@
 		threads?: Threads;
 		/** writes a new guide, offered when this one was for an earlier version */
 		onregenerate?: () => void;
+		/** a column at the right, the question panel */
+		panel?: Snippet;
+		panelWidth?: number | null;
 	}
 
 	let {
@@ -37,7 +40,9 @@
 		layout = 'unified',
 		virtualize = false,
 		threads,
-		onregenerate
+		onregenerate,
+		panel,
+		panelWidth = $bindable(null)
 	}: Props = $props();
 
 	// sections read core first, whatever order they were written in
@@ -217,7 +222,7 @@
 
 <svelte:window {onkeydown} />
 
-<SidebarLayout {layout} asideClass="overflow-y-auto">
+<SidebarLayout {layout} asideClass="overflow-y-auto" {panel} bind:panelWidth>
 	{#snippet aside()}
 		<div class="border-b border-line p-4">
 			<p class="text-[13px] leading-snug font-medium">{guide.title}</p>

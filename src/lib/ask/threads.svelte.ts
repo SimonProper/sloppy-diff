@@ -60,6 +60,8 @@ export class Threads {
 
 	/** the question open in the lens */
 	open = $state<string | null>(null);
+	/** the lens over the whole page, instead of docked beside the diff */
+	expanded = $state(false);
 	#lastOpen: string | null = null;
 	/** a marker being hovered, and where to show its peek */
 	peek = $state<{ id: string; x: number; y: number } | null>(null);
@@ -127,6 +129,7 @@ export class Threads {
 
 	close() {
 		this.open = null;
+		this.expanded = false;
 	}
 
 	/**

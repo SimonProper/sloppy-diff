@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { straightAnswer } from '$lib/ask/answer';
 	import type { Threads } from '$lib/ask/threads.svelte';
 
 	interface Props {
@@ -7,14 +8,17 @@
 
 	let { threads }: Props = $props();
 
-	const peek = $derived(threads.open ? null : threads.peek);
+	// the lens shows everything, and the docked panel the thread it's open on
+	const peek = $derived(
+		threads.expanded || threads.peek?.id === threads.open ? null : threads.peek
+	);
 	const thread = $derived(threads.get(peek?.id ?? null));
 	const live = $derived(thread ? threads.live[thread.id] : undefined);
 	const question = $derived(thread?.messages.findLast((m) => m.role === 'user')?.text ?? '');
 	const answer = $derived(thread?.messages.findLast((m) => m.role === 'assistant'));
-	// the start of the answer as plain text, markdown's marks left out
+	// the straight answer as plain text, markdown's marks left out
 	const gist = $derived(
-		(answer?.text ?? '')
+		straightAnswer(answer?.text ?? '')
 			.replace(/```[\s\S]*?```/g, ' ')
 			.replace(/[*_`#>|]/g, '')
 			.replace(/\s+/g, ' ')
@@ -31,7 +35,7 @@
 		role="tooltip"
 	>
 		<p class="truncate font-medium">{question}</p>
-		<p class="mt-1 line-clamp-3 text-muted">
+		<p class="mt-1 line-clamp-4 text-muted">
 			{#if live}
 				{live.status}…
 			{:else if answer?.error}

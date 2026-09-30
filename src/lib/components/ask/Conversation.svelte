@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Message, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
@@ -10,13 +11,23 @@
 		thread: Thread;
 		/** the section or file the lines are in */
 		title: string;
+		/** a second, quieter line under the title */
+		detail?: string;
+		/** the title shows the lines in the diff when clicked */
+		onreveal?: () => void;
+		/** buttons before the title */
+		leading?: Snippet;
+		/** more buttons at the end of the header */
+		actions?: Snippet;
 	}
 
-	let { threads, thread, title }: Props = $props();
+	let { threads, thread, title, detail, onreveal, leading, actions }: Props = $props();
 
 	const live = $derived(threads.live[thread.id]);
 	const lost = $derived(threads.lost[thread.id] ?? false);
 	const cost = $derived(thread.messages.reduce((sum, m) => sum + (m.cost ?? 0), 0));
+	/** where Delete sits: beside Copy, or Retry, under the first answer */
+	const firstAnswer = $derived(thread.messages.findIndex((m) => m.role === 'assistant'));
 
 	let sending = $state(false);
 	let failure = $state('');
@@ -91,43 +102,50 @@
 	});
 </script>
 
+{#snippet spent()}
+	{#if cost > 0}
+		<span class="tabular-nums" title="What this conversation has cost">{money(cost)} so far</span>
+	{/if}
+{/snippet}
+
+{#snippet deleting()}
+	{#if confirming}
+		<button
+			type="button"
+			class="rounded-md bg-del/10 px-1.5 font-medium text-del hover:bg-del/15"
+			onclick={remove}
+			onblur={() => (confirming = false)}
+			{@attach (el) => el.focus()}>Delete question</button
+		>
+	{:else}
+		<button type="button" class="hover:text-del" onclick={() => (confirming = true)}>Delete</button>
+	{/if}
+{/snippet}
+
+{#snippet heading()}
+	<span class="max-w-full truncate leading-4 font-medium" {title}>{title}</span>
+	{#if detail}
+		<span class="max-w-full truncate text-[11px] leading-4 text-muted tabular-nums">{detail}</span>
+	{/if}
+{/snippet}
+
 <section class="flex min-h-0 min-w-0 flex-col bg-surface">
-	<header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3 text-[12px]">
-		<span class="min-w-0 truncate font-medium" {title}>{title}</span>
-		<span class="flex-1"></span>
-		{#if cost > 0}
-			<span class="shrink-0 text-[11px] text-faint tabular-nums" title="What this conversation cost"
-				>{money(cost)}</span
-			>
-		{/if}
-		{#if confirming}
+	<header class="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3 text-[12px]">
+		{@render leading?.()}
+		{#if onreveal}
 			<button
 				type="button"
-				class="h-7 shrink-0 rounded-md bg-del/10 px-2 text-[11.5px] font-medium text-del hover:bg-del/15"
-				onclick={remove}
-				onblur={() => (confirming = false)}
-				{@attach (el) => el.focus()}>Delete question</button
+				class="-ml-1.5 flex min-w-0 flex-col items-start rounded-md px-1.5 py-0.5 text-left hover:bg-subtle"
+				title="Show these lines in the diff"
+				onclick={onreveal}
 			>
-		{:else}
-			<button
-				type="button"
-				class="grid size-7 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg"
-				title="Delete this question"
-				aria-label="Delete this question"
-				onclick={() => (confirming = true)}
-			>
-				<svg
-					viewBox="0 0 16 16"
-					class="size-3.5"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5" /></svg
-				>
+				{@render heading()}
 			</button>
+		{:else}
+			<div class="flex min-w-0 flex-col">{@render heading()}</div>
 		{/if}
+		<span class="flex-1"></span>
+		{@render actions?.()}
 	</header>
 
 	<div
@@ -171,6 +189,8 @@
 									onclick={retry}>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</button
 								>
 							{/if}
+							{#if i === firstAnswer}<span class="text-[11px] text-faint">{@render deleting()}</span
+								>{/if}
 						</p>
 					{:else}
 						<div class="prose text-[13.5px] leading-relaxed">{@html message.html}</div>
@@ -179,6 +199,7 @@
 							<button type="button" class="hover:text-fg" onclick={() => copy(message, i)}
 								>{copied === i ? 'Copied' : 'Copy'}</button
 							>
+							{#if i === firstAnswer}{@render deleting()}{/if}
 						</p>
 					{/if}
 				</div>
@@ -209,31 +230,37 @@
 	<!-- one place to look: the follow-up field, or while Claude answers, its progress -->
 	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup>
 		{#if live}
+			<!-- the field's shape, so nothing jumps when the answer comes back -->
 			<div
-				class="flex h-9 items-center gap-2 rounded-[10px] border border-line px-2.5 text-[12px] text-muted"
+				class="flex h-[74px] flex-col justify-between rounded-xl border border-line px-3 pt-2.5 pb-2 text-[12px] text-muted"
 			>
-				<span
-					class="spin size-3 shrink-0 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
-				></span>
-				<span class="min-w-0 truncate">{live.status}</span>
-				<span class="text-faint tabular-nums"
-					>· {Math.max(0, Math.round((now - live.startedAt) / 1000))}s</span
-				>
-				<span class="flex-1"></span>
-				<button
-					type="button"
-					class="h-[22px] shrink-0 rounded-md px-2 text-[11.5px] text-muted hover:bg-subtle hover:text-fg"
-					onclick={() => threads.cancel(thread.id)}
-					>Stop <kbd class="pl-1 font-mono text-[10.5px] text-faint">⌘.</kbd></button
-				>
+				<div class="flex h-[22px] items-center gap-2">
+					<span
+						class="spin size-3 shrink-0 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
+					></span>
+					<span class="min-w-0 truncate">{live.status}</span>
+					<span class="tabular-nums"
+						>· {Math.max(0, Math.round((now - live.startedAt) / 1000))}s</span
+					>
+				</div>
+				<div class="flex h-6 items-center justify-end gap-2 text-[11px]">
+					{@render spent()}
+					<button
+						type="button"
+						class="h-6 shrink-0 rounded-md px-2 text-[11.5px] text-muted hover:bg-subtle hover:text-fg"
+						onclick={() => threads.cancel(thread.id)}
+						>Stop <kbd class="pl-1 font-mono text-[10.5px]">⌘.</kbd></button
+					>
+				</div>
 			</div>
 		{:else}
 			<AskField
 				bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
 				placeholder="Follow up"
-				hints={['same session · ~$0.01', '↵']}
+				hints={['same session · ~$0.01', '↵ to send']}
 				busy={sending}
 				onsend={(text) => send(text)}
+				trailing={spent}
 			/>
 		{/if}
 		{#if failure}
