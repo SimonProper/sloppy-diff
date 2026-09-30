@@ -213,17 +213,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 
 	if (result.status === 'rejected') {
 		report();
-		return {
-			...context,
-			selection: null,
-			lane: null,
-			files: [],
-			changes: null,
-			guide: null,
-			scope: null,
-			threads: [] as Thread[],
-			error: errorMessage(result.reason)
-		};
+		return { ...empty(), ...context, error: errorMessage(result.reason) };
 	}
 
 	const { selection, lane, files, changes } = result.value;
