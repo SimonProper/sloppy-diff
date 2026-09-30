@@ -94,7 +94,7 @@ vi.mock('$env/dynamic/private', () => ({
 	env: { ...process.env, CLAUDE_BIN: claude, GUIDES_DIR: join(dir, 'guides') }
 }));
 
-const { ask, cancelAsk, getAskJob, sourceFor } = await import('./ask');
+const { ask, cancelAsk, cut, getAskJob, sourceFor } = await import('./ask');
 const { deleteThread, loadThreads, prepareThreads } = await import('./threads');
 const { readDiff, resolveCommit } = await import('./git');
 
@@ -376,4 +376,13 @@ describe('asking about a whole file or the whole change', () => {
 		const source = await sourceFor(fixture.root, from, to);
 		await expect(ask(source, { text: 'Hm?', path: 'nope.ts' })).rejects.toThrow(/not in the diff/);
 	});
+});
+
+test('cut keeps whole lines within the limit and says what it left out', () => {
+	expect(cut('one\ntwo\nthree', 100, 'x')).toBe('one\ntwo\nthree');
+	expect(cut('one\ntwo\nthree', 9, 'the rest is elsewhere')).toBe(
+		'one\ntwo\n… cut short, the rest is elsewhere'
+	);
+	// a single line longer than the limit is cut mid-line
+	expect(cut('abcdefgh', 3, 'x')).toBe('abc\n… cut short, x');
 });
