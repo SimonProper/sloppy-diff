@@ -1,16 +1,12 @@
 <script lang="ts">
 	import type { Layout } from '$lib/diff/split';
 	import type { ChangeMode } from '$lib/diff/types';
+	import type { ChangeSummary } from '$lib/server/changes';
 	import LayoutToggle from './LayoutToggle.svelte';
-
-	interface Summary {
-		mode: ChangeMode;
-		formattingOnly: number;
-	}
 
 	interface Props {
 		mode: ChangeMode;
-		summary: Summary | null;
+		summary: ChangeSummary | null;
 		onchange: (mode: ChangeMode) => void;
 		layout: Layout;
 	}
