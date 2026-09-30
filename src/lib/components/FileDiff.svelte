@@ -9,7 +9,7 @@
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
-	import { lineStats } from '$lib/diff/hunks';
+	import { lineStats, tinted } from '$lib/diff/hunks';
 	import { chunk } from '$lib/lazy';
 	import StatusBadge from './StatusBadge.svelte';
 	import ChangeBar from './ChangeBar.svelte';
@@ -129,11 +129,6 @@
 			threads?.draft?.span ??
 			null
 	);
-
-	/** changed with no tokens marked as new: in lines mode, or new or removed as a whole */
-	function tinted(line: DiffLine) {
-		return line.kind !== 'ctx' && !line.spans?.length && !line.reformatted;
-	}
 
 	function isPicked(hunk: string, index: number, line: DiffLine, side?: Side) {
 		return picked?.hunk === hunk && inSpan(picked, index, line, side);

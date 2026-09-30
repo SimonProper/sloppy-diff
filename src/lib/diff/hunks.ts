@@ -1,4 +1,4 @@
-import type { Hunk } from './types';
+import type { DiffLine, Hunk } from './types';
 
 /** added, deleted and all lines across some hunks */
 export function lineStats(hunks: Hunk[]) {
@@ -13,4 +13,9 @@ export function lineStats(hunks: Hunk[]) {
 		}
 	}
 	return { additions, deletions, lines };
+}
+
+/** changed with no tokens marked as new: in lines mode, or new or removed as a whole */
+export function tinted(line: DiffLine) {
+	return line.kind !== 'ctx' && !line.spans?.length && !line.reformatted;
 }

@@ -3,6 +3,7 @@
 	import type { Thread } from '$lib/ask/types';
 	import type { DiffFile, DiffLine } from '$lib/diff/types';
 	import { displayPath } from '$lib/diff/path';
+	import { tinted } from '$lib/diff/hunks';
 
 	interface Props {
 		thread: Thread;
@@ -37,9 +38,6 @@
 	});
 
 	const asked = (index: number, line: DiffLine) => inSpan(anchor, index, line);
-	/** changed with no tokens marked as new, tinted across the code */
-	const tinted = (line: DiffLine) =>
-		line.kind !== 'ctx' && !line.spans?.length && !line.reformatted;
 	// a question about one side of a split diff: the other side's lines stay, dimmed
 	const dimmed = (line: DiffLine) =>
 		(anchor.side === 'old' && line.kind === 'add') ||
