@@ -95,15 +95,13 @@
 		}
 	}
 
-	// a step is reviewed with the hunks it had then, one they've changed in since isn't.
-	// Marks from before were only the id, they hold while the hunks haven't changed
+	// a step is reviewed with the hunks it had then, one they've changed in since isn't
 	const mark = (section: GuideSection) => `${section.id} ${section.hunks.join(' ')}`;
-	const isReviewed = (section: GuideSection) =>
-		reviewed.includes(mark(section)) || (!section.changed && reviewed.includes(section.id));
+	const isReviewed = (section: GuideSection) => reviewed.includes(mark(section));
 
 	function toggleReviewed(section: GuideSection) {
 		reviewed = isReviewed(section)
-			? reviewed.filter((r) => r !== mark(section) && r !== section.id)
+			? reviewed.filter((r) => r !== mark(section))
 			: [...reviewed, mark(section)];
 		try {
 			localStorage.setItem(storageKey, JSON.stringify(reviewed));
