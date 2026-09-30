@@ -14,6 +14,12 @@
 
 	let { guides, repo, onnavigate }: Props = $props();
 
+	// the open repo's guides first, then the rest
+	const sorted = $derived([
+		...guides.filter((g) => g.repo === repo),
+		...guides.filter((g) => g.repo !== repo)
+	]);
+
 	const repoName = (path: string) => path.split('/').filter(Boolean).pop() ?? path;
 	const key = (g: GuideListing) => `${g.repo}\0${g.start}\0${g.stop}`;
 	const href = (g: GuideListing) =>
@@ -42,7 +48,7 @@
 </script>
 
 <div class="flex flex-col" role="list">
-	{#each guides as g (key(g))}
+	{#each sorted as g (key(g))}
 		{@const armed = confirming === key(g)}
 		<!-- leaving disarms, Safari doesn't focus a clicked button so blur alone can't -->
 		<div

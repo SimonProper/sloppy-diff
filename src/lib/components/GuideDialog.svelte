@@ -98,12 +98,6 @@
 
 	const tools = $derived(progress?.tools.slice(-6) ?? []);
 
-	// the open repo's guides first
-	const sortedGuides = $derived([
-		...guides.filter((g) => g.repo === repo),
-		...guides.filter((g) => g.repo !== repo)
-	]);
-
 	$effect(() => {
 		// whatever was loaded belongs to the previous choice, "Open existing guide" and
 		// Generate must never act on it
@@ -412,7 +406,7 @@
 				Saved guides
 			</p>
 			<div class="-mx-2 max-h-56 overflow-y-auto">
-				<SavedGuides guides={sortedGuides} {repo} onnavigate={onclose} />
+				<SavedGuides {guides} {repo} onnavigate={onclose} />
 			</div>
 		</div>
 	{/if}

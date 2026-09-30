@@ -143,12 +143,7 @@
 	// svelte-ignore state_referenced_locally
 	let layout = $state(data.layout);
 
-	// the open repo's guides first, then the rest
 	const repoGuides = $derived(data.guides.filter((g) => g.repo === data.repo));
-	const sortedGuides = $derived([
-		...repoGuides,
-		...data.guides.filter((g) => g.repo !== data.repo)
-	]);
 
 	// the dialog starts from what is on screen: the branch or commit, else the range
 	const dialogInitial = $derived.by(() => {
@@ -610,7 +605,7 @@
 				<p class="px-2 pt-1 pb-1.5 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 					Saved guides
 				</p>
-				<SavedGuides guides={sortedGuides} repo={data.repo} />
+				<SavedGuides guides={data.guides} repo={data.repo} />
 			</div>
 		{/if}
 	{/snippet}
