@@ -2,7 +2,7 @@ import { opendir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { env } from '$env/dynamic/private';
-import type { FoundRepo, Scan } from '$lib/repos';
+import { repoName, type FoundRepo, type Scan } from '$lib/repos';
 
 /**
  * Finds git repositories on this machine by walking the home folder (or
@@ -137,7 +137,7 @@ async function describe(path: string): Promise<FoundRepo> {
 
 	return {
 		path,
-		name: path.split('/').pop() ?? path,
+		name: repoName(path),
 		branch,
 		active: newest ? new Date(newest).toISOString() : null,
 		remote: origin

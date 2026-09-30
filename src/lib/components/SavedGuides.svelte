@@ -4,6 +4,7 @@
 	import { deleteSavedGuide } from '$lib/guide/guides.remote';
 	import type { GuideListing } from '$lib/guide/types';
 	import { timeAgo } from '$lib/refs';
+	import { repoName } from '$lib/repos';
 
 	interface Props {
 		guides: GuideListing[];
@@ -20,7 +21,6 @@
 		...guides.filter((g) => g.repo !== repo)
 	]);
 
-	const repoName = (path: string) => path.split('/').filter(Boolean).pop() ?? path;
 	const key = (g: GuideListing) => `${g.repo}\0${g.start}\0${g.stop}`;
 	const href = (g: GuideListing) =>
 		`?${new URLSearchParams({ repo: g.repo, from: g.start, to: g.stop, view: 'guide' })}`;

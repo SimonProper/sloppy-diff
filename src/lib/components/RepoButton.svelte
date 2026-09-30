@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { repoName } from '$lib/repos';
 	import { Popover, PopoverContent, PopoverTrigger } from './popover';
 	import RepoList from './RepoList.svelte';
 
@@ -7,7 +8,7 @@
 
 	let open = $state(false);
 
-	const name = $derived(repo.split('/').filter(Boolean).pop() ?? repo);
+	const name = $derived(repoName(repo));
 
 	function pick(path: string) {
 		open = false;

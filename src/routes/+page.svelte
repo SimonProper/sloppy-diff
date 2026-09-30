@@ -6,6 +6,7 @@
 	import { remember } from '$lib/prefs';
 	import { typing } from '$lib/keys';
 	import { sameSha } from '$lib/refs';
+	import { repoName } from '$lib/repos';
 	import { Threads } from '$lib/ask/threads.svelte';
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
@@ -34,7 +35,6 @@
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps
 	const reading = scrollSpy(() => (data.view === 'guide' ? [] : data.files.map((f) => f.id)));
-	const repoName = $derived(data.repo.split('/').filter(Boolean).pop() ?? data.repo);
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
@@ -260,7 +260,7 @@
 </script>
 
 <svelte:head>
-	<title>{repoName} · sloppy diff</title>
+	<title>{repoName(data.repo)} · sloppy diff</title>
 </svelte:head>
 
 <svelte:window {onkeydown} />

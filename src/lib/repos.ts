@@ -1,3 +1,6 @@
+/** the repo's folder name, the last part of its path */
+export const repoName = (path: string) => path.split('/').filter(Boolean).pop() ?? path;
+
 export interface FoundRepo {
 	path: string;
 	name: string;
