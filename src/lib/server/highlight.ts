@@ -15,6 +15,7 @@ import * as typescript from '@twinkleplop/typescript';
 import * as yaml from '@twinkleplop/yaml';
 import type { RenderOptions, TokenizeResult } from '@twinkleplop/core';
 import type { DiffFile, DiffLine } from '$lib/diff/types';
+import { markdown as md } from '$lib/server/markdown';
 
 type Highlighter = (input: string, render?: RenderOptions) => string;
 type Tokenizer = (input: string) => TokenizeResult;
@@ -178,17 +179,9 @@ function plain(line: DiffLine): string {
 	let out = '';
 	let pos = 0;
 	for (const [start, end] of line.spans ?? []) {
-		out += escapeHtml(line.text.slice(pos, start));
-		out += `<span class="novel">${escapeHtml(line.text.slice(start, end))}</span>`;
+		out += md.utils.escapeHtml(line.text.slice(pos, start));
+		out += `<span class="novel">${md.utils.escapeHtml(line.text.slice(start, end))}</span>`;
 		pos = end;
 	}
-	return out + escapeHtml(line.text.slice(pos));
-}
-
-function escapeHtml(text: string): string {
-	return text
-		.replaceAll('&', '&amp;')
-		.replaceAll('<', '&lt;')
-		.replaceAll('>', '&gt;')
-		.replaceAll('"', '&quot;');
+	return out + md.utils.escapeHtml(line.text.slice(pos));
 }
