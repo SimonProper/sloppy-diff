@@ -3,7 +3,7 @@
 	import type { Layout } from '$lib/diff/split';
 	import { typing } from '$lib/keys';
 	import { readText, writeText } from '$lib/storage';
-	import ResizeHandle from './ResizeHandle.svelte';
+	import ResizeHandle, { storedSize } from './ResizeHandle.svelte';
 
 	interface Props {
 		/** how diffs are shown, split needs room for two sides */
@@ -34,8 +34,7 @@
 	};
 
 	let total = $state(0);
-	let dragging = $state(false);
-	let stored = $state<number | null>(read());
+	let stored = $state<number | null>(storedSize(KEY));
 	let panel = $state<HTMLElement>();
 	let toggleButton = $state<HTMLButtonElement>();
 	let probe: HTMLElement;
@@ -160,17 +159,6 @@
 		// the code font may still be loading
 		document.fonts?.ready.then(measure);
 	});
-
-	function read(): number | null {
-		const value = Number(readText(KEY));
-		return value > 0 ? value : null;
-	}
-
-	$effect(() => {
-		// saved once a drag ends, not on every move
-		if (dragging) return;
-		writeText(KEY, stored === null ? null : String(stored));
-	});
 </script>
 
 <svelte:window {onkeydown} onpointerdowncapture={onpointerdown} />
@@ -283,7 +271,7 @@
 		<div class="absolute inset-y-0 w-px" style:left="{width - 1}px">
 			<ResizeHandle
 				bind:size={stored}
-				bind:dragging
+				key={KEY}
 				{panel}
 				orientation="vertical"
 				label="Resize the sidebar"

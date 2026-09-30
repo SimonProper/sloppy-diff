@@ -1,3 +1,13 @@
+<script module lang="ts">
+	import { readText, writeText } from '$lib/storage';
+
+	/** a size saved under `key`, null when there's none */
+	export function storedSize(key: string): number | null {
+		const value = Number(readText(key));
+		return value > 0 ? value : null;
+	}
+</script>
+
 <script lang="ts">
 	interface Props {
 		/** size of the panel in px, null while it sizes itself */
@@ -14,6 +24,8 @@
 		reserve?: number;
 		/** true while the pointer is dragging */
 		dragging?: boolean;
+		/** saves the size in this browser under this key, read it back with `storedSize` */
+		key?: string;
 	}
 
 	let {
@@ -24,8 +36,15 @@
 		min = 72,
 		max,
 		reserve = 96,
-		dragging = $bindable(false)
+		dragging = $bindable(false),
+		key
 	}: Props = $props();
+
+	$effect(() => {
+		// saved once a drag ends, not on every move
+		if (!key || dragging) return;
+		writeText(key, size === null ? null : String(size));
+	});
 
 	const vertical = $derived(orientation === 'vertical');
 

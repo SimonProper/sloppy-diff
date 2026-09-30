@@ -19,8 +19,7 @@
 	import RefPicker from '$lib/components/RefPicker.svelte';
 	import RepoButton from '$lib/components/RepoButton.svelte';
 	import RepoList from '$lib/components/RepoList.svelte';
-	import ResizeHandle from '$lib/components/ResizeHandle.svelte';
-	import { readText, writeText } from '$lib/storage';
+	import ResizeHandle, { storedSize } from '$lib/components/ResizeHandle.svelte';
 	import SidebarLayout from '$lib/components/SidebarLayout.svelte';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
@@ -103,20 +102,7 @@
 	// the split between commits and files in the sidebar, kept in this browser only
 	const SPLIT_KEY = 'sidebar-commits-height';
 	let commitsPanel = $state<HTMLElement>();
-	let commitsHeight = $state<number | null>(readSplit());
-
-	function readSplit(): number | null {
-		const value = Number(readText(SPLIT_KEY));
-		return value > 0 ? value : null;
-	}
-
-	let splitDragging = $state(false);
-
-	$effect(() => {
-		// saved once a drag ends, not on every move
-		if (splitDragging) return;
-		writeText(SPLIT_KEY, commitsHeight === null ? null : String(commitsHeight));
-	});
+	let commitsHeight = $state<number | null>(storedSize(SPLIT_KEY));
 
 	const loading = slowNavigation();
 
@@ -684,7 +670,7 @@
 					</div>
 					<ResizeHandle
 						bind:size={commitsHeight}
-						bind:dragging={splitDragging}
+						key={SPLIT_KEY}
 						panel={commitsPanel}
 						label="Resize the commit and file lists"
 					/>
