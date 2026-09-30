@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { chunk } from '$lib/lazy';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 
 const exec = promisify(execFile);
@@ -59,8 +60,8 @@ async function untracked(root: string): Promise<string> {
 	const paths = out.split('\0').filter(Boolean).slice(0, MAX_UNTRACKED);
 	const diffs: string[] = [];
 	// a few at a time, one git process per file
-	for (let i = 0; i < paths.length; i += 16) {
-		const batch = paths.slice(i, i + 16).map((path) =>
+	for (const run of chunk(paths, 16)) {
+		const batch = run.map((path) =>
 			// --no-index exits with 1 when the files differ, which they always do here
 			git(root, [
 				'-c',
