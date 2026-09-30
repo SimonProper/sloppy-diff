@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { listNav } from '$lib/list-nav';
 	import { sameSha, timeAgo, type Branch, type Commit } from '$lib/refs';
 	import Popover from './Popover.svelte';
 
@@ -133,27 +134,20 @@
 		if (next !== value) onselect(next);
 	}
 
-	async function move(delta: number) {
-		if (items.length === 0) return;
-		active = (active + delta + items.length) % items.length;
-		await tick();
-		list?.querySelector('[data-active]')?.scrollIntoView({ block: 'nearest' });
-	}
-
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			move(1);
-		} else if (event.key === 'ArrowUp') {
-			event.preventDefault();
-			move(-1);
-		} else if (event.key === 'Enter') {
-			event.preventDefault();
-			// with nothing matching, whatever was typed is used as a revision
-			const item = items[active];
-			if (item) choose(item.value);
-			else if (query.trim()) choose(query.trim());
-		} else if (event.key === 'Escape') {
+		listNav(event, {
+			active,
+			count: items.length,
+			list,
+			onmove: (i) => (active = i),
+			onenter: () => {
+				// with nothing matching, whatever was typed is used as a revision
+				const item = items[active];
+				if (item) choose(item.value);
+				else if (query.trim()) choose(query.trim());
+			}
+		});
+		if (event.key === 'Escape') {
 			// the popover would close itself, but focus has to go back to the button,
 			// and inside a dialog Escape would close the dialog too
 			event.preventDefault();

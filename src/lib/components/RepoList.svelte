@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount } from 'svelte';
 	import { errorText } from '$lib/errors';
 	import type { Scan } from '$lib/repos';
 	import { getRepos, pickRepo, rescanRepos } from '$lib/repos.remote';
+	import { listNav } from '$lib/list-nav';
 	import { timeAgo } from '$lib/refs';
 
 	interface Props {
@@ -50,29 +51,21 @@
 		return q ? all.filter((r) => `${r.name} ${short(r.path)}`.toLowerCase().includes(q)) : all;
 	});
 
-	async function move(delta: number) {
-		if (!repos.length) return;
-		active = (active + delta + repos.length) % repos.length;
-		await tick();
-		list?.querySelector('[data-active]')?.scrollIntoView({ block: 'nearest' });
-	}
-
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			move(1);
-		} else if (event.key === 'ArrowUp') {
-			event.preventDefault();
-			move(-1);
-		} else if (event.key === 'Enter') {
-			event.preventDefault();
-			const typed = query.trim();
-			// a typed path opens even when the scan didn't find it
-			if (repos[active]) onpick(repos[active].path);
-			else if (typed.startsWith('/') || typed.startsWith('~')) {
-				onpick(scan && typed.startsWith('~') ? scan.home + typed.slice(1) : typed);
+		listNav(event, {
+			active,
+			count: repos.length,
+			list,
+			onmove: (i) => (active = i),
+			onenter: () => {
+				const typed = query.trim();
+				// a typed path opens even when the scan didn't find it
+				if (repos[active]) onpick(repos[active].path);
+				else if (typed.startsWith('/') || typed.startsWith('~')) {
+					onpick(scan && typed.startsWith('~') ? scan.home + typed.slice(1) : typed);
+				}
 			}
-		}
+		});
 	}
 
 	async function choose() {
