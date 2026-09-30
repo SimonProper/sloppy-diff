@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { inSpan } from '$lib/ask/span';
-	import type { Thread } from '$lib/ask/types';
+	import { linesOf, type Thread } from '$lib/ask/types';
 	import type { DiffFile, DiffLine } from '$lib/diff/types';
 	import { displayPath } from '$lib/diff/path';
 	import { findHunk, tinted } from '$lib/diff/hunks';
@@ -19,19 +19,20 @@
 	let { thread, files, section, compact = false, onclose, onreveal }: Props = $props();
 
 	const anchor = $derived(thread.anchor);
-	const found = $derived(findHunk(files, anchor.hunk));
+	const lines = $derived(linesOf(anchor));
+	const found = $derived(lines && findHunk(files, lines.hunk));
 	const name = $derived(anchor.path.split('/').pop() ?? anchor.path);
 
 	let whole = $state(false);
 	/** the lines shown: the hunk, or in a compact excerpt the asked ones (six at most) */
 	const shown = $derived.by(() => {
-		if (!found) return [];
+		if (!found || !lines) return [];
 		const all = found.hunk.lines.map((line, index) => ({ line, index }));
 		if (!compact || whole) return all;
-		return all.slice(anchor.start, Math.min(anchor.end + 1, anchor.start + 6));
+		return all.slice(lines.start, Math.min(lines.end + 1, lines.start + 6));
 	});
 
-	const asked = (index: number, line: DiffLine) => inSpan(anchor, index, line);
+	const asked = (index: number, line: DiffLine) => !!lines && inSpan(lines, index, line);
 	// a question about one side of a split diff: the other side's lines stay, dimmed
 	const dimmed = (line: DiffLine) =>
 		(anchor.side === 'old' && line.kind === 'add') ||
@@ -64,17 +65,21 @@
 			>
 			Diff <kbd class="font-mono text-[10.5px] text-faint">esc</kbd>
 		</button>
-		<span class="min-w-0 truncate font-mono text-[12px]" title={anchor.path}>
-			<span class="text-muted">{anchor.path.slice(0, -name.length)}</span>{name}
-			<span class="text-faint">· {anchor.label}</span>
-		</span>
+		{#if anchor.path}
+			<span class="min-w-0 truncate font-mono text-[12px]" title={anchor.path}>
+				<span class="text-muted">{anchor.path.slice(0, -name.length)}</span>{name}
+				<span class="text-faint">· {anchor.label}</span>
+			</span>
+		{:else}
+			<span class="min-w-0 truncate">Whole change</span>
+		{/if}
 		{#if section}
 			<span class="shrink-0 rounded-md bg-subtle px-1.5 py-0.5 font-mono text-[10.5px] text-muted"
 				>{section}</span
 			>
 		{/if}
 		<span class="flex-1"></span>
-		{#if !thread.outdated}
+		{#if !thread.outdated && anchor.path}
 			<button
 				type="button"
 				class="h-7 shrink-0 rounded-md px-2 text-muted hover:bg-subtle hover:text-fg"
@@ -84,7 +89,15 @@
 	</header>
 
 	<div bind:this={body} class="relative min-h-0 flex-1 overflow-y-auto p-4">
-		{#if thread.outdated || !found}
+		{#if !lines}
+			<p class="text-[12px] leading-snug text-muted">
+				{#if anchor.path}
+					A question about the whole of <span class="font-mono text-fg">{anchor.path}</span>.
+				{:else}
+					A question about the whole change.
+				{/if}
+			</p>
+		{:else if thread.outdated || !found}
 			<p
 				class="mb-3 flex items-start gap-2 rounded-[10px] bg-mod/10 px-3 py-2.5 text-[12px] leading-snug text-mod"
 			>

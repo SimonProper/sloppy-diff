@@ -23,8 +23,12 @@
 	);
 
 	const context = $derived.by(() => {
-		const found = draft && findHunk(files, draft.span.hunk);
-		if (!found) return '';
+		if (draft && !draft.span) {
+			const name = draft.path?.split('/').pop();
+			return name ? `whole file ${name}` : 'whole change';
+		}
+		const found = draft?.span && findHunk(files, draft.span.hunk);
+		if (!draft?.span || !found) return '';
 		const { file, hunk } = found;
 		const section = sectionLabel(guide, hunk.id);
 		return [`${shortLines(spanLabel(hunk, draft.span))} ${file.newPath.split('/').pop()}`, section]
@@ -38,6 +42,18 @@
 
 	function measure() {
 		if (!draft) return;
+		if (!draft.span) {
+			// a whole file or the whole change: under the button it was asked from
+			const at = draft.at && document.getElementById(draft.at)?.getBoundingClientRect();
+			if (!at) {
+				place = null;
+				return;
+			}
+			const width = Math.min(460, window.innerWidth - 16);
+			const left = Math.max(8, at.right - width);
+			place = { top: at.bottom + 6 + window.scrollY, left: left + window.scrollX, width };
+			return;
+		}
 		const { hunk, start, end, side } = draft.span;
 		const last = rowOf(hunk, end, side);
 		const card = last?.closest('section');

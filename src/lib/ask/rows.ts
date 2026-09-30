@@ -1,5 +1,5 @@
 import type { Cursor } from './threads.svelte';
-import type { LineSpan, Side } from './types';
+import { linesOf, type Anchor, type LineSpan, type Side } from './types';
 
 /**
  * The diff's rows carry `data-hunk`, `data-index` and, in split layout,
@@ -139,5 +139,16 @@ export async function reveal(target: LineSpan) {
 		void el.offsetWidth;
 		el.classList.add('flash');
 		setTimeout(() => el.classList.remove('flash'), 900);
+	}
+}
+
+/** Scrolls to a question's lines, or the file of a question about a whole file. */
+export function revealAnchor(anchor: Anchor) {
+	const lines = linesOf(anchor);
+	if (lines) return reveal(lines);
+	if (anchor.path) {
+		document
+			.querySelector(`[data-path="${CSS.escape(anchor.path)}"]`)
+			?.scrollIntoView({ block: 'start' });
 	}
 }

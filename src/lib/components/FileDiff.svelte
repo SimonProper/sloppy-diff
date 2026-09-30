@@ -5,7 +5,7 @@
 	import { selectedSpan, span } from '$lib/ask/rows';
 	import { inSpan } from '$lib/ask/span';
 	import type { Status, Threads } from '$lib/ask/threads.svelte';
-	import type { LineSpan, Side, Thread } from '$lib/ask/types';
+	import { linesOf, type LineSpan, type Side, type Thread } from '$lib/ask/types';
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
@@ -118,6 +118,12 @@
 		new Map(file.hunks.flatMap((h) => h.lines.map((l, i) => [l, i] as const)))
 	);
 	const fileThreads = $derived(threads ? threads.in(hunks.map((h) => h.id)) : []);
+	/** questions about the whole file, first in the header's count */
+	const wholeThreads = $derived(
+		threads?.list.filter((t) => !t.outdated && !t.anchor.hunk && t.anchor.path === file.newPath) ??
+			[]
+	);
+	const headerThreads = $derived([...wholeThreads, ...fileThreads]);
 
 	/** the lines being dragged over, from `anchor` to wherever the pointer is */
 	let drag = $state<{ hunk: string; side?: Side; anchor: number } | null>(null);
@@ -153,9 +159,9 @@
 	const marks = $derived.by(() => {
 		const map = new Map<string, Mark>();
 		for (const thread of fileThreads) {
-			const a = thread.anchor;
-			const hunk = hunks.find((h) => h.id === a.hunk);
-			if (!hunk || !threads) continue;
+			const a = linesOf(thread.anchor);
+			const hunk = a && hunks.find((h) => h.id === a.hunk);
+			if (!a || !hunk || !threads) continue;
 			const status = threads.status(thread);
 			// asked in unified layout: on the new side, unless only removed lines were picked
 			const side: Side =
@@ -265,6 +271,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <section
 	id={anchor ?? file.id}
+	data-path={file.newPath}
 	bind:this={root}
 	class={[
 		'relative overflow-clip rounded-xl border border-line bg-surface',
@@ -325,14 +332,25 @@
 			</span>
 		{/if}
 		<span class="ml-auto flex shrink-0 items-center gap-3">
-			{#if fileThreads.length}
+			{#if threads}
+				<!-- a question about the whole file, the composer floats under this -->
+				<button
+					type="button"
+					id="ask-{anchor ?? file.id}"
+					class="h-6 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
+					title="Ask Claude about this whole file"
+					onclick={() => threads.selectWhole(file.newPath, section, `ask-${anchor ?? file.id}`)}
+					>Ask</button
+				>
+			{/if}
+			{#if headerThreads.length}
 				<button
 					type="button"
 					class="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
-					title="{fileThreads.length} {fileThreads.length === 1
+					title="{headerThreads.length} {headerThreads.length === 1
 						? 'question'
 						: 'questions'} to Claude in this file, open the first"
-					onclick={() => threads?.openLens(fileThreads[0].id)}
+					onclick={() => threads?.openLens(headerThreads[0].id)}
 				>
 					<svg
 						viewBox="0 0 16 16"
@@ -342,7 +360,7 @@
 						stroke-width="1.5"
 						stroke-linecap="round"
 						stroke-linejoin="round"><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" /></svg
-					>{fileThreads.length}
+					>{headerThreads.length}
 				</button>
 			{/if}
 			{#if file.language}

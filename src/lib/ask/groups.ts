@@ -1,7 +1,7 @@
 import type { DiffFile } from '$lib/diff/types';
 import { orderSections } from '$lib/guide/order';
 import type { Guide } from '$lib/guide/types';
-import type { Thread } from './types';
+import { linesOf, type Thread } from './types';
 
 export interface Group {
 	key: string;
@@ -10,35 +10,52 @@ export interface Group {
 }
 
 /**
- * Questions in the order they're read: by guide section when a guide is open,
- * else by file in diff order, and the questions about changed code last.
+ * Questions in the order they're read: the whole change first, then by guide section
+ * when a guide is open, else by file in diff order, and the questions about changed code
+ * last. A question about a whole file comes first in its file, or in the first section
+ * that reads it.
  */
 export function groupThreads(list: Thread[], files: DiffFile[], guide?: Guide | null): Group[] {
 	const current = list.filter((t) => !t.outdated);
 	const result: Group[] = [];
-	const position = new Map(files.flatMap((f) => f.hunks.map((h, i) => [h.id, i] as const)));
-	const byLines = (a: Thread, b: Thread) =>
-		(position.get(a.anchor.hunk) ?? 0) - (position.get(b.anchor.hunk) ?? 0) ||
-		a.anchor.start - b.anchor.start;
+	const change = current.filter((t) => !t.anchor.path);
+	if (change.length) result.push({ key: 'change', label: 'Whole change', threads: change });
+
+	const fileOf = new Map(files.flatMap((f) => f.hunks.map((h) => [h.id, f.newPath] as const)));
+	/** Sorts by where the lines are in `order`, a whole file before its lines. */
+	const by = (order: string[]) => (a: Thread, b: Thread) => {
+		const [x, y] = [linesOf(a.anchor), linesOf(b.anchor)];
+		if (!x || !y) return (x ? 1 : 0) - (y ? 1 : 0);
+		return order.indexOf(x.hunk) - order.indexOf(y.hunk) || x.start - y.start;
+	};
 
 	if (guide) {
-		orderSections(guide.sections).forEach((section, i) => {
+		const sections = orderSections(guide.sections);
+		// a whole file is asked about in the first section that reads it
+		const firstSection = new Map<string, string>();
+		for (const section of sections) {
+			for (const hunk of section.hunks) {
+				const path = fileOf.get(hunk);
+				if (path && !firstSection.has(path)) firstSection.set(path, section.id);
+			}
+		}
+		sections.forEach((section, i) => {
 			const hunks = new Set(section.hunks);
 			const here = current
-				.filter((t) => hunks.has(t.anchor.hunk))
-				.sort(
-					(a, b) =>
-						section.hunks.indexOf(a.anchor.hunk) - section.hunks.indexOf(b.anchor.hunk) ||
-						a.anchor.start - b.anchor.start
-				);
+				.filter((t) => {
+					const lines = linesOf(t.anchor);
+					return lines ? hunks.has(lines.hunk) : firstSection.get(t.anchor.path) === section.id;
+				})
+				.sort(by(section.hunks));
 			if (here.length) {
 				result.push({ key: section.id, label: `§${i + 1} ${section.title}`, threads: here });
 			}
 		});
 	} else {
 		for (const file of files) {
-			const hunks = new Set(file.hunks.map((h) => h.id));
-			const here = current.filter((t) => hunks.has(t.anchor.hunk)).sort(byLines);
+			const here = current
+				.filter((t) => t.anchor.path === file.newPath)
+				.sort(by(file.hunks.map((h) => h.id)));
 			if (here.length) result.push({ key: file.id, label: file.newPath, threads: here });
 		}
 	}

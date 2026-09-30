@@ -335,3 +335,45 @@ describe('asking about lines', () => {
 		expect(prepareThreads(saved, diff).map((t) => t.outdated)).toEqual([false]);
 	});
 });
+
+describe('asking about a whole file or the whole change', () => {
+	test('a file question gets the whole file diff and no selection', async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to);
+		const thread = await ask(source, { text: 'What changed here?', path: 'src/cart.ts' });
+		expect(thread.anchor).toEqual({ path: 'src/cart.ts', label: 'whole file', code: '' });
+		await finished(thread);
+
+		const { prompt } = run(0);
+		expect(prompt).toContain('a question about the whole of src/cart.ts');
+		expect(prompt).toContain('The diff of src/cart.ts');
+		expect(prompt).not.toContain('<selection>');
+		// outdated once the file is out of the diff
+		const [saved] = await loadThreads(fixture.root, source.scope);
+		expect(prepareThreads([saved], files)[0].outdated).toBe(false);
+		expect(prepareThreads([saved], [])[0].outdated).toBe(true);
+
+		await deleteThread(fixture.root, source.scope, thread.id);
+	});
+
+	test('a question about the whole change lists the files, and is never outdated', async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to);
+		const thread = await ask(source, { text: 'Ready to merge?' });
+		expect(thread.anchor).toEqual({ path: '', label: 'whole change', code: '' });
+		await finished(thread);
+
+		const { prompt } = run(0);
+		expect(prompt).toContain('a question about the change as a whole');
+		expect(prompt).toMatch(/<files>\n[^]*src\/cart\.ts \+\d+ −\d+/);
+		const [saved] = await loadThreads(fixture.root, source.scope);
+		expect(prepareThreads([saved], [])[0].outdated).toBe(false);
+
+		await deleteThread(fixture.root, source.scope, thread.id);
+	});
+
+	test('a file that is not in the diff is refused', async () => {
+		const source = await sourceFor(fixture.root, from, to);
+		await expect(ask(source, { text: 'Hm?', path: 'nope.ts' })).rejects.toThrow(/not in the diff/);
+	});
+});

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { groupThreads, sectionLabel } from '$lib/ask/groups';
-	import { reveal } from '$lib/ask/rows';
+	import { revealAnchor } from '$lib/ask/rows';
+	import { linesOf } from '$lib/ask/types';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { DiffFile } from '$lib/diff/types';
 	import type { Guide } from '$lib/guide/types';
@@ -23,13 +24,12 @@
 	const thread = $derived(threads.get(threads.open));
 	const grouped = $derived(groupThreads(threads.list, files, guide));
 	const order = $derived(grouped.flatMap((g) => g.threads));
-	const section = $derived(thread ? sectionLabel(guide, thread.anchor.hunk) : undefined);
+	const lines = $derived(thread && linesOf(thread.anchor));
+	const section = $derived(lines ? sectionLabel(guide, lines.hunk) : undefined);
 	const at = $derived(thread ? order.findIndex((t) => t.id === thread.id) : -1);
-	const part = $derived(
-		thread && guide?.sections.find((s) => s.hunks.includes(thread.anchor.hunk))
-	);
+	const part = $derived(lines && guide?.sections.find((s) => s.hunks.includes(lines.hunk)));
 	// docked: the section's title, and under it where the lines are and which question this is
-	const heading = $derived(part ? part.title : (thread?.anchor.path ?? ''));
+	const heading = $derived(part ? part.title : thread?.anchor.path || 'Whole change');
 	const detail = $derived(
 		[section, thread?.anchor.label, order.length > 1 && `${at + 1} of ${order.length}`]
 			.filter(Boolean)
@@ -37,8 +37,7 @@
 	);
 	const title = $derived.by(() => {
 		if (!thread) return '';
-		const part = guide?.sections.find((s) => s.hunks.includes(thread.anchor.hunk));
-		return part ? `${section} ${part.title}` : thread.anchor.path;
+		return part ? `${section} ${part.title}` : thread.anchor.path || 'Whole change';
 	});
 
 	/** \ flips the questions pane: hidden where there's room for it, shown over the excerpt where not */
@@ -54,7 +53,7 @@
 		const anchor = thread.anchor;
 		threads.expanded = false;
 		await tick();
-		reveal(anchor);
+		revealAnchor(anchor);
 	}
 
 	/** Opens the next or previous question, in the order of the questions list. */
@@ -63,7 +62,7 @@
 		if (!next) return;
 		threads.openLens(next.id);
 		// docked, the diff is the excerpt: it goes to the next question's lines
-		if (!threads.expanded) reveal(next.anchor);
+		if (!threads.expanded) revealAnchor(next.anchor);
 	}
 
 	// ⇧J and ⇧K step through the questions from the diff too, where j and k are the guide's
@@ -120,7 +119,7 @@
 				{thread}
 				title={heading}
 				{detail}
-				onreveal={thread.outdated ? undefined : showInDiff}
+				onreveal={thread.outdated || !thread.anchor.path ? undefined : showInDiff}
 			>
 				{#snippet leading()}
 					{#if order.length > 1}

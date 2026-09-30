@@ -100,7 +100,7 @@
 
 	// lines picked in a diff that's no longer on screen can't be asked about
 	$effect(() => {
-		const hunk = threads.draft?.span.hunk;
+		const hunk = threads.draft?.span?.hunk;
 		if (hunk && !data.files.some((f) => f.hunks.some((h) => h.id === hunk))) threads.draft = null;
 	});
 
@@ -567,6 +567,17 @@
 					}
 				/>
 			</div>
+			{#if asking}
+				<!-- a question about the whole change, the composer floats under this -->
+				<button
+					type="button"
+					id="ask-change"
+					class="ml-3 h-7 shrink-0 rounded-lg px-2.5 text-[12px] text-muted hover:bg-subtle hover:text-fg"
+					title="Ask Claude about the whole change"
+					onclick={() => threads.selectWhole(undefined, undefined, 'ask-change')}
+					>Ask about the change</button
+				>
+			{/if}
 			{#if asking && threads.list.length}
 				<!-- every question about this diff, in the lens -->
 				<button

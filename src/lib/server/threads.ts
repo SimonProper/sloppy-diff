@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { Anchor, LineSpan, Scope, Thread } from '$lib/ask/types';
+import { linesOf, type Anchor, type LineSpan, type Scope, type Thread } from '$lib/ask/types';
 import { spanLabel, spanLines } from '$lib/ask/span';
 import { findHunk } from '$lib/diff/hunks';
 import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
@@ -126,6 +126,15 @@ export function anchorFor(files: DiffFile[], span: LineSpan): Anchor {
 	};
 }
 
+/** A question about a whole file of the diff, or with no path about the whole change. */
+export function wholeAnchor(files: DiffFile[], path?: string): Anchor {
+	if (!path) return { path: '', label: 'whole change', code: '' };
+	if (!files.some((f) => f.newPath === path)) {
+		throw new Error('That file is not in the diff anymore, reload the page');
+	}
+	return { path, label: 'whole file', code: '' };
+}
+
 /** Renders a thread's answers. */
 export function renderThread(thread: Thread): Thread {
 	return {
@@ -139,8 +148,13 @@ export function renderThread(thread: Thread): Thread {
 /** Saved threads checked against the diff on screen, with their answers rendered. */
 export function prepareThreads(threads: Thread[], files: DiffFile[]): Thread[] {
 	return threads.map((thread) => {
-		const found = findHunk(files, thread.anchor.hunk);
-		const outdated = !found || thread.anchor.end >= found.hunk.lines.length;
+		const { anchor } = thread;
+		const lines = linesOf(anchor);
+		const found = lines && findHunk(files, lines.hunk);
+		// a file is outdated once it's out of the diff, the whole change never is
+		const outdated = lines
+			? !found || lines.end >= found.hunk.lines.length
+			: anchor.path !== '' && !files.some((f) => f.newPath === anchor.path);
 		return { ...renderThread(thread), outdated };
 	});
 }

@@ -10,9 +10,15 @@ export interface Live extends Answer {
 	startedAt: number;
 }
 
-/** Lines picked for a new question, and what's been typed about them. */
+/**
+ * What a new question is about, and what's been typed: lines, a whole file without them,
+ * or the whole change without a path either.
+ */
 export interface Draft {
-	span: LineSpan;
+	span?: LineSpan;
+	path?: string;
+	/** without lines, the id of the button the composer floats under */
+	at?: string;
 	/** the guide section they were picked in */
 	section?: string;
 	text: string;
@@ -85,7 +91,7 @@ export class Threads {
 	/** Threads anchored to lines in any of these hunks. */
 	in(hunks: string[]): Thread[] {
 		const ids = new Set(hunks);
-		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk));
+		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk ?? ''));
 	}
 
 	get(id: string | null): Thread | undefined {
@@ -112,8 +118,20 @@ export class Threads {
 	}
 
 	select(span: LineSpan, section?: string) {
+		this.#compose({ span, section });
+	}
+
+	/**
+	 * A new question about a whole file, or without `path` about the whole change, its
+	 * composer under the button `at`.
+	 */
+	selectWhole(path: string | undefined, section: string | undefined, at: string) {
+		this.#compose({ path, section, at });
+	}
+
+	#compose(about: Omit<Draft, 'text'>) {
 		const keep = this.draft?.text ?? '';
-		this.draft = { span, section, text: keep };
+		this.draft = { ...about, text: keep };
 		this.composing = true;
 		this.cursor = null;
 	}
@@ -146,7 +164,7 @@ export class Threads {
 			text,
 			...(thread
 				? { thread, retry: options.retry === true }
-				: { span: draft?.span, section: draft?.section })
+				: { span: draft?.span, path: draft?.path, section: draft?.section })
 		});
 
 		this.#upsert(saved);

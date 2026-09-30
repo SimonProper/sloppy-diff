@@ -61,7 +61,9 @@
 							]}>{firstLine(thread)}</span
 						>
 						<span class="mt-0.5 block truncate font-mono text-[10.5px] text-faint"
-							>{shortLines(thread.anchor.label)} · {thread.anchor.path.split('/').pop()}</span
+							>{thread.anchor.path
+								? `${shortLines(thread.anchor.label)} · ${thread.anchor.path.split('/').pop()}`
+								: 'whole change'}</span
 						>
 					</span>
 				</button>

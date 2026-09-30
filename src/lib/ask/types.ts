@@ -11,14 +11,23 @@ export interface LineSpan {
 	side?: Side;
 }
 
-/** Where a thread sits in the diff. Hunk ids hash the content, so it stays put until the code changes. */
-export interface Anchor extends LineSpan {
+/**
+ * Where a thread sits in the diff: lines of a hunk, a whole file without them, or the
+ * whole change without a path either. Hunk ids hash the content, so lines stay put until
+ * the code changes.
+ */
+export interface Anchor extends Partial<LineSpan> {
+	/** the file, empty for the whole change */
 	path: string;
-	/** "line 12", "lines 12–15", on the new side where the lines have numbers there */
+	/** "line 12", "lines 12–15", on the new side where the lines have numbers there, or "whole file" */
 	label: string;
 	/** the selected lines as they read when asked, for a thread whose code has changed since */
 	code: string;
 }
+
+/** A thread's lines, when it's about lines and not a whole file or the whole change. */
+export const linesOf = (anchor: Anchor): LineSpan | null =>
+	anchor.hunk === undefined ? null : (anchor as LineSpan);
 
 /** Something Claude did on the way to an answer. */
 export type Step =
