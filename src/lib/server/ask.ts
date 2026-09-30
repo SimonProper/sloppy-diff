@@ -32,7 +32,6 @@ const SYSTEM = `You answer a code reviewer's questions about specific lines of a
 const MAX_FILE_DIFF_CHARS = 100_000;
 
 const jobs = jobQueue<AskEvent>('ask');
-const emit = jobs.emit;
 
 const jobKey = (root: string, scope: Scope, thread: string) => `${root}\0${scope}\0${thread}`;
 
@@ -138,7 +137,7 @@ async function answer(
 	};
 
 	try {
-		emit(job, { type: 'status', text: 'Starting Claude Code' });
+		jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
 		await mkdir(cwd, { recursive: true });
 
 		let resume = before.sessionId;
@@ -190,8 +189,8 @@ async function answer(
 			sessionId: outcome.sessionId,
 			sessionCost: total
 		});
-		if (done) emit(job, { type: 'done', thread: renderThread(done) });
-		else emit(job, { type: 'error', message: 'The thread was deleted while Claude answered' });
+		if (done) jobs.emit(job, { type: 'done', thread: renderThread(done) });
+		else jobs.emit(job, { type: 'error', message: 'The thread was deleted while Claude answered' });
 	} catch (error) {
 		await finish(source, thread.id, {
 			error: error instanceof Error ? error.message : String(error),
@@ -287,7 +286,7 @@ async function attempt(
 		// the repo's CLAUDE.md, for its conventions, although it isn't the working directory
 		env: { CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1' },
 		onSpawnError: (error) =>
-			emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
+			jobs.emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
 	});
 	job.child = claude.child;
 
@@ -309,21 +308,21 @@ async function attempt(
 		if (message.type === 'system' && message.subtype === 'init') {
 			sessionId = message.session_id;
 			model = message.model;
-			emit(job, { type: 'status', text: 'Thinking' });
+			jobs.emit(job, { type: 'status', text: 'Thinking' });
 		} else if (message.type === 'system' && message.subtype === 'thinking_tokens') {
-			emit(job, { type: 'thinking_tokens', tokens: message.estimated_tokens ?? 0 });
+			jobs.emit(job, { type: 'thinking_tokens', tokens: message.estimated_tokens ?? 0 });
 		} else if (message.type === 'stream_event') {
 			const delta = message.event?.type === 'content_block_delta' ? message.event.delta : null;
 			if (delta?.type === 'thinking_delta') {
 				thinkingSince ??= Date.now();
 				if (delta.thinking) {
 					answered = true;
-					emit(job, { type: 'thinking', text: delta.thinking });
+					jobs.emit(job, { type: 'thinking', text: delta.thinking });
 				}
 			} else if (delta?.type === 'text_delta' && delta.text) {
 				thought();
 				answered = true;
-				emit(job, { type: 'text', text: delta.text });
+				jobs.emit(job, { type: 'text', text: delta.text });
 			}
 		} else if (message.type === 'assistant') {
 			answered = true;
@@ -338,7 +337,7 @@ async function attempt(
 					pending = [];
 					const text = describeTool(block.name, block.input, options.root);
 					steps.push({ type: 'tool', text });
-					emit(job, { type: 'tool', text });
+					jobs.emit(job, { type: 'tool', text });
 				}
 			}
 		} else if (message.type === 'result') {

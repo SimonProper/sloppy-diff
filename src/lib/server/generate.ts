@@ -54,7 +54,6 @@ const MAX_DIFF_CHARS = 400_000;
 const SHORT_HUNK_LINES = 30;
 
 const jobs = jobQueue<GuideEvent>('guides');
-const emit = jobs.emit;
 
 const jobKey = (root: string, start: string, stop: string) => `${root}\0${start}..${stop}`;
 
@@ -72,7 +71,7 @@ export function startGuide(root: string, start: string, stop: string): Job<Guide
 }
 
 async function run(job: Job<GuideEvent>, root: string, start: string, stop: string) {
-	emit(job, { type: 'status', text: 'Reading commits and diff' });
+	jobs.emit(job, { type: 'status', text: 'Reading commits and diff' });
 	const [log, patch] = await Promise.all([
 		commitLog(root, start, stop),
 		readDiff(root, start, stop)
@@ -103,25 +102,25 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 		input: prompt(start, stop, log, files),
 		cwd: root,
 		onSpawnError: (error) =>
-			emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
+			jobs.emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
 	});
 	const child = claude.child;
 	job.child = child;
 
-	emit(job, { type: 'status', text: 'Starting Claude Code' });
+	jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
 	let model = env.GUIDE_MODEL || 'default';
 
 	for await (const message of claude.messages) {
 		if (message.type === 'system' && message.subtype === 'init') {
 			model = message.model ?? model;
-			emit(job, { type: 'status', text: `Claude is reviewing the change (${model})` });
+			jobs.emit(job, { type: 'status', text: `Claude is reviewing the change (${model})` });
 		} else if (message.type === 'assistant') {
 			for (const block of message.message?.content ?? []) {
 				if (block.type !== 'tool_use') continue;
 				if (block.name === 'StructuredOutput') {
-					emit(job, { type: 'status', text: 'Writing the guide' });
+					jobs.emit(job, { type: 'status', text: 'Writing the guide' });
 				} else {
-					emit(job, { type: 'tool', text: describeTool(block.name, block.input, root) });
+					jobs.emit(job, { type: 'tool', text: describeTool(block.name, block.input, root) });
 				}
 			}
 		} else if (message.type === 'result') {
@@ -141,7 +140,7 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 				sections: reconcile(draft, files)
 			};
 			await saveGuide(guide);
-			emit(job, { type: 'done', start, stop });
+			jobs.emit(job, { type: 'done', start, stop });
 			// the result is all we need, don't wait on hooks or anything else keeping claude alive
 			child.kill();
 			return;
