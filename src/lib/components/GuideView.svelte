@@ -10,6 +10,7 @@
 	import { lineStats } from '$lib/diff/hunks';
 	import { KINDS, orderSections } from '$lib/guide/order';
 	import type { Guide, GuideSection } from '$lib/guide/types';
+	import { typing } from '$lib/keys';
 	import { timeAgo } from '$lib/refs';
 	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
 	import FileDiff from './FileDiff.svelte';
@@ -211,8 +212,7 @@
 	// j / k step through sections
 	function onkeydown(event: KeyboardEvent) {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target as HTMLElement;
-		if (target.closest('input, textarea, [contenteditable], dialog')) return;
+		if (typing(event)) return;
 		if (event.key !== 'j' && event.key !== 'k') return;
 
 		const headers = sections

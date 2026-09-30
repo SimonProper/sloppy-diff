@@ -6,6 +6,7 @@
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { DiffFile } from '$lib/diff/types';
 	import type { Guide } from '$lib/guide/types';
+	import { typing } from '$lib/keys';
 	import AskComposer from './AskComposer.svelte';
 	import AskLens from './AskLens.svelte';
 	import AskPeek from './AskPeek.svelte';
@@ -25,7 +26,7 @@
 	// a, q, and picking lines from the keyboard. The lens handles its own keys
 	function onkeydown(event: KeyboardEvent) {
 		if (threads.open || event.metaKey || event.ctrlKey || event.altKey) return;
-		if ((event.target as HTMLElement).closest('input, textarea, [contenteditable], dialog')) return;
+		if (typing(event)) return;
 
 		const cursor = threads.cursor;
 		if (cursor) {

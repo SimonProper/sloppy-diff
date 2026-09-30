@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Layout } from '$lib/diff/split';
+	import { typing } from '$lib/keys';
 	import ResizeHandle from './ResizeHandle.svelte';
 
 	interface Props {
@@ -111,8 +112,7 @@
 	// s opens and closes the rail, Escape closes it
 	function onkeydown(event: KeyboardEvent) {
 		if (!rail || event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target as HTMLElement;
-		if (target.closest('input, textarea, [contenteditable], dialog')) return;
+		if (typing(event)) return;
 		if (event.key === 's') setOpen(!open, true);
 		else if (event.key === 'Escape' && open) setOpen(false, true);
 	}

@@ -4,6 +4,7 @@
 	import { slowNavigation } from '$lib/slow.svelte';
 	import { scrollSpy } from '$lib/scroll-spy.svelte';
 	import { remember } from '$lib/prefs';
+	import { typing } from '$lib/keys';
 	import { sameSha } from '$lib/refs';
 	import { Threads } from '$lib/ask/threads.svelte';
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
@@ -240,7 +241,7 @@
 	// [ and ] step to the older and newer commit
 	function onkeydown(event: KeyboardEvent) {
 		if (data.mode !== 'commit' || event.metaKey || event.ctrlKey || event.altKey) return;
-		if ((event.target as HTMLElement).closest('input, textarea, [contenteditable], dialog')) return;
+		if (typing(event)) return;
 		if (event.key === '[' && older) navigate(commitParams(older));
 		if (event.key === ']' && newer) navigate(commitParams(newer));
 	}
