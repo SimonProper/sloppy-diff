@@ -488,7 +488,7 @@ async function firstPrompt(
 			: `The diff of the whole change is in ${diffPath}, search it and read the parts the question needs.`
 	);
 	parts.push(`<question>\n${question}\n</question>`);
-	parts.push(suggesting());
+	parts.push(suggesting(source.pr !== undefined));
 	parts.push(
 		`Answer the question${lines ? ' about the selected lines' : ''}. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
 	);
@@ -543,18 +543,24 @@ function prContextOf(root: string, number: number): Promise<string> {
 	);
 }
 
+// only a pull request's prompt lists its threads with their ids
+const replying = `To answer one of the review threads listed in <threads> above, write a block that names it by its id, never a made-up one:
+\`\`\`reply thread=<id>
+The reply, in markdown.
+\`\`\`
+`;
+
 /**
  * How to suggest review comments, written as blocks the page shows as cards. Their
  * syntax is `Suggestion`'s, replies only go to threads the prompt lists with their ids.
  */
-function suggesting(): string {
+function suggesting(pr: boolean): string {
 	return `When the reviewer asks you to suggest review comments, or when one is clearly warranted, write each as a fenced block of its own:
 \`\`\`review path=src/a.ts line=12-14 side=new
 The comment, in markdown, to the author of the change.
 \`\`\`
 \`path\` is the file as the diff names it. \`line\` is one line or a first-last range, all in one hunk of the diff, numbered as in the file on \`side\`: \`new\` for added and unchanged lines, \`old\` for removed ones, \`new\` when left out. Leave out \`line\` for a comment about the whole file. A path with spaces goes in double quotes. When the comment quotes code in a fence, open and close the block with four backticks.
-To answer an existing review thread, use \`\`\`reply thread=<id>\`, only with the id of a thread listed in <threads> above, never a made-up one.
-The page shows these blocks as numbered cards after your answer, so don't repeat a comment in the text around it. The reviewer may ask to change one by its number: write the changed block again in full. Nothing is posted, the reviewer decides what to use. Don't write these blocks just to explain code.`;
+${pr ? replying : ''}The page shows these blocks as numbered cards after your answer, so don't repeat a comment in the text around it. The reviewer may ask to change one by its number: write the changed block again in full. Nothing is posted, the reviewer decides what to use. Don't write these blocks just to explain code.`;
 }
 
 /** A file's diff for the prompt, cut down to the asked hunk, or cut short, when it's very long. */
