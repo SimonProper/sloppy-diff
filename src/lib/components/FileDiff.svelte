@@ -908,11 +908,10 @@
 			color 0.15s ease,
 			transform 0.1s ease-out;
 	}
-	/* yours, not posted yet: a draft's dashed edge, a step brighter */
+	/* yours, not posted yet: a draft's dashed edge. Quiet at rest like the others, every
+	   chip brightens only when hovered or open */
 	.rv-open.pending {
 		border-style: dashed;
-		border-color: var(--ink-mark);
-		color: var(--fg);
 	}
 	/* done: just the number, faint */
 	.rv-open.resolved {
