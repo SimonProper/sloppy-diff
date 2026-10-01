@@ -83,3 +83,22 @@ export type AskEvent =
 	| { type: 'thinking_tokens'; tokens: number }
 	| { type: 'done'; thread: Thread }
 	| { type: 'error'; message: string };
+
+/**
+ * A comment Claude suggests, written as a fenced block in its answer:
+ *
+ * ````
+ * ```review path=src/a.ts line=12-14 side=new
+ * the comment, markdown
+ * ```
+ * ```reply thread=PRRT_kwDO…
+ * the reply, markdown
+ * ```
+ * ````
+ *
+ * `line` is one line or a range, numbered on `side` (`new` when left out). A `review`
+ * without `line` is about the whole file. A `reply` answers a GitHub review thread by its id.
+ */
+export type Suggestion =
+	| { kind: 'review'; path: string; side: Side; line?: number; startLine?: number; body: string }
+	| { kind: 'reply'; thread: string; body: string };
