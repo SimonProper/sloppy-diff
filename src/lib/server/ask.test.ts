@@ -355,6 +355,8 @@ describe('asking about a whole file or the whole change', () => {
 		expect(prompt).toContain('a question about the whole of src/cart.ts');
 		expect(prompt).toContain('The diff of src/cart.ts');
 		expect(prompt).not.toContain('<selection>');
+		// suggestions are asked for as fenced blocks, in every kind of question
+		expect(prompt).toContain('```review path=');
 		// outdated once the file is out of the diff
 		const [saved] = await loadThreads(fixture.root, source.scope);
 		expect(prepareThreads([saved], files)[0].outdated).toBe(false);

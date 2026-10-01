@@ -43,6 +43,8 @@ export interface Message {
 	createdAt: string;
 	/** rendered answer, filled in when the thread is loaded */
 	html?: string;
+	/** assistant: the comments it suggests, filled in with html, their blocks left out of it */
+	suggestions?: ShownSuggestion[];
 	/** assistant: thinking and tool calls, in order */
 	steps?: Step[];
 	thinkingTokens?: number;
@@ -102,3 +104,6 @@ export type AskEvent =
 export type Suggestion =
 	| { kind: 'review'; path: string; side: Side; line?: number; startLine?: number; body: string }
 	| { kind: 'reply'; thread: string; body: string };
+
+/** A suggestion as the page shows it: rendered, and placed in the diff when it's about lines. */
+export type ShownSuggestion = Suggestion & { html: string; span?: LineSpan };

@@ -127,6 +127,8 @@ export async function ask(source: Source, question: Question): Promise<Thread> {
 		};
 	}
 
+	// for the suggestions in the answers, checked against the diff as it is now
+	const diff = files ?? parseDiff(await readDiff(root, source.from, source.to));
 	const asked: Message = { role: 'user', text, createdAt: new Date().toISOString() };
 	const before = thread;
 	thread = { ...thread, messages: [...thread.messages, asked] };
@@ -134,9 +136,9 @@ export async function ask(source: Source, question: Question): Promise<Thread> {
 
 	const saved = thread;
 	jobs.start(jobKey(root, scope, thread.id), (job) =>
-		answer(job, source, saved, before, question.section, files)
+		answer(job, source, saved, before, question.section, diff)
 	);
-	return renderThread(thread);
+	return renderThread(thread, diff);
 }
 
 async function answer(
@@ -146,7 +148,7 @@ async function answer(
 	/** the thread before this question */
 	before: Thread,
 	section: string | undefined,
-	files: DiffFile[] | undefined
+	files: DiffFile[]
 ) {
 	const { root } = source;
 	const started = Date.now();
@@ -157,10 +159,7 @@ async function answer(
 	const diffPath = join(cwd, `${thread.id}.diff`);
 
 	/** A full prompt for a new session, with the earlier questions and answers when there are any. */
-	const fresh = async () => {
-		files ??= parseDiff(await readDiff(root, source.from, source.to));
-		return firstPrompt(source, before, question, files, section, diffPath);
-	};
+	const fresh = () => firstPrompt(source, before, question, files, section, diffPath);
 
 	try {
 		jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
@@ -217,7 +216,7 @@ async function answer(
 			sessionCost: total,
 			sessionTokens: outcome.tokens
 		});
-		if (done) jobs.emit(job, { type: 'done', thread: renderThread(done) });
+		if (done) jobs.emit(job, { type: 'done', thread: renderThread(done, files) });
 		else jobs.emit(job, { type: 'error', message: 'The thread was deleted while Claude answered' });
 	} catch (error) {
 		await finish(source, thread.id, {
@@ -489,6 +488,7 @@ async function firstPrompt(
 			: `The diff of the whole change is in ${diffPath}, search it and read the parts the question needs.`
 	);
 	parts.push(`<question>\n${question}\n</question>`);
+	parts.push(suggesting());
 	parts.push(
 		`Answer the question${lines ? ' about the selected lines' : ''}. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
 	);
@@ -541,6 +541,20 @@ function prContextOf(root: string, number: number): Promise<string> {
 		prContext,
 		() => `The change is GitHub pull request #${number}.`
 	);
+}
+
+/**
+ * How to suggest review comments, written as blocks the page shows as cards. Their
+ * syntax is `Suggestion`'s, replies only go to threads the prompt lists with their ids.
+ */
+function suggesting(): string {
+	return `When the reviewer asks you to suggest review comments, or when one is clearly warranted, write each as a fenced block of its own:
+\`\`\`review path=src/a.ts line=12-14 side=new
+The comment, in markdown, to the author of the change.
+\`\`\`
+\`path\` is the file as the diff names it. \`line\` is one line or a first-last range, all in one hunk of the diff, numbered as in the file on \`side\`: \`new\` for added and unchanged lines, \`old\` for removed ones, \`new\` when left out. Leave out \`line\` for a comment about the whole file. A path with spaces goes in double quotes. When the comment quotes code in a fence, open and close the block with four backticks.
+To answer an existing review thread, use \`\`\`reply thread=<id>\`, only with the id of a thread listed in <threads> above, never a made-up one.
+The page shows these blocks as numbered cards after your answer, so don't repeat a comment in the text around it. The reviewer may ask to change one by its number: write the changed block again in full. Nothing is posted, the reviewer decides what to use. Don't write these blocks just to explain code.`;
 }
 
 /** A file's diff for the prompt, cut down to the asked hunk, or cut short, when it's very long. */

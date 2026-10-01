@@ -1,9 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { linesOf, type Anchor, type LineSpan, type Scope, type Thread } from '$lib/ask/types';
+import {
+	linesOf,
+	type Anchor,
+	type LineSpan,
+	type Message,
+	type Scope,
+	type ShownSuggestion,
+	type Suggestion,
+	type Thread
+} from '$lib/ask/types';
 import { spanLabel, spanLines } from '$lib/ask/span';
-import { findHunk } from '$lib/diff/hunks';
+import { suggestionBlocks } from '$lib/ask/suggest';
+import { findHunk, spanAt } from '$lib/diff/hunks';
 import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 import { repoDir } from './guides';
 import { markdown } from './markdown';
@@ -135,14 +145,48 @@ export function wholeAnchor(files: DiffFile[], path?: string): Anchor {
 	return { path, label: 'whole file', code: '' };
 }
 
-/** Renders a thread's answers. */
-export function renderThread(thread: Thread): Thread {
+/** Renders a thread's answers, the comments they suggest as cards beside them. */
+export function renderThread(thread: Thread, files: DiffFile[]): Thread {
 	return {
 		...thread,
 		messages: thread.messages.map((m) =>
-			m.role === 'assistant' && m.text ? { ...m, html: markdown.render(m.text) } : m
+			m.role === 'assistant' && m.text ? renderAnswer(m, files) : m
 		)
 	};
+}
+
+function renderAnswer(message: Message, files: DiffFile[]): Message {
+	let text = message.text;
+	const suggestions: ShownSuggestion[] = [];
+	// from the last, cutting a block out leaves the earlier ones where they were
+	for (const { suggestion, start, end } of suggestionBlocks(text).reverse()) {
+		const placed = place(suggestion, files);
+		if (!placed) continue;
+		suggestions.unshift({ ...placed, html: markdown.render(placed.body) });
+		text = text.slice(0, start) + text.slice(end);
+	}
+	return {
+		...message,
+		html: markdown.render(text),
+		...(suggestions.length > 0 && { suggestions })
+	};
+}
+
+/**
+ * A suggestion checked against the diff: lines that aren't in it make it about the whole
+ * file, a file that isn't leaves it out, to stay in the answer as it was written.
+ */
+function place(
+	suggestion: Suggestion,
+	files: DiffFile[]
+): (Suggestion & { span?: LineSpan }) | null {
+	if (suggestion.kind === 'reply') return suggestion;
+	const file = files.find((f) => f.newPath === suggestion.path || f.oldPath === suggestion.path);
+	if (!file) return null;
+	const { line, startLine, ...whole } = suggestion;
+	const span = line === undefined ? null : spanAt(files, whole.path, whole.side, line, startLine);
+	// the page finds files by their new path
+	return span ? { ...suggestion, path: file.newPath, span } : { ...whole, path: file.newPath };
 }
 
 /** Saved threads checked against the diff on screen, with their answers rendered. */
@@ -155,6 +199,6 @@ export function prepareThreads(threads: Thread[], files: DiffFile[]): Thread[] {
 		const outdated = lines
 			? !found || lines.end >= found.hunk.lines.length
 			: anchor.path !== '' && !files.some((f) => f.newPath === anchor.path);
-		return { ...renderThread(thread), outdated };
+		return { ...renderThread(thread, files), outdated };
 	});
 }
