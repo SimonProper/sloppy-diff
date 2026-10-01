@@ -870,9 +870,9 @@
 	}
 
 	/* a pull request's review threads: a small count on the thread's last line, outlined
-	   when posted, filled when it holds your comments not posted yet, a bare faint numeral
-	   once resolved. Nothing over the background but the pending fill, so it sits on any
-	   row's colour. The covered lines show as a hairline only while the thread is open */
+	   when posted, dashed when it holds your comments not posted yet, a bare faint numeral
+	   once resolved. Nothing is filled, so it sits on any row's colour. The covered lines
+	   show as a hairline only while the thread is open */
 	.rv {
 		position: absolute;
 		top: 0;
@@ -892,48 +892,45 @@
 		top: 3px;
 		left: 4px;
 		z-index: 2;
+		box-sizing: border-box;
 		min-width: 14px;
 		height: 14px;
 		padding: 0 3px;
 		border-radius: 4px;
-		font: 500 10px/14px var(--font-sans);
+		border: 1px solid var(--ink-mark-seen);
+		font: 500 10px/12px var(--font-sans);
 		font-variant-numeric: tabular-nums;
 		text-align: center;
 		color: var(--muted);
-		box-shadow: inset 0 0 0 1px var(--ink-mark-seen);
 		cursor: pointer;
 		transition:
-			box-shadow 0.15s ease,
+			border-color 0.15s ease,
 			color 0.15s ease,
 			transform 0.1s ease-out;
 	}
+	/* yours, not posted yet: a draft's dashed edge, a step brighter */
 	.rv-open.pending {
-		background: var(--ink);
-		color: var(--surface);
-		box-shadow: none;
+		border-style: dashed;
+		border-color: var(--ink-mark);
+		color: var(--fg);
 	}
+	/* done: just the number, faint */
 	.rv-open.resolved {
+		border-color: transparent;
 		color: var(--faint);
-		box-shadow: none;
 	}
 	.rv-open:active {
 		transform: scale(0.94);
 	}
-	.rv-open.open:not(.pending) {
-		color: var(--fg);
-		box-shadow: inset 0 0 0 1px var(--ink-mark);
-	}
 	@media (hover: hover) and (pointer: fine) {
-		.rv-open:not(.pending):hover {
+		.rv-open:hover {
+			border-color: var(--ink-mark);
 			color: var(--fg);
-			box-shadow: inset 0 0 0 1px var(--ink-mark);
-		}
-		.rv-open.pending:hover {
-			background: var(--ink-mark);
 		}
 	}
-	.rv-open.pending.open {
-		background: var(--ink-mark);
+	.rv-open.open {
+		border-color: var(--ink-mark);
+		color: var(--fg);
 	}
 
 	/* split layout */
