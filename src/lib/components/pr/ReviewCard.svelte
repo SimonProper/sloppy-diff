@@ -8,9 +8,10 @@
 		/** the marker it opened from */
 		at: DOMRect;
 		onclose: () => void;
+		onreply?: (thread: string, body: string) => Promise<void>;
 	}
 
-	let { threads, at, onclose }: Props = $props();
+	let { threads, at, onclose, onreply }: Props = $props();
 
 	let card: HTMLDivElement;
 	let placed = $state<{ top: number; left: number } | null>(null);
@@ -43,7 +44,7 @@
 			{#if thread.isResolved}
 				<p class="mb-2 text-[11px] text-faint">Resolved</p>
 			{/if}
-			<ReviewComments {thread} />
+			<ReviewComments {thread} {onreply} />
 		</div>
 	{/each}
 </div>

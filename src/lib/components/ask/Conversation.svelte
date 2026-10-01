@@ -1,10 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
-	import { addDraft } from '$lib/pr/pr.remote';
 	import AskField from './AskField.svelte';
 	import StreamText from './StreamText.svelte';
 	import Trail from './Trail.svelte';
@@ -100,14 +98,11 @@
 	/** suggestions on their way to the pending review, in it, or turned down, by key */
 	let drafted = $state<Record<string, 'adding' | 'added' | { error: string }>>({});
 	async function draft({ html: _, span: __, ...suggestion }: ShownSuggestion, key: string) {
-		const review = threads.review;
-		if (!review || drafted[key] === 'adding' || drafted[key] === 'added') return;
+		if (drafted[key] === 'adding' || drafted[key] === 'added') return;
 		drafted[key] = 'adding';
 		try {
-			await addDraft({ ...review, suggestion });
+			await threads.addToReview(suggestion);
 			drafted[key] = 'added';
-			// shows it in the diff as one of your pending comments
-			await invalidateAll();
 		} catch (e) {
 			drafted[key] = { error: errorText(e) };
 		}

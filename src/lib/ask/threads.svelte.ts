@@ -1,9 +1,11 @@
 import { isHttpError } from '@sveltejs/kit';
+import { invalidateAll } from '$app/navigation';
 import { errorText } from '$lib/errors';
+import { addDraft } from '$lib/pr/pr.remote';
 import { readJson, writeJson } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
 import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
-import type { LineSpan, Scope, Side, Thread } from './types';
+import type { LineSpan, Scope, Side, Suggestion, Thread } from './types';
 
 /** An answer on its way, as the server last sent it. */
 export interface Live extends Answer {
@@ -102,6 +104,17 @@ export class Threads {
 	get review(): { repo: string; pr: string; commit: string } | null {
 		const { repo, prId, to } = this.#config();
 		return prId ? { repo, pr: prId, commit: to } : null;
+	}
+
+	/**
+	 * Adds a comment to your pending review on the pull request, then loads the page again
+	 * so it shows on its lines.
+	 */
+	async addToReview(suggestion: Suggestion) {
+		const review = this.review;
+		if (!review) throw new Error('Comments go on a pull request');
+		await addDraft({ ...review, suggestion });
+		await invalidateAll();
 	}
 
 	get(id: string | null): Thread | undefined {

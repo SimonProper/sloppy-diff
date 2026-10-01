@@ -2,8 +2,13 @@
 	import type { ReviewThread } from '$lib/pr/types';
 	import ReviewComments from './ReviewComments.svelte';
 
-	/** a file's review threads that aren't on any of its lines in the diff */
-	let { threads }: { threads: ReviewThread[] } = $props();
+	interface Props {
+		/** a file's review threads that aren't on any of its lines in the diff */
+		threads: ReviewThread[];
+		onreply?: (thread: string, body: string) => Promise<void>;
+	}
+
+	let { threads, onreply }: Props = $props();
 
 	/** the end of the code a thread was started on, where its lines were */
 	const excerpt = (thread: ReviewThread) => thread.diffHunk.split('\n').slice(-6);
@@ -36,7 +41,7 @@
 						>{/each}</pre>
 			{/if}
 			<div class="p-3">
-				<ReviewComments {thread} />
+				<ReviewComments {thread} {onreply} />
 			</div>
 		</div>
 	{/each}

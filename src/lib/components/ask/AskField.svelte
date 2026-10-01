@@ -12,6 +12,8 @@
 		busy?: boolean;
 		/** `background` asks without opening the lens (⌘↵) */
 		onsend: (text: string, background: boolean) => void;
+		/** a second way to send it, on ⌥↵ */
+		onalt?: (text: string) => void;
 		onescape?: () => void;
 		autofocus?: boolean;
 		/** frameless, when it sits in a floating shell that has the border */
@@ -29,6 +31,7 @@
 		context,
 		busy = false,
 		onsend,
+		onalt,
 		onescape,
 		autofocus = false,
 		bare = false,
@@ -52,7 +55,9 @@
 	function onkeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			if (typed && !busy) onsend(value.trim(), event.metaKey || event.ctrlKey);
+			if (!typed || busy) return;
+			if (event.altKey && onalt) onalt(value.trim());
+			else onsend(value.trim(), event.metaKey || event.ctrlKey);
 		} else if (event.key === 'Escape' && onescape) {
 			event.preventDefault();
 			event.stopPropagation();

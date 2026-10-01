@@ -7,6 +7,7 @@
 	import { findHunk } from '$lib/diff/hunks';
 	import type { DiffFile } from '$lib/diff/types';
 	import { errorText } from '$lib/errors';
+	import { commentOn } from '$lib/pr/comment';
 	import type { Guide } from '$lib/guide/types';
 	import AskField from './AskField.svelte';
 
@@ -100,6 +101,25 @@
 	let sending = $state(false);
 	let failure = $state('');
 
+	/** on a pull request, what's typed can go to your pending review instead of to Claude */
+	const commenting = $derived(threads.review && draft && (draft.span || draft.path) ? draft : null);
+
+	async function comment(text: string) {
+		const suggestion = commenting && commentOn(files, commenting, text);
+		if (!suggestion) return;
+		sending = true;
+		failure = '';
+		try {
+			await threads.addToReview(suggestion);
+			threads.draft = null;
+			threads.composing = false;
+		} catch (e) {
+			failure = errorText(e);
+		} finally {
+			sending = false;
+		}
+	}
+
 	async function send(text: string, background: boolean) {
 		sending = true;
 		failure = '';
@@ -122,6 +142,16 @@
 		threads.composing = false;
 	}}
 />
+
+{#snippet commentButton()}
+	<button
+		type="button"
+		class="shrink-0 rounded-md border border-line px-1.5 leading-5 hover:border-muted hover:text-fg disabled:pointer-events-none disabled:opacity-50"
+		title="Adds it to your pending review, finish the review on GitHub  ⌥↵"
+		disabled={sending || !threads.draft?.text.trim()}
+		onclick={() => threads.draft && comment(threads.draft.text.trim())}>Comment</button
+	>
+{/snippet}
 
 {#if draft && place}
 	<div
@@ -146,10 +176,12 @@
 			bare
 			autofocus
 			{context}
-			placeholder="Ask about these lines"
-			hints={['esc', '⌘↵ in background']}
+			placeholder={commenting ? 'Ask Claude, or write a comment' : 'Ask about these lines'}
+			hints={['esc', commenting ? '⌥↵ to comment' : '⌘↵ in background']}
 			busy={sending}
 			onsend={send}
+			onalt={commenting ? comment : undefined}
+			trailing={commenting ? commentButton : undefined}
 			onescape={() => (threads.composing = false)}
 		/>
 		{#if failure}

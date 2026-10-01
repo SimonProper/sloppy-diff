@@ -1,11 +1,36 @@
 <script lang="ts">
+	import { errorText } from '$lib/errors';
 	import { timeAgo } from '$lib/refs';
 	import type { ReviewThread } from '$lib/pr/types';
+	import AskField from '../ask/AskField.svelte';
 
-	let { thread }: { thread: ReviewThread } = $props();
+	interface Props {
+		thread: ReviewThread;
+		/** adds a reply to your pending review, without it the thread is read-only */
+		onreply?: (thread: string, body: string) => Promise<void>;
+	}
+
+	let { thread, onreply }: Props = $props();
+
+	let reply = $state('');
+	let sending = $state(false);
+	let failure = $state('');
+
+	async function send(body: string) {
+		if (!onreply) return;
+		sending = true;
+		failure = '';
+		try {
+			await onreply(thread.id, body);
+			reply = '';
+		} catch (e) {
+			failure = errorText(e);
+		} finally {
+			sending = false;
+		}
+	}
 </script>
 
-<!-- read-only, replying happens on GitHub -->
 <ul class="flex flex-col gap-3">
 	{#each thread.comments as comment (comment.id)}
 		<li>
@@ -29,3 +54,18 @@
 		</li>
 	{/each}
 </ul>
+
+{#if onreply}
+	<div class="mt-3">
+		<AskField
+			bind:value={reply}
+			placeholder="Reply"
+			hints={['', '↵ to add to your review']}
+			busy={sending}
+			onsend={send}
+		/>
+		{#if failure}
+			<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>
+		{/if}
+	</div>
+{/if}

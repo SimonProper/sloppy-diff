@@ -19,15 +19,28 @@ export function spanLines(hunk: Hunk, span: LineSpan): DiffLine[] {
 		.filter((l, i) => inSpan(span, span.start + i, l));
 }
 
-/** "line 12", "lines 12–15", numbered on the new side unless only removed lines are in it. */
-export function spanLabel(hunk: Hunk, span: LineSpan): string {
+/**
+ * The first and last line of a span, numbered on the new side unless only removed lines
+ * are in it. Null when it has no numbered lines.
+ */
+export function spanNumbers(
+	hunk: Hunk,
+	span: LineSpan
+): { side: Side; first: number; last: number } | null {
 	const lines = spanLines(hunk, span);
 	const side = span.side ?? (lines.some((l) => l.new !== null) ? 'new' : 'old');
 	const numbers = lines
 		.map((l) => (side === 'old' ? l.old : l.new))
 		.filter((n): n is number => n !== null);
-	if (numbers.length === 0) return 'no lines';
-	const [first, last] = [Math.min(...numbers), Math.max(...numbers)];
+	if (numbers.length === 0) return null;
+	return { side, first: Math.min(...numbers), last: Math.max(...numbers) };
+}
+
+/** "line 12", "lines 12–15", numbered on the new side unless only removed lines are in it. */
+export function spanLabel(hunk: Hunk, span: LineSpan): string {
+	const at = spanNumbers(hunk, span);
+	if (!at) return 'no lines';
+	const { side, first, last } = at;
 	return (
 		(first === last ? `line ${first}` : `lines ${first}–${last}`) + (side === 'old' ? ' (old)' : '')
 	);
