@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { cubicOut } from 'svelte/easing';
+	import { fade, slide } from 'svelte/transition';
 	import { errorText } from '$lib/errors';
 	import {
 		cancelGuide,
@@ -135,6 +137,11 @@
 		);
 		return () => (stale = true);
 	});
+
+	// the commits come in after the dialog opens, they open up under their count instead of
+	// pushing the buttons down in one jump
+	const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const reveal = () => ({ duration: still() ? 0 : 220, easing: cubicOut });
 
 	function open(start: string, stop: string) {
 		onclose();
@@ -386,23 +393,25 @@
 							<span>Loading commits…</span>
 						{/if}
 					</p>
-					<div class="max-h-44 overflow-y-auto p-1">
-						{#each range?.commits ?? [] as commit (commit.sha)}
-							<div class="flex items-center gap-2.5 rounded-lg px-2 py-1 text-[12px]">
-								<span class="shrink-0 font-mono text-[11px] text-accent">{commit.sha}</span>
-								<span class="min-w-0 flex-1 truncate">{commit.subject}</span>
-								<span class="shrink-0 text-[11px] text-faint tabular-nums"
-									>{timeAgo(commit.date)}</span
-								>
+					{#if range}
+						<div class="max-h-44 overflow-y-auto" in:slide={reveal()}>
+							<div class="p-1" in:fade={reveal()}>
+								{#each range.commits as commit (commit.sha)}
+									<div class="flex items-center gap-2.5 rounded-lg px-2 py-1 text-[12px]">
+										<span class="shrink-0 font-mono text-[11px] text-accent">{commit.sha}</span>
+										<span class="min-w-0 flex-1 truncate">{commit.subject}</span>
+										<span class="shrink-0 text-[11px] text-faint tabular-nums"
+											>{timeAgo(commit.date)}</span
+										>
+									</div>
+								{:else}
+									<p class="px-2 py-3 text-center text-[12px] text-faint">
+										No commits between these two points. Is start an ancestor of stop?
+									</p>
+								{/each}
 							</div>
-						{:else}
-							{#if range}
-								<p class="px-2 py-3 text-center text-[12px] text-faint">
-									No commits between these two points. Is start an ancestor of stop?
-								</p>
-							{/if}
-						{/each}
-					</div>
+						</div>
+					{/if}
 				</div>
 			{:else if rangeError}
 				<p class="flex items-center gap-1.5 text-[12px] text-del">
