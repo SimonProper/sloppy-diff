@@ -25,7 +25,7 @@
 	{#each threads as thread (thread.id)}
 		<div class="overflow-hidden rounded-lg border border-line bg-surface">
 			<p class="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[11px] text-faint">
-				<span class="size-1.5 rounded-full bg-move"></span>
+				<span class="size-1.5 rounded-full bg-ink-soft"></span>
 				{where(thread)}
 				{#if thread.isResolved}<span>· resolved</span>{/if}
 			</p>

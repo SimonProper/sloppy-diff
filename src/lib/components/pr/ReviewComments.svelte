@@ -38,7 +38,7 @@
 				<span class="font-medium text-fg">{comment.author}</span>
 				{#if comment.pending}
 					<span
-						class="rounded-[4px] border border-mod/40 bg-mod/10 px-1 text-[10px] font-medium text-mod"
+						class="rounded-[4px] border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
 						title="In your pending review, not posted yet">Pending</span
 					>
 				{/if}

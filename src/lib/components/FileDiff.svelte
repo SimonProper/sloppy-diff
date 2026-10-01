@@ -870,15 +870,16 @@
 		}
 	}
 
-	/* a pull request's review threads, a quiet line in GitHub's purple. Yours not posted
-	   yet are amber and dotted, lighter than a posted one, and told apart without colour */
+	/* a pull request's review threads, in ink like the questions to Claude but on the
+	   gutter's left edge and ending in a bubble. Yours not posted yet are dotted, as heavy
+	   as a posted line, told apart by texture */
 	.rv {
 		position: absolute;
 		top: 0;
 		bottom: 0;
 		left: 0;
 		width: 2px;
-		background: color-mix(in oklab, var(--move) 65%, transparent);
+		background: var(--ink-mark-seen);
 	}
 	.rv.first {
 		top: 2px;
@@ -887,11 +888,7 @@
 		bottom: 2px;
 	}
 	.rv.pending {
-		background: repeating-linear-gradient(
-			to bottom,
-			color-mix(in oklab, var(--mod) 75%, transparent) 0 2px,
-			transparent 2px 5px
-		);
+		background: repeating-linear-gradient(to bottom, var(--ink-mark) 0 2px, transparent 2px 5px);
 	}
 	/* a first row's line starts lower, its dots stay on the beat of the rows above */
 	.rv.pending.first {
@@ -907,9 +904,9 @@
 		width: 16px;
 		height: 16px;
 		border-radius: 4px;
-		color: var(--move);
-		/* over a long line number */
-		background: var(--surface);
+		color: var(--muted);
+		/* the gutter's own colour, whatever the row is, to cover a long line number */
+		background: inherit;
 		cursor: pointer;
 	}
 	.rv-open svg {
@@ -917,13 +914,17 @@
 		height: 13px;
 	}
 	.rv-open:hover {
-		background: color-mix(in oklab, var(--move) 14%, transparent);
+		/* over the inherited colour, not instead of it */
+		box-shadow: inset 0 0 0 100vmax var(--ink-wash);
+		color: var(--fg);
 	}
+	/* your comments waiting to be posted want doing, full ink */
 	.rv-open.pending {
-		color: var(--mod);
+		color: var(--ink);
 	}
+	/* fainter by colour, an opacity would let the line number show through */
 	.rv-open.resolved {
-		opacity: 0.5;
+		color: var(--ink-mark-seen);
 	}
 
 	/* split layout */
