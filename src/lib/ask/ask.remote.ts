@@ -14,9 +14,15 @@ type ThreadRef = { repo: string; scope: string; thread: string };
  */
 export const askClaude = command(
 	'unchecked',
-	({ repo, from, to, ...question }: { repo: string; from: string; to: string } & Question) =>
+	({
+		repo,
+		from,
+		to,
+		pr,
+		...question
+	}: { repo: string; from: string; to: string; pr?: number } & Question) =>
 		badRequestOnError(async () => {
-			const source = await sourceFor(repo, from, to);
+			const source = await sourceFor(repo, from, to, pr);
 			const thread = await ask(source, question);
 			return { scope: source.scope, thread };
 		})

@@ -152,6 +152,11 @@ async function fetchRaw(root: string, number: number): Promise<RawPullRequest> {
 	return pr;
 }
 
+/** A pull request as GitHub has it now, without fetching its commits. */
+export async function loadPullRequest(root: string, number: number): Promise<PullRequest> {
+	return toPullRequest(await fetchRaw(root, checkPrNumber(number)));
+}
+
 /**
  * A pull request and the range its diff is: from where its head split off its base
  * to its head. Fetches the commits first when they aren't here, fork PRs included.

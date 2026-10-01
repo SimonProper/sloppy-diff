@@ -106,7 +106,8 @@
 		from: data.selection?.range?.from ?? data.selection?.from ?? '',
 		to: data.selection?.range?.to ?? '',
 		scope: data.scope ?? 'worktree',
-		threads: data.threads
+		threads: data.threads,
+		pr: data.selection?.pr?.number
 	}));
 	const asking = $derived(data.scope !== null && data.selection !== null ? threads : undefined);
 	/** the question open in the panel docked at the right, beside the diff */

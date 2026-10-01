@@ -42,6 +42,8 @@ interface Config {
 	to: string;
 	scope: Scope;
 	threads: Thread[];
+	/** the GitHub pull request the range is, for Claude to know about */
+	pr?: number;
 }
 
 /**
@@ -155,12 +157,13 @@ export class Threads {
 	 * `thread`. Returns the thread's id.
 	 */
 	async ask(text: string, thread?: string, options: { retry?: boolean } = {}): Promise<string> {
-		const { repo, from, to } = this.#config();
+		const { repo, from, to, pr } = this.#config();
 		const draft = this.draft;
 		const { scope, thread: saved } = await askClaude({
 			repo,
 			from,
 			to,
+			pr,
 			text,
 			...(thread
 				? { thread, retry: options.retry === true }

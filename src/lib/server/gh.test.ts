@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { prContext } from './ask';
 import { checkPrNumber, toPullRequest } from './gh';
 import response from './testing/pr.json';
 
@@ -40,4 +41,16 @@ test('only takes a positive whole number', () => {
 	for (const bad of ['0', '-1', '1.5', '01', '', '1;rm', '--help', '99999999999']) {
 		expect(() => checkPrNumber(bad)).toThrow();
 	}
+});
+
+test("Claude gets the PR's description and unresolved threads by id", () => {
+	const pr = toPullRequest(response.data.repository.pullRequest as never);
+	const context = prContext(pr);
+	expect(context).toContain('#17066, "feat: configure per-route Netlify deployments" by teemingc');
+	expect(context).toContain('<description>\nNetlify deployment configuration');
+	// resolved threads are done with
+	expect(context).not.toContain('PRRT_kwDOEiPr8c6gUYvj');
+	expect(context).toContain(
+		'<thread id="PRRT_kwDOEiPr8c6gVNye" path="documentation/docs/25-build-and-deploy/80-adapter-netlify.md" outdated>\nteemingc (pending): we need'
+	);
 });
