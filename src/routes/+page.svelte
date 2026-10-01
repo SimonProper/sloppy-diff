@@ -706,6 +706,7 @@
 			layout={shownLayout}
 			{virtualize}
 			threads={asking}
+			review={pr?.threads}
 			panel={docked ? askPanel : undefined}
 			bind:panelWidth
 			onregenerate={() => (dialogOpen = true)}
@@ -796,6 +797,7 @@
 						layout={shownLayout}
 						{virtualize}
 						threads={asking}
+						review={pr?.threads}
 						remember={data.repo}
 					/>
 				{:else}

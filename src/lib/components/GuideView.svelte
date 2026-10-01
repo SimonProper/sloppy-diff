@@ -16,6 +16,7 @@
 	import { readJson, writeJson } from '$lib/storage';
 	import FileDiff from './FileDiff.svelte';
 	import Popover from './Popover.svelte';
+	import type { ReviewThread } from '$lib/pr/types';
 
 	interface Props {
 		guide: Guide;
@@ -26,6 +27,8 @@
 		virtualize?: boolean;
 		/** questions to Claude about lines of the diff */
 		threads?: Threads;
+		/** a pull request's review threads */
+		review?: ReviewThread[];
 		/** writes a new guide, offered when this one was for an earlier version */
 		onregenerate?: () => void;
 		/** a column at the right, the question panel */
@@ -40,6 +43,7 @@
 		layout = 'unified',
 		virtualize = false,
 		threads,
+		review,
 		onregenerate,
 		panel,
 		panelWidth = $bindable(null)
@@ -529,6 +533,7 @@
 									{layout}
 									{virtualize}
 									{threads}
+									{review}
 									section={section.id}
 									remember="{guideKey}:{section.id}"
 								/>

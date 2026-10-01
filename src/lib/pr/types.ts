@@ -37,6 +37,8 @@ export interface PrComment {
 	url: string;
 	/** part of your pending review, not posted yet */
 	pending: boolean;
+	/** `body` rendered, filled in when the page loads */
+	html?: string;
 }
 
 /** Comments on lines or a whole file of the diff, and the replies to them. */

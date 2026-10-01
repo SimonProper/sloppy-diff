@@ -247,6 +247,9 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	]);
 	report();
 	const prBody = selection.pr ? markdown.render(selection.pr.body) : '';
+	for (const comment of selection.pr?.threads.flatMap((t) => t.comments) ?? []) {
+		comment.html = markdown.render(comment.body);
+	}
 	return {
 		...context,
 		selection,

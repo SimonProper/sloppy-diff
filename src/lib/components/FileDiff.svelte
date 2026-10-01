@@ -9,11 +9,14 @@
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
-	import { lineStats, tinted } from '$lib/diff/hunks';
+	import { lineStats, spanAt, tinted } from '$lib/diff/hunks';
 	import { chunk } from '$lib/chunk';
+	import type { ReviewThread } from '$lib/pr/types';
 	import StatusBadge from './StatusBadge.svelte';
 	import ChangeBar from './ChangeBar.svelte';
 	import LazyBlock from './LazyBlock.svelte';
+	import ReviewCard from './pr/ReviewCard.svelte';
+	import UnplacedThreads from './pr/UnplacedThreads.svelte';
 
 	interface Props {
 		file: DiffFile;
@@ -40,6 +43,8 @@
 		section?: string;
 		/** where opening and closing the file is remembered, by path, not remembered when absent */
 		remember?: string;
+		/** a pull request's review threads, shown on their lines in this file */
+		review?: ReviewThread[];
 	}
 
 	let {
@@ -55,7 +60,8 @@
 		virtualize = false,
 		threads,
 		section,
-		remember
+		remember,
+		review = []
 	}: Props = $props();
 
 	// lockfiles and formatting-only files start collapsed, unless the reader opened them
@@ -188,6 +194,62 @@
 		}
 		return map;
 	});
+
+	// a pull request's review threads: a bar down the left edge of their lines, and on
+	// the last one, where GitHub shows them, a marker that opens their comments. Drawn
+	// apart from the questions to Claude down the right edge
+
+	/** One line's piece of the review threads' bar. */
+	interface ReviewMark {
+		first: boolean;
+		last: boolean;
+		/** has comments of yours not posted yet */
+		pending: boolean;
+		/** the threads whose last line this is */
+		threads: ReviewThread[];
+	}
+
+	const placedReview = $derived(
+		review
+			.filter((t) => t.path === file.newPath || t.path === file.oldPath)
+			.map((thread) => ({
+				thread,
+				span:
+					thread.isOutdated || thread.line === null
+						? null
+						: spanAt([file], thread.path, thread.side, thread.line, thread.startLine ?? thread.line)
+			}))
+	);
+	/** outdated, about the whole file, or on lines the diff doesn't show */
+	const unplaced = $derived(placedReview.filter((r) => !r.span).map((r) => r.thread));
+
+	const reviewMarks = $derived.by(() => {
+		const map = new Map<string, ReviewMark>();
+		for (const { thread, span } of placedReview) {
+			const hunk = span && hunks.find((h) => h.id === span.hunk);
+			if (!span || !hunk) continue;
+			const pending = thread.comments.some((c) => c.pending);
+			const indexes: number[] = [];
+			for (let i = span.start; i <= span.end; i++) {
+				if (inSpan(span, i, hunk.lines[i])) indexes.push(i);
+			}
+			indexes.forEach((i, n) => {
+				const key = layout === 'split' ? `${span.hunk}:${i}:${span.side}` : `${span.hunk}:${i}`;
+				const before = map.get(key);
+				const last = n === indexes.length - 1;
+				map.set(key, {
+					first: n === 0 || (before?.first ?? false),
+					last: last || (before?.last ?? false),
+					pending: pending || (before?.pending ?? false),
+					threads: [...(before?.threads ?? []), ...(last ? [thread] : [])]
+				});
+			});
+		}
+		return map;
+	});
+
+	/** the review threads open in their card, and the marker it opened from */
+	let reviewOpen = $state<{ threads: ReviewThread[]; at: DOMRect } | null>(null);
 
 	/** Hovering a dot for a moment peeks at its answer. */
 	let peekTimer: ReturnType<typeof setTimeout> | undefined;
@@ -470,6 +532,7 @@
 												title={threads ? PICK : undefined}
 												onpointerdown={(e) => pick(e, hunk.id, index)}
 											>
+												{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}`))}
 												<span class="w-12 pr-2">{line.old ?? ''}</span>
 												<span class="w-12 pr-2">{line.new ?? ''}</span>
 											</span>
@@ -487,6 +550,17 @@
 				{/if}
 			{/each}
 		{/if}
+		{#if unplaced.length && !only}
+			<UnplacedThreads threads={unplaced} />
+		{/if}
+	{/if}
+
+	{#if reviewOpen}
+		<ReviewCard
+			threads={reviewOpen.threads}
+			at={reviewOpen.at}
+			onclose={() => (reviewOpen = null)}
+		/>
 	{/if}
 
 	{#if offer}
@@ -531,6 +605,40 @@
 	{/if}
 {/snippet}
 
+<!-- a review thread's bar down the gutter's left edge, and the marker on its last line -->
+{#snippet reviewMark(mark: ReviewMark | undefined)}
+	{#if mark}
+		<span class={['rv', mark.first && 'first', mark.last && 'last', mark.pending && 'pending']}
+		></span>
+		{#if mark.threads.length}
+			{@const comments = mark.threads.reduce((n, t) => n + t.comments.length, 0)}
+			{@const label = `${comments} ${comments === 1 ? 'comment' : 'comments'} on GitHub${mark.pending ? ', some pending in your review' : ''}`}
+			<button
+				type="button"
+				class={[
+					'rv-open',
+					mark.pending && 'pending',
+					mark.threads.every((t) => t.isResolved) && 'resolved'
+				]}
+				aria-label={label}
+				title={label}
+				onpointerdown={(e) => e.stopPropagation()}
+				onclick={(e) =>
+					(reviewOpen = {
+						threads: mark.threads,
+						at: (e.currentTarget as HTMLElement).getBoundingClientRect()
+					})}
+			>
+				<svg viewBox="0 0 16 16" fill="currentColor"
+					><path
+						d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7l-3 3v-3H3a1 1 0 0 1-1-1z"
+					/></svg
+				>
+			</button>
+		{/if}
+	{/if}
+{/snippet}
+
 {#snippet marker(line: DiffLine, place: string)}
 	<span class={['marker w-5 shrink-0 text-center select-none', place]}
 		>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
@@ -568,10 +676,12 @@
 		>
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<span
-				class="gutter w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
+				class="gutter relative w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
 				title={threads ? PICK : undefined}
 				onpointerdown={(e) => pick(e, hunk.id, index, side)}
-				>{side === 'old' ? line.old : line.new}</span
+				>{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}:${side}`))}{side === 'old'
+					? line.old
+					: line.new}</span
 			>
 			{@render marker(line, '')}
 			<span class="text min-w-0 flex-1 pr-4 break-all whitespace-pre-wrap"
@@ -791,6 +901,54 @@
 				0 0 0 2px var(--surface),
 				0 0 0 5px var(--ink-soft);
 		}
+	}
+
+	/* a pull request's review threads, in GitHub's purple, yours not posted yet in
+	   amber and dashed */
+	.rv {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 3px;
+		background: var(--move);
+	}
+	.rv.first {
+		top: 2px;
+	}
+	.rv.last {
+		bottom: 2px;
+	}
+	.rv.pending {
+		background: repeating-linear-gradient(to bottom, var(--mod) 0 4px, transparent 4px 7px);
+	}
+	.rv-open {
+		position: absolute;
+		top: 2px;
+		left: 5px;
+		z-index: 2;
+		display: grid;
+		place-items: center;
+		width: 16px;
+		height: 16px;
+		border-radius: 4px;
+		color: var(--move);
+		/* over a long line number */
+		background: var(--surface);
+		cursor: pointer;
+	}
+	.rv-open svg {
+		width: 13px;
+		height: 13px;
+	}
+	.rv-open:hover {
+		background: color-mix(in oklab, var(--move) 14%, transparent);
+	}
+	.rv-open.pending {
+		color: var(--mod);
+	}
+	.rv-open.resolved {
+		opacity: 0.5;
 	}
 
 	/* split layout */
