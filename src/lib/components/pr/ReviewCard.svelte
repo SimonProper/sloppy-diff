@@ -8,7 +8,7 @@
 		/** the marker it opened from */
 		at: DOMRect;
 		onclose: () => void;
-		onreply?: (thread: string, body: string) => Promise<void>;
+		onreply?: (thread: string, body: string) => Promise<unknown>;
 	}
 
 	let { threads, at, onclose, onreply }: Props = $props();

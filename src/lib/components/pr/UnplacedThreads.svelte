@@ -5,7 +5,7 @@
 	interface Props {
 		/** a file's review threads that aren't on any of its lines in the diff */
 		threads: ReviewThread[];
-		onreply?: (thread: string, body: string) => Promise<void>;
+		onreply?: (thread: string, body: string) => Promise<unknown>;
 	}
 
 	let { threads, onreply }: Props = $props();

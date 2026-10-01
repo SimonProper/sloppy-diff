@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Suggestion } from '$lib/ask/types';
 import type { PrComment, PrSummary, PullRequest, ReviewThread } from '$lib/pr/types';
+import { sameSha } from '$lib/refs';
 import { mergeBase, resolveCommit } from './git';
 
 const exec = promisify(execFile);
@@ -220,8 +221,15 @@ async function graphql(root: string, query: string, variables: Record<string, un
 	return data;
 }
 
+// ponytail: a pending review's first 100 comments are checked for one already there
 const PENDING = `query($pr: ID!) {
-  node(id: $pr) { ... on PullRequest { reviews(states: PENDING, first: 1) { nodes { id } } } }
+  node(id: $pr) {
+    ... on PullRequest {
+      reviews(states: PENDING, first: 1) {
+        nodes { id commit { oid } comments(first: 100) { nodes { path body } } }
+      }
+    }
+  }
 }`;
 const START = `mutation($pr: ID!, $commit: GitObjectID) {
   addPullRequestReview(input: { pullRequestId: $pr, commitOID: $commit }) { pullRequestReview { id } }
@@ -236,6 +244,8 @@ const REPLY = `mutation($input: AddPullRequestReviewThreadReplyInput!) {
 const NODE_ID = /^[A-Za-z0-9_-]{1,100}$/;
 // the page names commits by short shas, GitHub takes full ones
 const SHA = /^[0-9a-f]{7,40}$/;
+// GitHub's own limit on a comment
+const MAX_BODY = 65_536;
 const LINE = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) > 0);
 
 /** Checks a suggestion from the page before it goes anywhere near GitHub. */
@@ -243,8 +253,9 @@ export function checkSuggestion(s: Suggestion): Suggestion {
 	const valid =
 		typeof s?.body === 'string' &&
 		s.body.trim() !== '' &&
+		s.body.length <= MAX_BODY &&
 		(s.kind === 'reply'
-			? NODE_ID.test(s.thread)
+			? typeof s.thread === 'string' && NODE_ID.test(s.thread)
 			: s.kind === 'review' &&
 				typeof s.path === 'string' &&
 				s.path !== '' &&
@@ -275,26 +286,80 @@ export function threadInput(review: string, s: Extract<Suggestion, { kind: 'revi
 	};
 }
 
+/** Your pending review on a pull request, as GitHub has it. */
+export interface PendingReview {
+	id: string;
+	/** the head it was started at, its comments are numbered on that */
+	commit: string;
+	comments: { path: string; body: string }[];
+}
+
+/**
+ * What adding a comment takes: starting a review, adding it to the pending one, or
+ * nothing when it's in there already, so a second click or a card offered again after a
+ * reload doesn't post it twice. Lines numbered on another head than the pending review's
+ * would land on the wrong ones, so that's turned down.
+ */
+export function draftStep(
+	pending: PendingReview | null,
+	commit: string,
+	s: Suggestion
+): 'start' | 'add' | 'skip' {
+	if (!pending) return 'start';
+	if (!sameSha(pending.commit, commit)) {
+		throw new Error(
+			`Your pending review is on an older version of this pull request (${pending.commit.slice(0, 7)}), finish or discard it on GitHub first`
+		);
+	}
+	const body = s.body.trim();
+	const there = pending.comments.some(
+		(c) => c.body.trim() === body && (s.kind === 'reply' || c.path === s.path)
+	);
+	return there ? 'skip' : 'add';
+}
+
+// one at a time per pull request: two at once would each find no pending review and both
+// start one, GitHub turns the second down
+const drafting = new Map<string, Promise<unknown>>();
+
 /**
  * Adds a comment to your pending review on the pull request, starting one at `commit`
  * (the head the diff shows) when there's none. Only you see it until you finish the
- * review on GitHub.
+ * review on GitHub. Returns whether it was added or was there already.
  */
-export async function addToDraft(root: string, pr: string, commit: string, suggestion: Suggestion) {
+export function addToDraft(
+	root: string,
+	pr: string,
+	commit: string,
+	suggestion: Suggestion
+): Promise<'added' | 'already'> {
 	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
 	if (!SHA.test(commit)) throw new Error(`Invalid commit: ${commit}`);
 	const s = checkSuggestion(suggestion);
+	const next = (drafting.get(pr) ?? Promise.resolve()).then(() => draft(root, pr, commit, s));
+	drafting.set(
+		pr,
+		next.catch(() => {})
+	);
+	return next;
+}
+
+async function draft(root: string, pr: string, commit: string, s: Suggestion) {
 	// asked every time, a review finished on GitHub since the page loaded is gone
-	const found = await graphql(root, PENDING, { pr });
+	const found = (await graphql(root, PENDING, { pr })).node?.reviews?.nodes[0];
+	const pending: PendingReview | null = found
+		? { id: found.id, commit: found.commit?.oid ?? '', comments: found.comments.nodes }
+		: null;
+	const step = draftStep(pending, commit, s);
+	if (step === 'skip') return 'already';
 	const review: string =
-		found.node?.reviews?.nodes[0]?.id ??
+		pending?.id ??
 		(
 			await graphql(root, START, {
 				pr,
 				commit: (await git(root, ['rev-parse', '--verify', `${commit}^{commit}`])).trim()
 			})
 		).addPullRequestReview.pullRequestReview.id;
-	// ponytail: a pending review started at an older head keeps that head, lines that moved since may land off
 	if (s.kind === 'reply') {
 		await graphql(root, REPLY, {
 			input: { pullRequestReviewId: review, pullRequestReviewThreadId: s.thread, body: s.body }
@@ -302,4 +367,5 @@ export async function addToDraft(root: string, pr: string, commit: string, sugge
 	} else {
 		await graphql(root, THREAD, { input: threadInput(review, s) });
 	}
+	return 'added';
 }

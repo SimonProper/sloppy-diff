@@ -7,7 +7,7 @@
 	interface Props {
 		thread: ReviewThread;
 		/** adds a reply to your pending review, without it the thread is read-only */
-		onreply?: (thread: string, body: string) => Promise<void>;
+		onreply?: (thread: string, body: string) => Promise<unknown>;
 	}
 
 	let { thread, onreply }: Props = $props();

@@ -1,6 +1,6 @@
-import { expect, test } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import { prContext } from './ask';
-import { checkPrNumber, checkSuggestion, threadInput, toPullRequest } from './gh';
+import { checkPrNumber, checkSuggestion, draftStep, threadInput, toPullRequest } from './gh';
 import response from './testing/pr.json';
 
 test('maps the GraphQL response to a PullRequest', () => {
@@ -104,4 +104,45 @@ test('turns down a suggestion GitHub could not take', () => {
 	]) {
 		expect(() => checkSuggestion(bad as never)).toThrow();
 	}
+});
+
+describe('draftStep', () => {
+	const head = '4c57bd392961ff1cadc7225396536274c92dc6dc';
+	const review = {
+		kind: 'review',
+		path: 'a.ts',
+		side: 'new',
+		line: 2,
+		body: 'Rename this'
+	} as const;
+	const pending = (comments: { path: string; body: string }[] = []) => ({
+		id: 'PRR_1',
+		commit: head,
+		comments
+	});
+
+	test('starts a review without one, adds to the pending one on the same head', () => {
+		expect(draftStep(null, head.slice(0, 12), review)).toBe('start');
+		expect(draftStep(pending(), head.slice(0, 12), review)).toBe('add');
+	});
+
+	test('skips a comment already in the review, on that file or as a reply', () => {
+		const there = pending([{ path: 'a.ts', body: 'Rename this\n' }]);
+		expect(draftStep(there, head, review)).toBe('skip');
+		expect(draftStep(there, head, { ...review, path: 'b.ts' })).toBe('add');
+		expect(draftStep(there, head, { kind: 'reply', thread: 'PRRT_1', body: 'Rename this' })).toBe(
+			'skip'
+		);
+	});
+
+	test('turns down lines numbered on another head than the pending review', () => {
+		expect(() => draftStep(pending(), '1962666bb7fa', review)).toThrow(/older version/);
+	});
+});
+
+test('turns down a reply without a thread, and a body longer than GitHub takes', () => {
+	expect(() => checkSuggestion({ kind: 'reply', body: 'x' } as never)).toThrow();
+	expect(() =>
+		checkSuggestion({ kind: 'review', path: 'a.ts', side: 'new', body: 'x'.repeat(70_000) })
+	).toThrow();
 });

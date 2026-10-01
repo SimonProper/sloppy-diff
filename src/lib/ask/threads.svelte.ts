@@ -110,13 +110,15 @@ export class Threads {
 
 	/**
 	 * Adds a comment to your pending review on the pull request, then loads the page again
-	 * so it shows on its lines.
+	 * so it shows on its lines. Says whether it was added or was in the review already.
 	 */
 	async addToReview(suggestion: Suggestion) {
 		const review = this.review;
 		if (!review) throw new Error('Comments go on a pull request');
-		await addDraft({ ...review, suggestion });
-		await invalidateAll();
+		const result = await addDraft({ ...review, suggestion });
+		// it's on GitHub now, a reload that fails isn't a comment that failed
+		await invalidateAll().catch(() => {});
+		return result;
 	}
 
 	get(id: string | null): Thread | undefined {
