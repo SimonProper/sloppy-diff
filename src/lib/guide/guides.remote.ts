@@ -48,16 +48,18 @@ export const getRange = query('unchecked', ({ repo, start, stop }: Range) =>
 );
 
 /** Starts generating a guide for start..stop, or joins the one already running. */
-export const generateGuide = command('unchecked', ({ repo, start, stop }: Range) =>
-	badRequestOnError(async () => {
-		const root = await repoRoot(repo);
-		const range = {
-			start: await resolveStart(root, start),
-			stop: await resolveCommit(root, stop)
-		};
-		startGuide(root, range.start, range.stop);
-		return { repo: root, ...range };
-	})
+export const generateGuide = command(
+	'unchecked',
+	({ repo, start, stop, pr }: Range & { pr?: number }) =>
+		badRequestOnError(async () => {
+			const root = await repoRoot(repo);
+			const range = {
+				start: await resolveStart(root, start),
+				stop: await resolveCommit(root, stop)
+			};
+			startGuide(root, range.start, range.stop, pr);
+			return { repo: root, ...range };
+		})
 );
 
 /**

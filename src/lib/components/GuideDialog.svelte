@@ -31,17 +31,32 @@
 		commits: Commit[];
 		/** false when the open repo can't produce a diff, only saved guides are offered */
 		canGenerate: boolean;
+		/** for the span on screen, `initial`'s range, with nothing to pick */
+		onscreen?: boolean;
+		/** the pull request the range is, for Claude to read */
+		pr?: number;
 		/** show the finished or chosen guide */
 		onopen: (start: string, stop: string) => void;
 		onclose: () => void;
 	}
 
-	let { repo, initial, guides, branches, commits, canGenerate, onopen, onclose }: Props = $props();
+	let {
+		repo,
+		initial,
+		guides,
+		branches,
+		commits,
+		canGenerate,
+		onscreen = false,
+		pr,
+		onopen,
+		onclose
+	}: Props = $props();
 
 	// a branch, or part of it, like Branch mode, or any two revisions like Range
 	type Tab = 'branch' | 'range';
 	// svelte-ignore state_referenced_locally
-	let tab = $state<Tab>(initial.tab);
+	let tab = $state<Tab>(onscreen ? 'range' : initial.tab);
 	// svelte-ignore state_referenced_locally
 	let branch = $state(initial.branch);
 	// svelte-ignore state_referenced_locally
@@ -131,7 +146,7 @@
 		failure = '';
 		progress = null;
 		try {
-			const resolved = await generateGuide({ repo, ...target });
+			const resolved = await generateGuide({ repo, ...target, pr });
 			follow(resolved.start, resolved.stop);
 		} catch (e) {
 			failure = errorText(e);
@@ -254,35 +269,37 @@
 		</div>
 	{:else}
 		<div class="flex flex-col gap-4 px-5 py-4">
-			<div class="flex items-center gap-2">
-				<div class="flex rounded-lg border border-line bg-surface p-0.5">
-					{#each [{ tab: 'branch', label: 'Branch' }, { tab: 'range', label: 'Range' }] as const as option (option.tab)}
-						<button
-							type="button"
-							class={[
-								'h-7 rounded-md px-2.5 text-[12px]',
-								tab === option.tab ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
-							]}
-							onclick={() => setTab(option.tab)}>{option.label}</button
-						>
-					{/each}
+			{#if !onscreen}
+				<div class="flex items-center gap-2">
+					<div class="flex rounded-lg border border-line bg-surface p-0.5">
+						{#each [{ tab: 'branch', label: 'Branch' }, { tab: 'range', label: 'Range' }] as const as option (option.tab)}
+							<button
+								type="button"
+								class={[
+									'h-7 rounded-md px-2.5 text-[12px]',
+									tab === option.tab ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
+								]}
+								onclick={() => setTab(option.tab)}>{option.label}</button
+							>
+						{/each}
+					</div>
+					{#if tab === 'branch'}
+						<RefPicker
+							label="branch"
+							value={branch}
+							fallback=""
+							{branches}
+							{commits}
+							only={['branches']}
+							placeholder="Filter branches"
+							onselect={(v) => {
+								branch = v;
+								first = last = null;
+							}}
+						/>
+					{/if}
 				</div>
-				{#if tab === 'branch'}
-					<RefPicker
-						label="branch"
-						value={branch}
-						fallback=""
-						{branches}
-						{commits}
-						only={['branches']}
-						placeholder="Filter branches"
-						onselect={(v) => {
-							branch = v;
-							first = last = null;
-						}}
-					/>
-				{/if}
-			</div>
+			{/if}
 
 			{#if tab === 'branch'}
 				<div class="rounded-xl border border-line">
@@ -318,7 +335,7 @@
 						<p class="px-3 py-2.5 text-[11.5px] text-muted">Loading commits…</p>
 					{/if}
 				</div>
-			{:else}
+			{:else if !onscreen}
 				<div class="flex items-center gap-2">
 					<RefPicker
 						label="start"
@@ -419,7 +436,7 @@
 		</div>
 	{/if}
 
-	{#if guides.length && !generating}
+	{#if guides.length && !generating && !onscreen}
 		<div class={['px-5 py-3', canGenerate && 'border-t border-line']}>
 			<p class="mb-1.5 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 				Saved guides

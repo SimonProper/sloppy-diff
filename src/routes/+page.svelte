@@ -99,7 +99,10 @@
 		return { first, last, total: branchSel.commits.length };
 	});
 
-	let dialogOpen = $state(false);
+	/** the guide dialog: to pick what a guide covers, or for the span on screen */
+	let dialog = $state<'pick' | 'onscreen' | null>(null);
+	/** a guide is a way of viewing the diff on screen, writing one shouldn't pick it again */
+	const guideHere = () => (dialog = range ? 'onscreen' : 'pick');
 
 	// questions to Claude about lines of the diff on screen. A range is named by the
 	// shas the page resolved, so the server files them where the page load found them
@@ -285,9 +288,11 @@
 	}
 
 	function openGuide(start: string, stop: string) {
-		// stay on the branch when the guide covers what is on screen
-		if (range && range.from === start && range.to === stop) navigate({ view: 'guide' });
-		else navigate({ from: start, to: stop, view: 'guide' }, true);
+		// stay on the branch or pull request when the guide covers what is on screen, loading
+		// again for a guide just written
+		if (range && sameSha(range.from, start) && sameSha(range.to, stop)) {
+			goto(url({ view: 'guide' }), { keepFocus: true, invalidateAll: true });
+		} else navigate({ from: start, to: stop, view: 'guide' }, true);
 	}
 </script>
 
@@ -566,7 +571,7 @@
 				type="button"
 				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent hover:bg-accent/14"
 				title="Generate or open review guides"
-				onclick={() => (dialogOpen = true)}
+				onclick={() => (dialog = 'pick')}
 			>
 				<svg
 					viewBox="0 0 16 16"
@@ -714,17 +719,21 @@
 	{:else if data.mode === 'pr' && !pr}
 		<PrList prs={data.prs} href={(number) => url({ pr: String(number), view: null }, true)} />
 	{:else if data.view === 'guide' && data.guide}
+		{#snippet prIntro()}
+			{#if pr}<PrCard {pr} body={data.prBody} />{/if}
+		{/snippet}
 		<GuideView
 			guide={data.guide}
 			files={data.files}
 			{toolbar}
+			intro={pr ? prIntro : undefined}
 			layout={shownLayout}
 			{virtualize}
 			threads={asking}
 			review={pr?.threads}
 			panel={docked ? askPanel : undefined}
 			bind:panelWidth
-			onregenerate={() => (dialogOpen = true)}
+			onregenerate={guideHere}
 		/>
 	{:else if data.view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
@@ -736,7 +745,7 @@
 			<button
 				type="button"
 				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
-				onclick={() => (dialogOpen = true)}>Generate a guide</button
+				onclick={guideHere}>Generate a guide</button
 			>
 			{@render saved()}
 		</div>
@@ -829,7 +838,7 @@
 	<AskLayer threads={asking} files={data.files} guide={data.view === 'guide' ? data.guide : null} />
 {/if}
 
-{#if dialogOpen}
+{#if dialog}
 	<GuideDialog
 		repo={data.repo}
 		initial={dialogInitial}
@@ -838,7 +847,9 @@
 		commits={data.commits}
 		canGenerate={data.commits.length > 0}
 		onopen={openGuide}
-		onclose={() => (dialogOpen = false)}
+		onscreen={dialog === 'onscreen'}
+		pr={dialog === 'onscreen' ? pr?.number : undefined}
+		onclose={() => (dialog = null)}
 	/>
 {/if}
 

@@ -22,6 +22,8 @@
 		guide: Guide;
 		files: DiffFile[];
 		toolbar?: Snippet;
+		/** above the guide, a pull request's card */
+		intro?: Snippet;
 		layout?: Layout;
 		/** only render lines near the viewport, for big diffs */
 		virtualize?: boolean;
@@ -40,6 +42,7 @@
 		guide,
 		files,
 		toolbar,
+		intro,
 		layout = 'unified',
 		virtualize = false,
 		threads,
@@ -365,6 +368,9 @@
 
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
 		{@render toolbar?.()}
+		{#if intro}
+			<div class="-mt-4">{@render intro()}</div>
+		{/if}
 		<!-- clipped to its corners, so a header band can run edge to edge -->
 		<div class="-mt-4 overflow-clip rounded-xl border border-line bg-surface">
 			{#if guide.earlier}

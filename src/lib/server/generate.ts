@@ -2,7 +2,9 @@ import { env } from '$env/dynamic/private';
 import { parseDiff } from '$lib/diff/parse';
 import type { DiffFile } from '$lib/diff/types';
 import type { Guide, GuideDraft, GuideEvent } from '$lib/guide/types';
+import { prContextOf } from './ask';
 import { describeTool, runClaude } from './claude';
+import { checkPrNumber } from './gh';
 import { commitLog, readDiff } from './git';
 import { reconcile, saveGuide } from './guides';
 import { jobQueue, type Job } from './jobs';
@@ -65,16 +67,25 @@ export function cancelJob(root: string, start: string, stop: string) {
 	jobs.cancel(jobKey(root, start, stop));
 }
 
-/** Starts generating a guide for start..stop (resolved shas), or joins the running job. */
-export function startGuide(root: string, start: string, stop: string): Job<GuideEvent> {
-	return jobs.start(jobKey(root, start, stop), (job) => run(job, root, start, stop));
+/**
+ * Starts generating a guide for start..stop (resolved shas), or joins the running job.
+ * `pr` is the pull request the range is, Claude reads its title and description too.
+ */
+export function startGuide(
+	root: string,
+	start: string,
+	stop: string,
+	pr?: number
+): Job<GuideEvent> {
+	return jobs.start(jobKey(root, start, stop), (job) => run(job, root, start, stop, pr));
 }
 
-async function run(job: Job<GuideEvent>, root: string, start: string, stop: string) {
+async function run(job: Job<GuideEvent>, root: string, start: string, stop: string, pr?: number) {
 	jobs.emit(job, { type: 'status', text: 'Reading commits and diff' });
-	const [log, patch] = await Promise.all([
+	const [log, patch, context] = await Promise.all([
 		commitLog(root, start, stop),
-		readDiff(root, start, stop)
+		readDiff(root, start, stop),
+		pr === undefined ? '' : prContextOf(root, checkPrNumber(pr))
 	]);
 	// cancelled while reading
 	if (job.finished) return;
@@ -99,7 +110,7 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 
 	const claude = runClaude({
 		args,
-		input: prompt(start, stop, log, files),
+		input: prompt(start, stop, log, files, context),
 		cwd: root,
 		onSpawnError: (error) =>
 			jobs.emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
@@ -153,9 +164,9 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 	}
 }
 
-function prompt(start: string, stop: string, log: string, files: DiffFile[]): string {
+function prompt(start: string, stop: string, log: string, files: DiffFile[], pr: string): string {
 	return `You are preparing a guided code review of the changes between commit ${start} and commit ${stop} in this repository. A reviewer will read your guide section by section instead of going through the diff file by file.
-
+${pr && `\n${pr}\n\nWhere the change doesn't do what the description says, or does more than it says, point it out in the summary or in a note on the hunk.\n`}
 <commits>
 ${log.trim()}
 </commits>
