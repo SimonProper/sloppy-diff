@@ -8,8 +8,8 @@ import type { ReviewThread } from './types';
 export interface ReviewMark {
 	first: boolean;
 	last: boolean;
-	/** has comments of yours not posted yet */
-	pending: boolean;
+	/** every thread on this line, its hairline shows while one of them is open */
+	ids: string[];
 	/** the threads whose last line this is */
 	threads: ReviewThread[];
 }
@@ -40,7 +40,6 @@ export function placeThreads(
 		}
 		const hunk = hunks.find((h) => h.id === span.hunk);
 		if (!hunk) continue;
-		const pending = thread.comments.some((c) => c.pending);
 		const indexes: number[] = [];
 		for (let i = span.start; i <= span.end; i++) {
 			if (inSpan(span, i, hunk.lines[i])) indexes.push(i);
@@ -52,7 +51,7 @@ export function placeThreads(
 			marks.set(key, {
 				first: n === 0 || (before?.first ?? false),
 				last: last || (before?.last ?? false),
-				pending: pending || (before?.pending ?? false),
+				ids: [...(before?.ids ?? []), thread.id],
 				threads: [...(before?.threads ?? []), ...(last ? [thread] : [])]
 			});
 		});

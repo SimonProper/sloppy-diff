@@ -212,6 +212,7 @@
 
 	/** the review threads open in their card, and the marker it opened from */
 	let reviewOpen = $state<{ threads: ReviewThread[]; at: DOMRect } | null>(null);
+	const openIds = $derived(new Set(reviewOpen?.threads.map((t) => t.id)));
 
 	/** Hovering a dot for a moment peeks at its answer. */
 	let peekTimer: ReturnType<typeof setTimeout> | undefined;
@@ -568,21 +569,24 @@
 	{/if}
 {/snippet}
 
-<!-- a review thread's bar down the gutter's left edge and a dot on its last line, drawn
-     like a question's marker on the other side of the line -->
+<!-- a review thread is a count of its comments on its last line. The lines it covers
+     show as a hairline down the gutter's edge while its card is open -->
 {#snippet reviewMark(mark: ReviewMark | undefined)}
 	{#if mark}
-		<span class={['rv', mark.first && 'first', mark.last && 'last', mark.pending && 'pending']}
-		></span>
+		{#if mark.ids.some((id) => openIds.has(id))}
+			<span class={['rv', mark.first && 'first', mark.last && 'last']}></span>
+		{/if}
 		{#if mark.threads.length}
 			{@const comments = mark.threads.reduce((n, t) => n + t.comments.length, 0)}
-			{@const label = `${comments} ${comments === 1 ? 'comment' : 'comments'} on GitHub${mark.pending ? ', some pending in your review' : ''}`}
+			{@const pending = mark.threads.some((t) => t.comments.some((c) => c.pending))}
+			{@const label = `${comments} ${comments === 1 ? 'comment' : 'comments'} on GitHub${pending ? ', some pending in your review' : ''}`}
 			<button
 				type="button"
 				class={[
 					'rv-open',
-					mark.pending && 'pending',
-					mark.threads.every((t) => t.isResolved) && 'resolved'
+					pending && 'pending',
+					mark.threads.every((t) => t.isResolved) && 'resolved',
+					mark.threads.some((t) => openIds.has(t.id)) && 'open'
 				]}
 				aria-label={label}
 				title={label}
@@ -591,9 +595,8 @@
 					(reviewOpen = {
 						threads: mark.threads,
 						at: (e.currentTarget as HTMLElement).getBoundingClientRect()
-					})}
+					})}>{comments > 9 ? '9+' : comments}</button
 			>
-			</button>
 		{/if}
 	{/if}
 {/snippet}
@@ -866,60 +869,71 @@
 		}
 	}
 
-	/* a pull request's review threads: a bar down the gutter's left edge and a dot on the
-	   last line, like a question's marker on the right. A thread holding your comments not
-	   posted yet is darker and its dot filled, it wants doing. Resolved ones fade */
+	/* a pull request's review threads: a small count on the thread's last line, outlined
+	   when posted, filled when it holds your comments not posted yet, a bare faint numeral
+	   once resolved. Nothing over the background but the pending fill, so it sits on any
+	   row's colour. The covered lines show as a hairline only while the thread is open */
 	.rv {
 		position: absolute;
 		top: 0;
 		bottom: 0;
 		left: 3px;
-		width: 2px;
+		width: 1px;
 		background: var(--ink-mark-seen);
 	}
 	.rv.first {
-		top: 3px;
-		border-radius: 1px 1px 0 0;
+		top: 4px;
 	}
 	.rv.last {
-		bottom: 3px;
-		border-radius: 0 0 1px 1px;
-	}
-	.rv.pending {
-		background: var(--ink-mark);
+		bottom: 4px;
 	}
 	.rv-open {
 		position: absolute;
-		top: 2px;
-		/* centred on the bar, the dot itself stays inside the gutter */
-		left: -4px;
+		top: 3px;
+		left: 4px;
 		z-index: 2;
-		display: grid;
-		place-items: center;
-		width: 16px;
-		height: 16px;
+		min-width: 14px;
+		height: 14px;
+		padding: 0 3px;
+		border-radius: 4px;
+		font: 500 10px/14px var(--font-sans);
+		font-variant-numeric: tabular-nums;
+		text-align: center;
+		color: var(--muted);
+		box-shadow: inset 0 0 0 1px var(--ink-mark-seen);
 		cursor: pointer;
+		transition:
+			box-shadow 0.15s ease,
+			color 0.15s ease,
+			transform 0.1s ease-out;
 	}
-	.rv-open::after {
-		content: '';
-		box-sizing: border-box;
-		width: 8px;
-		height: 8px;
-		border-radius: 99px;
-		background: var(--surface);
-		border: 2px solid var(--ink-mark);
-		box-shadow: 0 0 0 2px var(--surface);
-		transition: transform 0.12s;
-	}
-	.rv-open.pending::after {
+	.rv-open.pending {
 		background: var(--ink);
-		border: 0;
+		color: var(--surface);
+		box-shadow: none;
 	}
-	.rv-open.resolved::after {
-		border-color: var(--ink-mark-seen);
+	.rv-open.resolved {
+		color: var(--faint);
+		box-shadow: none;
 	}
-	.rv-open:hover::after {
-		transform: scale(1.35);
+	.rv-open:active {
+		transform: scale(0.94);
+	}
+	.rv-open.open:not(.pending) {
+		color: var(--fg);
+		box-shadow: inset 0 0 0 1px var(--ink-mark);
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.rv-open:not(.pending):hover {
+			color: var(--fg);
+			box-shadow: inset 0 0 0 1px var(--ink-mark);
+		}
+		.rv-open.pending:hover {
+			background: var(--ink-mark);
+		}
+	}
+	.rv-open.pending.open {
+		background: var(--ink-mark);
 	}
 
 	/* split layout */

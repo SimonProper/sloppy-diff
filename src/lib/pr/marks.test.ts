@@ -39,12 +39,12 @@ describe('placeThreads', () => {
 		expect([...marks.keys()]).toEqual([`${id}:1:old`]);
 	});
 
-	test('two threads ending on one line share it, either one pending marks it', () => {
+	test('two threads ending on one line share it, a line knows every thread on it', () => {
 		const a = thread({ id: 'A' });
-		const b = thread({ id: 'B', comments: [{ pending: true } as never] });
-		const mark = placeThreads(file, file.hunks, [a, b], 'unified').marks.get(`${id}:2`);
-		expect(mark?.threads.map((t) => t.id)).toEqual(['A', 'B']);
-		expect(mark?.pending).toBe(true);
+		const b = thread({ id: 'B', line: 4, startLine: 2 });
+		const { marks } = placeThreads(file, file.hunks, [a, b], 'unified');
+		expect(marks.get(`${id}:2`)).toMatchObject({ ids: ['A', 'B'], threads: [a] });
+		expect(marks.get(`${id}:4`)).toMatchObject({ ids: ['B'], threads: [b] });
 	});
 
 	test('outdated, whole-file and off-diff threads are unplaced, other files skipped', () => {
