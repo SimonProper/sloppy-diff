@@ -469,18 +469,21 @@
 							<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
 						{/if}
 					{/if}
-				{:else if data.mode === 'pr' && pr}
-					<RefPicker
-						label="PR"
-						value={data.inputs.pr}
-						fallback=""
-						branches={[]}
-						commits={[]}
-						prs={prChoices}
-						only={['prs']}
-						placeholder="Filter pull requests, or type a number"
-						onselect={(number) => navigate({ pr: number, view: null }, true)}
-					/>
+				{:else if data.mode === 'pr'}
+					<!-- the list of pull requests has nothing to compare against yet -->
+					{#if pr}
+						<RefPicker
+							label="PR"
+							value={data.inputs.pr}
+							fallback=""
+							branches={[]}
+							commits={[]}
+							prs={prChoices}
+							only={['prs']}
+							placeholder="Filter pull requests, or type a number"
+							onselect={(number) => navigate({ pr: number, view: null }, true)}
+						/>
+					{/if}
 				{:else if data.mode === 'range'}
 					<RefPicker
 						label="from"
