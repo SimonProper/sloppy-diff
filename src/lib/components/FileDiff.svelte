@@ -9,7 +9,8 @@
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
-	import { lineStats, spanAt, tinted } from '$lib/diff/hunks';
+	import { lineStats, tinted } from '$lib/diff/hunks';
+	import { placeThreads, type ReviewMark } from '$lib/pr/marks';
 	import { chunk } from '$lib/chunk';
 	import type { ReviewThread } from '$lib/pr/types';
 	import StatusBadge from './StatusBadge.svelte';
@@ -198,55 +199,9 @@
 	// a pull request's review threads: a bar down the left edge of their lines, and on
 	// the last one, where GitHub shows them, a marker that opens their comments. Drawn
 	// apart from the questions to Claude down the right edge
-
-	/** One line's piece of the review threads' bar. */
-	interface ReviewMark {
-		first: boolean;
-		last: boolean;
-		/** has comments of yours not posted yet */
-		pending: boolean;
-		/** the threads whose last line this is */
-		threads: ReviewThread[];
-	}
-
-	const placedReview = $derived(
-		review
-			.filter((t) => t.path === file.newPath || t.path === file.oldPath)
-			.map((thread) => ({
-				thread,
-				span:
-					thread.isOutdated || thread.line === null
-						? null
-						: spanAt([file], thread.path, thread.side, thread.line, thread.startLine ?? thread.line)
-			}))
-	);
-	/** outdated, about the whole file, or on lines the diff doesn't show */
-	const unplaced = $derived(placedReview.filter((r) => !r.span).map((r) => r.thread));
-
-	const reviewMarks = $derived.by(() => {
-		const map = new Map<string, ReviewMark>();
-		for (const { thread, span } of placedReview) {
-			const hunk = span && hunks.find((h) => h.id === span.hunk);
-			if (!span || !hunk) continue;
-			const pending = thread.comments.some((c) => c.pending);
-			const indexes: number[] = [];
-			for (let i = span.start; i <= span.end; i++) {
-				if (inSpan(span, i, hunk.lines[i])) indexes.push(i);
-			}
-			indexes.forEach((i, n) => {
-				const key = layout === 'split' ? `${span.hunk}:${i}:${span.side}` : `${span.hunk}:${i}`;
-				const before = map.get(key);
-				const last = n === indexes.length - 1;
-				map.set(key, {
-					first: n === 0 || (before?.first ?? false),
-					last: last || (before?.last ?? false),
-					pending: pending || (before?.pending ?? false),
-					threads: [...(before?.threads ?? []), ...(last ? [thread] : [])]
-				});
-			});
-		}
-		return map;
-	});
+	const placed = $derived(placeThreads(file, hunks, review, layout));
+	const reviewMarks = $derived(placed.marks);
+	const unplaced = $derived(placed.unplaced);
 
 	/** the review threads open in their card, and the marker it opened from */
 	let reviewOpen = $state<{ threads: ReviewThread[]; at: DOMRect } | null>(null);
