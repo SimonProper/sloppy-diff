@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { Threads } from '$lib/ask/threads.svelte';
-	import type { Message, Thread } from '$lib/ask/types';
+	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
 	import AskField from './AskField.svelte';
 	import StreamText from './StreamText.svelte';
@@ -16,13 +16,15 @@
 		detail?: string;
 		/** the title shows the lines in the diff when clicked */
 		onreveal?: () => void;
+		/** a suggested comment's Jump shows its lines, or its file, in the diff */
+		onjump?: (anchor: Anchor) => void;
 		/** buttons before the title */
 		leading?: Snippet;
 		/** more buttons at the end of the header */
 		actions?: Snippet;
 	}
 
-	let { threads, thread, title, detail, onreveal, leading, actions }: Props = $props();
+	let { threads, thread, title, detail, onreveal, onjump, leading, actions }: Props = $props();
 
 	const live = $derived(threads.live[thread.id]);
 	const lost = $derived(threads.lost[thread.id] ?? false);
@@ -85,11 +87,21 @@
 			.join(' · ');
 	}
 
-	let copied = $state<number | null>(null);
-	async function copy(message: Message, i: number) {
-		await navigator.clipboard.writeText(message.text).catch(() => {});
-		copied = i;
+	/** what was just copied: an answer by its index, or one of its suggestions as `i.n` */
+	let copied = $state<string | null>(null);
+	async function copy(text: string, key: string) {
+		await navigator.clipboard.writeText(text).catch(() => {});
+		copied = key;
 		setTimeout(() => (copied = null), 1200);
+	}
+
+	/** Where a suggested comment goes, labelled like a thread's lines. */
+	function where(suggestion: ShownSuggestion): string {
+		if (suggestion.kind === 'reply') return 'reply to a review thread';
+		if (suggestion.line === undefined) return 'whole file';
+		const { line, startLine } = suggestion;
+		const lines = startLine ? `lines ${startLine}–${line}` : `line ${line}`;
+		return suggestion.side === 'old' ? `${lines}, old side` : lines;
 	}
 
 	// follow the answer as it streams, unless the reader scrolled up to read. The lens
@@ -202,10 +214,51 @@
 						</p>
 					{:else}
 						<div class="prose text-[13.5px] leading-relaxed">{@html message.html}</div>
+						{#if message.suggestions}
+							<ol class="mt-3 flex flex-col gap-2">
+								{#each message.suggestions as suggestion, n (n)}
+									{@const key = `${i}.${n}`}
+									<li class="rounded-[10px] border border-line px-3 pt-2 pb-2.5">
+										<p class="flex items-center gap-2 text-[11px] text-faint">
+											<span class="tabular-nums">#{n + 1}</span>
+											{#if suggestion.kind === 'review'}
+												<span class="min-w-0 truncate font-medium text-fg" title={suggestion.path}
+													>{suggestion.path}</span
+												>
+											{/if}
+											<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
+											<span class="flex-1"></span>
+											{#if suggestion.kind === 'review' && onjump}
+												<button
+													type="button"
+													class="shrink-0 hover:text-fg"
+													onclick={() =>
+														onjump({
+															path: suggestion.path,
+															label: where(suggestion),
+															code: '',
+															...suggestion.span
+														})}>{suggestion.span ? 'Jump to lines' : 'Jump to file'}</button
+												>
+											{/if}
+											<button
+												type="button"
+												class="shrink-0 hover:text-fg"
+												onclick={() => copy(suggestion.body, key)}
+												>{copied === key ? 'Copied' : 'Copy'}</button
+											>
+										</p>
+										<div class="prose mt-1.5 text-[13px] leading-relaxed">
+											{@html suggestion.html}
+										</div>
+									</li>
+								{/each}
+							</ol>
+						{/if}
 						<p class="mt-2.5 flex items-center gap-2 text-[11px] text-faint">
 							{meta(message)}
-							<button type="button" class="hover:text-fg" onclick={() => copy(message, i)}
-								>{copied === i ? 'Copied' : 'Copy'}</button
+							<button type="button" class="hover:text-fg" onclick={() => copy(message.text, `${i}`)}
+								>{copied === `${i}` ? 'Copied' : 'Copy'}</button
 							>
 							{#if i === firstAnswer}{@render deleting()}{/if}
 						</p>

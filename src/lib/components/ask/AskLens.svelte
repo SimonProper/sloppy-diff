@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { groupThreads, sectionLabel } from '$lib/ask/groups';
 	import { revealAnchor } from '$lib/ask/rows';
-	import { linesOf } from '$lib/ask/types';
+	import { linesOf, type Anchor } from '$lib/ask/types';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { DiffFile } from '$lib/diff/types';
 	import type { Guide } from '$lib/guide/types';
@@ -49,8 +49,11 @@
 	});
 
 	async function showInDiff() {
-		if (!thread) return;
-		const anchor = thread.anchor;
+		if (thread) await jumpTo(thread.anchor);
+	}
+
+	/** Shows lines in the diff, or a file, leaving the expanded view for it. */
+	async function jumpTo(anchor: Anchor) {
 		threads.expanded = false;
 		await tick();
 		revealAnchor(anchor);
@@ -120,6 +123,7 @@
 				title={heading}
 				{detail}
 				onreveal={thread.outdated || !thread.anchor.path ? undefined : showInDiff}
+				onjump={jumpTo}
 			>
 				{#snippet leading()}
 					{#if order.length > 1}
@@ -231,7 +235,7 @@
 			</div>
 			<div class="pane conversation">
 				{#key thread.id}
-					<Conversation {threads} {thread} {title} />
+					<Conversation {threads} {thread} {title} onjump={jumpTo} />
 				{/key}
 			</div>
 		</div>
