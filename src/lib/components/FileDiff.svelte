@@ -744,7 +744,7 @@
 			color: var(--number);
 		}
 		.unpicked .row:has(.gutter:hover) .mk:not(.on)::before {
-			border-right: 2px dashed var(--ink-soft);
+			background: var(--dots);
 			opacity: 0.5;
 		}
 	}
@@ -821,8 +821,12 @@
 				0 0;
 		}
 	}
+	/* dots on a 5px beat, four to a 20px row, so they run on unbroken from row to row */
+	.mk {
+		--dots: repeating-linear-gradient(to bottom, var(--ink-soft) 0 2px, transparent 2px 5px);
+	}
 	.mk.pick::before {
-		border-right: 2px dashed var(--ink-soft);
+		background: var(--dots);
 	}
 	.dot {
 		position: absolute;
@@ -866,15 +870,15 @@
 		}
 	}
 
-	/* a pull request's review threads, in GitHub's purple, yours not posted yet in
-	   amber and dashed */
+	/* a pull request's review threads, a quiet line in GitHub's purple. Yours not posted
+	   yet are amber and dotted, lighter than a posted one, and told apart without colour */
 	.rv {
 		position: absolute;
 		top: 0;
 		bottom: 0;
 		left: 0;
-		width: 3px;
-		background: var(--move);
+		width: 2px;
+		background: color-mix(in oklab, var(--move) 65%, transparent);
 	}
 	.rv.first {
 		top: 2px;
@@ -883,7 +887,15 @@
 		bottom: 2px;
 	}
 	.rv.pending {
-		background: repeating-linear-gradient(to bottom, var(--mod) 0 4px, transparent 4px 7px);
+		background: repeating-linear-gradient(
+			to bottom,
+			color-mix(in oklab, var(--mod) 75%, transparent) 0 2px,
+			transparent 2px 5px
+		);
+	}
+	/* a first row's line starts lower, its dots stay on the beat of the rows above */
+	.rv.pending.first {
+		background-position-y: -2px;
 	}
 	.rv-open {
 		position: absolute;
