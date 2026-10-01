@@ -284,7 +284,8 @@
 	function setChanges(mode: typeof data.changeMode) {
 		// remembered for the next visit, the url keeps it shareable
 		remember('changes', mode);
-		navigate({ changes: mode === 'lines' ? null : mode }, false, true);
+		// always explicit: dropping it for lines leaves the url unchanged when the cookie said tokens
+		navigate({ changes: mode }, false, true);
 	}
 
 	function openGuide(start: string, stop: string) {
