@@ -87,6 +87,8 @@ export class Threads {
 	seen = $derived.by(() => readJson<Record<string, number>>(this.#seenKey, {}));
 	/** answered trails start open, remembered per browser */
 	trailOpen = $state(readJson<boolean>('sloppy-diff:ask-trail', false));
+	/** on a pull request, what the composer sends: a question to Claude or your comment */
+	intent = $state<'ask' | 'comment'>(readJson('sloppy-diff:compose-intent', 'ask'));
 
 	running = $derived(Object.keys(this.live).length);
 
@@ -133,6 +135,11 @@ export class Threads {
 		if ((this.seen[thread.id] ?? 0) >= count) return;
 		this.seen = { ...this.seen, [thread.id]: count };
 		writeJson(this.#seenKey, this.seen);
+	}
+
+	setIntent(intent: 'ask' | 'comment') {
+		this.intent = intent;
+		writeJson('sloppy-diff:compose-intent', intent);
 	}
 
 	toggleTrail() {

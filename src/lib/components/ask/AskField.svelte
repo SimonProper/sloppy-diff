@@ -12,8 +12,10 @@
 		busy?: boolean;
 		/** `background` asks without opening the lens (⌘↵) */
 		onsend: (text: string, background: boolean) => void;
-		/** a second way to send it, on ⌥↵ */
-		onalt?: (text: string) => void;
+		/** what send does, for its label */
+		action?: string;
+		/** Tab, to switch what send does */
+		ontab?: () => void;
 		onescape?: () => void;
 		autofocus?: boolean;
 		/** frameless, when it sits in a floating shell that has the border */
@@ -31,7 +33,8 @@
 		context,
 		busy = false,
 		onsend,
-		onalt,
+		action = 'Ask',
+		ontab,
 		onescape,
 		autofocus = false,
 		bare = false,
@@ -55,9 +58,10 @@
 	function onkeydown(event: KeyboardEvent) {
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			if (!typed || busy) return;
-			if (event.altKey && onalt) onalt(value.trim());
-			else onsend(value.trim(), event.metaKey || event.ctrlKey);
+			if (typed && !busy) onsend(value.trim(), event.metaKey || event.ctrlKey);
+		} else if (event.key === 'Tab' && !event.shiftKey && ontab) {
+			event.preventDefault();
+			ontab();
 		} else if (event.key === 'Escape' && onescape) {
 			event.preventDefault();
 			event.stopPropagation();
@@ -103,8 +107,8 @@
 				'grid size-6 shrink-0 place-items-center rounded-full transition-colors',
 				typed || onstop ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
 			]}
-			aria-label={onstop ? 'Stop' : 'Ask'}
-			title={onstop ? 'Stop  ⌘.' : 'Ask  ↵'}
+			aria-label={onstop ? 'Stop' : action}
+			title={onstop ? 'Stop  ⌘.' : `${action}  ↵`}
 			disabled={onstop ? false : !typed || busy}
 			onclick={() => (onstop ? onstop() : onsend(value.trim(), false))}
 		>

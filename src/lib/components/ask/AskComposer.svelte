@@ -101,11 +101,13 @@
 	let sending = $state(false);
 	let failure = $state('');
 
-	/** on a pull request, what's typed can go to your pending review instead of to Claude */
-	const commenting = $derived(threads.review && draft && (draft.span || draft.path) ? draft : null);
+	/** on a pull request, what's typed goes to Claude or to your pending review, as picked */
+	const choosing = $derived(!!threads.review && !!draft && !!(draft.span || draft.path));
+	const commenting = $derived(choosing && threads.intent === 'comment');
+	const what = $derived(draft?.span ? 'these lines' : 'this file');
 
 	async function comment(text: string) {
-		const suggestion = commenting && commentOn(files, commenting, text);
+		const suggestion = draft && commentOn(files, draft, text);
 		if (!suggestion) return;
 		sending = true;
 		failure = '';
@@ -121,6 +123,7 @@
 	}
 
 	async function send(text: string, background: boolean) {
+		if (commenting) return comment(text);
 		sending = true;
 		failure = '';
 		try {
@@ -143,16 +146,6 @@
 	}}
 />
 
-{#snippet commentButton()}
-	<button
-		type="button"
-		class="shrink-0 rounded-md border border-line px-1.5 leading-5 hover:border-muted hover:text-fg disabled:pointer-events-none disabled:opacity-50"
-		title="Adds it to your pending review, finish the review on GitHub  ⌥↵"
-		disabled={sending || !threads.draft?.text.trim()}
-		onclick={() => threads.draft && comment(threads.draft.text.trim())}>Comment</button
-	>
-{/snippet}
-
 {#if draft && place}
 	<div
 		bind:this={box}
@@ -166,6 +159,28 @@
 		style:left="{place.left}px"
 		style:width="{place.width}px"
 	>
+		{#if choosing}
+			<!-- what ↵ does, Tab switches it. Clicking leaves the focus in the text -->
+			<div class="flex px-2 pt-2" role="radiogroup" aria-label="Send to">
+				<div class="flex rounded-lg border border-line p-0.5">
+					{#each [{ intent: 'ask', label: 'Ask Claude' }, { intent: 'comment', label: 'Comment' }] as const as option (option.intent)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={threads.intent === option.intent}
+							class={[
+								'h-6 rounded-md px-2 text-[11.5px]',
+								threads.intent === option.intent
+									? 'bg-subtle font-medium text-fg'
+									: 'text-muted hover:text-fg'
+							]}
+							onpointerdown={(e) => e.preventDefault()}
+							onclick={() => threads.setIntent(option.intent)}>{option.label}</button
+						>
+					{/each}
+				</div>
+			</div>
+		{/if}
 		<AskField
 			bind:value={
 				() => threads.draft?.text ?? '',
@@ -176,12 +191,17 @@
 			bare
 			autofocus
 			{context}
-			placeholder={commenting ? 'Ask Claude, or write a comment' : 'Ask about these lines'}
-			hints={['esc', commenting ? '⌥↵ to comment' : '⌘↵ in background']}
+			placeholder={commenting ? `Comment on ${what}` : 'Ask about these lines'}
+			hints={choosing
+				? [
+						commenting ? 'tab to ask Claude' : 'tab to comment',
+						commenting ? '↵ adds it to your review' : '⌘↵ in background'
+					]
+				: ['esc', '⌘↵ in background']}
 			busy={sending}
+			action={commenting ? 'Comment' : 'Ask'}
 			onsend={send}
-			onalt={commenting ? comment : undefined}
-			trailing={commenting ? commentButton : undefined}
+			ontab={choosing ? () => threads.setIntent(commenting ? 'ask' : 'comment') : undefined}
 			onescape={() => (threads.composing = false)}
 		/>
 		{#if failure}
