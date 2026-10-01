@@ -13,6 +13,7 @@
 	import CommitCard from '$lib/components/CommitCard.svelte';
 	import CommitList from '$lib/components/CommitList.svelte';
 	import PrCard from '$lib/components/PrCard.svelte';
+	import PrList from '$lib/components/pr/PrList.svelte';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import FileList from '$lib/components/FileList.svelte';
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
@@ -47,11 +48,12 @@
 	const commit = $derived(data.selection?.commit ?? null);
 	const pr = $derived(data.selection?.pr ?? null);
 
-	// the repo's open pull requests, asked of gh after the page is up, it takes a moment.
-	// Null without gh, a sign in or a GitHub remote
+	// the repo's open pull requests for the picker on a pull request, asked of gh after
+	// the page is up, it takes a moment. Null without gh, a sign in or a GitHub remote
 	let prs = $state<PrSummary[] | null>(null);
 	$effect(() => {
 		const repo = data.repo;
+		if (!pr) return;
 		getPullRequests(repo).then(
 			(list) => repo === data.repo && (prs = list),
 			() => (prs = null)
@@ -194,6 +196,13 @@
 		return `?${params}`;
 	}
 
+	/** PR mode without a pull request picked, the list of open ones. */
+	function prList() {
+		const params = new URLSearchParams(url({ view: null }, true).slice(1));
+		params.set('pr', '');
+		return `?${params}`;
+	}
+
 	/** `noScroll` stays where the page is, for another look at the same diff */
 	function navigate(next: Record<string, string | null>, reset = false, noScroll = false) {
 		goto(url(next, reset), { keepFocus: true, noScroll });
@@ -234,13 +243,12 @@
 
 	// a single commit is part of Branch, reached from the branch's commit list
 	type Tab = 'worktree' | 'branch' | 'range' | 'pr';
-	const MODES = $derived<{ mode: Tab; label: string }[]>([
+	const MODES: { mode: Tab; label: string }[] = [
 		{ mode: 'worktree', label: 'Uncommitted' },
 		{ mode: 'branch', label: 'Branch' },
 		{ mode: 'range', label: 'Range' },
-		// only with pull requests to show
-		...(prChoices.length ? [{ mode: 'pr' as const, label: 'Pull request' }] : [])
-	]);
+		{ mode: 'pr', label: 'Pull request' }
+	];
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
 	/** The checked-out branch, or the most recent one that isn't the base. */
@@ -255,7 +263,7 @@
 	function setMode(mode: Tab) {
 		if (mode === tab) return;
 		if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
-		else if (mode === 'pr') navigate({ pr: String(prChoices[0].number), view: null }, true);
+		else if (mode === 'pr') goto(prList(), { keepFocus: true });
 		else if (mode === 'range')
 			navigate({ from: range?.from ?? 'HEAD~1', to: range?.to ?? 'HEAD', view: null }, true);
 		else navigate({ view: null }, true);
@@ -461,7 +469,7 @@
 							<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
 						{/if}
 					{/if}
-				{:else if data.mode === 'pr'}
+				{:else if data.mode === 'pr' && pr}
 					<RefPicker
 						label="PR"
 						value={data.inputs.pr}
@@ -699,6 +707,8 @@
 			{/if}
 			{@render saved()}
 		</div>
+	{:else if data.mode === 'pr' && !pr}
+		<PrList prs={data.prs} href={(number) => url({ pr: String(number), view: null }, true)} />
 	{:else if data.view === 'guide' && data.guide}
 		<GuideView
 			guide={data.guide}

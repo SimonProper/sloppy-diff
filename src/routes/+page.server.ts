@@ -6,7 +6,7 @@ import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, ChangeSummary, DiffFile } from '$lib/diff/types';
 import type { Scope, Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
-import type { PullRequest } from '$lib/pr/types';
+import type { PrSummary, PullRequest } from '$lib/pr/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 import {
 	branchBase,
@@ -33,7 +33,7 @@ import { dev } from '$app/environment';
 import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
-import { checkPrNumber, readPullRequest } from '$lib/server/gh';
+import { checkPrNumber, listPullRequests, readPullRequest } from '$lib/server/gh';
 import { highlightFiles } from '$lib/server/highlight';
 import { markdown } from '$lib/server/markdown';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
@@ -52,7 +52,8 @@ if (dev) clearDiffs();
  *   stepped through along the branch `on` (found from the commit when not given)
  * - range: `from` to `to`, any two revisions
  * - worktree: uncommitted changes against `from` (HEAD by default)
- * - pr: GitHub pull request `pr`, the range from where it split off its base to its head
+ * - pr: GitHub pull request `pr`, the range from where it split off its base to its head.
+ *   Without a number, the open pull requests to pick one from
  */
 type Mode = 'pr' | 'branch' | 'commit' | 'range' | 'worktree';
 
@@ -103,7 +104,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		pr: param('pr')
 	};
 	const repo = param('repo') || env.REPO || process.cwd();
-	const mode: Mode = inputs.pr
+	const mode: Mode = url.searchParams.has('pr')
 		? 'pr'
 		: inputs.branch
 			? 'branch'
@@ -175,6 +176,28 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 			`${mode === 'commit'}\0${rev}`
 		)
 	]);
+
+	// no pull request picked yet: the open ones to pick from, and no diff
+	if (mode === 'pr' && !inputs.pr) {
+		const [lists, [branch, defaultBase], prs] = await Promise.all([
+			meta.catch((): [Branch[], Commit[]] => [[], []]),
+			head,
+			timing.measure('prs', listPullRequests(root))
+		]);
+		const [branches, commits] = lists;
+		report();
+		return {
+			...empty(),
+			...base,
+			repo: root,
+			branch,
+			defaultBase,
+			branches,
+			commits,
+			prs,
+			error: null
+		};
+	}
 
 	// the diff doesn't wait for the lists above, both run at once
 	const work = head.then(async ([current, defaultBase]) => {
@@ -260,6 +283,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		scope,
 		threads,
 		prBody,
+		prs: null,
 		error: null
 	};
 };
@@ -400,6 +424,8 @@ function empty() {
 		guide: null,
 		scope: null,
 		threads: [] as Thread[],
-		prBody: ''
+		prBody: '',
+		/** the open pull requests, PR mode without one picked. Null without gh or GitHub */
+		prs: null as PrSummary[] | null
 	};
 }
