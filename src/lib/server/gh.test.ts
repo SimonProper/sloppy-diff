@@ -1,0 +1,43 @@
+import { expect, test } from 'vitest';
+import { checkPrNumber, toPullRequest } from './gh';
+import response from './testing/pr.json';
+
+test('maps the GraphQL response to a PullRequest', () => {
+	const pr = toPullRequest(response.data.repository.pullRequest as never);
+	expect(pr).toMatchObject({
+		number: 17066,
+		author: 'teemingc',
+		state: 'OPEN',
+		isDraft: false,
+		baseRefOid: '1962666bb7fa32831b21287c031efc599720cfe7',
+		headRefOid: '4c57bd392961ff1cadc7225396536274c92dc6dc',
+		pendingReviewId: 'PRR_pending'
+	});
+	expect(pr.comments.map((c) => [c.author, c.pending])).toEqual([
+		['pkg-svelte-dev', false],
+		['ghost', false]
+	]);
+
+	const [placed, outdated] = pr.threads;
+	expect(placed).toMatchObject({
+		id: 'PRRT_kwDOEiPr8c6gUYvj',
+		path: 'packages/adapter-netlify/index.js',
+		file: false,
+		line: 281,
+		startLine: 281,
+		side: 'new',
+		isResolved: true,
+		isOutdated: false
+	});
+	expect(placed.diffHunk).toContain('route_groups.length === 0');
+	expect(placed.comments).toHaveLength(2);
+	expect(outdated).toMatchObject({ file: true, line: null, side: 'old', isOutdated: true });
+	expect(outdated.comments[0]).toMatchObject({ author: 'teemingc', pending: true });
+});
+
+test('only takes a positive whole number', () => {
+	expect(checkPrNumber('42')).toBe(42);
+	for (const bad of ['0', '-1', '1.5', '01', '', '1;rm', '--help', '99999999999']) {
+		expect(() => checkPrNumber(bad)).toThrow();
+	}
+});

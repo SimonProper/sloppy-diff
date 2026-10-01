@@ -56,3 +56,14 @@ export interface ReviewThread {
 	diffHunk: string;
 	comments: PrComment[];
 }
+
+/** A pull request as `gh pr list` lists it, to pick one. */
+export interface PrSummary {
+	number: number;
+	title: string;
+	author: string;
+	headRefName: string;
+	baseRefName: string;
+	isDraft: boolean;
+	updatedAt: string;
+}

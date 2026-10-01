@@ -1,0 +1,118 @@
+{
+	"data": {
+		"repository": {
+			"pullRequest": {
+				"id": "PR_kwDOEiPr8c8AAAABCsxOSQ",
+				"number": 17066,
+				"title": "feat: configure per-route Netlify deployments",
+				"body": "Netlify deployment configuration is currently adapter-wide, preventing individua…",
+				"url": "https://github.com/sveltejs/kit/pull/17066",
+				"state": "OPEN",
+				"isDraft": false,
+				"author": {
+					"login": "teemingc"
+				},
+				"baseRefName": "teemingc-netlify-adapter-node-runtime",
+				"headRefName": "teemingc-netlify-route-runtime-config",
+				"baseRefOid": "1962666bb7fa32831b21287c031efc599720cfe7",
+				"headRefOid": "4c57bd392961ff1cadc7225396536274c92dc6dc",
+				"baseRepository": {
+					"url": "https://github.com/sveltejs/kit",
+					"sshUrl": "git@github.com:sveltejs/kit.git"
+				},
+				"comments": {
+					"nodes": [
+						{
+							"id": "IC_kwDOEiPr8c8AAAABTRLMhw",
+							"author": {
+								"login": "pkg-svelte-dev"
+							},
+							"body": "<!-- automated-install-comment -->\n\nInstall the latest version of `@sveltejs/kit…",
+							"createdAt": "2026-09-08T15:57:21Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#issuecomment-5588044935"
+						},
+						{
+							"id": "IC_ghost",
+							"author": null,
+							"body": "gone",
+							"createdAt": "2026-01-01T00:00:00Z",
+							"url": "https://github.com/x"
+						}
+					]
+				},
+				"reviews": {
+					"nodes": [
+						{
+							"id": "PRR_pending"
+						}
+					]
+				},
+				"reviewThreads": {
+					"nodes": [
+						{
+							"id": "PRRT_kwDOEiPr8c6gUYvj",
+							"path": "packages/adapter-netlify/index.js",
+							"line": 281,
+							"startLine": 281,
+							"diffSide": "RIGHT",
+							"subjectType": "LINE",
+							"isResolved": true,
+							"isOutdated": false,
+							"comments": {
+								"nodes": [
+									{
+										"id": "PRRC_kwDOEiPr8c7sB4n6",
+										"author": {
+											"login": "vercel"
+										},
+										"body": "A fully\\-prerendered app no longer emits any Netlify function\\, so unknown paths…",
+										"createdAt": "2026-09-08T16:08:54Z",
+										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3959917050",
+										"state": "SUBMITTED",
+										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+"
+									},
+									{
+										"id": "PRRC_kwDOEiPr8c7soksC",
+										"author": {
+											"login": "vercel"
+										},
+										"body": "This suggestion has been addressed\\.\n",
+										"createdAt": "2026-09-09T15:15:48Z",
+										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3970059010",
+										"state": "SUBMITTED",
+										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+"
+									}
+								]
+							}
+						},
+						{
+							"id": "PRRT_kwDOEiPr8c6gVNye",
+							"path": "documentation/docs/25-build-and-deploy/80-adapter-netlify.md",
+							"line": null,
+							"startLine": null,
+							"diffSide": "LEFT",
+							"subjectType": "FILE",
+							"isResolved": false,
+							"isOutdated": true,
+							"comments": {
+								"nodes": [
+									{
+										"id": "PRRC_kwDOEiPr8c7sDIqV",
+										"author": {
+											"login": "teemingc"
+										},
+										"body": "we need to add `@sveltejs/adapter-netlify` to the site types package to get the …",
+										"createdAt": "2026-09-08T16:48:58Z",
+										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3960244885",
+										"state": "PENDING",
+										"diffHunk": "+```js\n+/// file: src/routes/admin/+page.server.js\n+/** @type {import('@sveltejs/adapter-netlify').Config} */"
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		}
+	}
+}
