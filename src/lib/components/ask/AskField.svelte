@@ -4,7 +4,7 @@
 	interface Props {
 		value: string;
 		placeholder: string;
-		/** a quiet hint at the end: while empty, and once something's typed */
+		/** a quiet hint beside send: while empty, and once something's typed */
 		hints: [string, string];
 		/** what the question is about, shown inline before the text */
 		context?: string;
@@ -16,8 +16,10 @@
 		autofocus?: boolean;
 		/** frameless, when it sits in a floating shell that has the border */
 		bare?: boolean;
-		/** at the end of the bottom row, before send */
+		/** after what it's about, before the hint and send */
 		trailing?: Snippet;
+		/** Claude is answering: send becomes stop */
+		onstop?: () => void;
 	}
 
 	let {
@@ -30,7 +32,8 @@
 		onescape,
 		autofocus = false,
 		bare = false,
-		trailing
+		trailing,
+		onstop
 	}: Props = $props();
 
 	let textarea: HTMLTextAreaElement;
@@ -84,21 +87,27 @@
 			<span class="min-w-0 truncate rounded-md bg-subtle px-1.5 font-mono leading-5">{context}</span
 			>
 		{/if}
-		<span class="shrink-0 whitespace-nowrap">{typed ? hints[1] : hints[0]}</span>
-		<span class="flex-1"></span>
 		{@render trailing?.()}
+		<span class="flex-1"></span>
+		<span class="shrink-0 whitespace-nowrap"
+			>{onstop ? '⌘. to stop' : typed ? hints[1] : hints[0]}</span
+		>
 		<button
 			type="button"
 			class={[
 				'grid size-6 shrink-0 place-items-center rounded-full transition-colors',
-				typed ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
+				typed || onstop ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
 			]}
-			aria-label="Ask"
-			title="Ask  ↵"
-			disabled={!typed || busy}
-			onclick={() => onsend(value.trim(), false)}
+			aria-label={onstop ? 'Stop' : 'Ask'}
+			title={onstop ? 'Stop  ⌘.' : 'Ask  ↵'}
+			disabled={onstop ? false : !typed || busy}
+			onclick={() => (onstop ? onstop() : onsend(value.trim(), false))}
 		>
-			{#if busy}
+			{#if onstop}
+				<svg viewBox="0 0 16 16" class="size-2.5" fill="currentColor"
+					><rect x="3" y="3" width="10" height="10" rx="1.5" /></svg
+				>
+			{:else if busy}
 				<span class="spin size-3 rounded-full border-[1.5px] border-surface/40 border-t-surface"
 				></span>
 			{:else}

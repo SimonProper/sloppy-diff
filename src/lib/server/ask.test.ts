@@ -43,7 +43,13 @@ const answer = (session: string) =>
 			type: 'stream_event',
 			event: { type: 'content_block_delta', delta: { type: 'text_delta', text: 'It is ' } }
 		},
-		{ type: 'assistant', message: { content: [{ type: 'text', text: 'It is **fine**.' }] } }
+		{
+			type: 'assistant',
+			message: {
+				content: [{ type: 'text', text: 'It is **fine**.' }],
+				usage: { input_tokens: 3, cache_read_input_tokens: 1000, output_tokens: 20 }
+			}
+		}
 	]
 		.map((m) => `echo '${JSON.stringify(m)}'`)
 		.concat(
@@ -171,6 +177,7 @@ describe('asking about lines', () => {
 			{ type: 'tool', text: expect.stringMatching(/^Reading .*x\.ts$/) }
 		]);
 		expect(saved.sessionId).toBe('sess-1');
+		expect(saved.sessionTokens).toBe(1023);
 		if (event.type === 'done') expect(event.thread.messages[1].html).toContain('<strong>');
 
 		const first = run(0);

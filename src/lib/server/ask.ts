@@ -207,7 +207,8 @@ async function answer(
 		};
 		const done = await finish(source, thread.id, reply, {
 			sessionId: outcome.sessionId,
-			sessionCost: total
+			sessionCost: total,
+			sessionTokens: outcome.tokens
 		});
 		if (done) jobs.emit(job, { type: 'done', thread: renderThread(done) });
 		else jobs.emit(job, { type: 'error', message: 'The thread was deleted while Claude answered' });
@@ -227,7 +228,7 @@ async function finish(
 	source: Source,
 	id: string,
 	reply: Message | { error: string; startedAt: number },
-	session: Pick<Thread, 'sessionId' | 'sessionCost'> = {}
+	session: Pick<Thread, 'sessionId' | 'sessionCost' | 'sessionTokens'> = {}
 ): Promise<Thread | null> {
 	const message: Message =
 		'role' in reply
@@ -269,6 +270,8 @@ type Outcome =
 			resumed: boolean;
 			/** how long the thinking took, from each thought to whatever came after it */
 			thinkingMs: number;
+			/** how much of the context the session fills, as of its last turn */
+			tokens?: number;
 	  }
 	| { kind: 'failed'; stderr: string; code: number | null; answered: boolean };
 
@@ -318,6 +321,7 @@ async function attempt(
 	let sessionId: string | undefined;
 	let model: string | undefined;
 	let answered = false;
+	let tokens: number | undefined;
 	// thinking comes in stretches between tool calls, each is timed until what follows it
 	let thinkingMs = 0;
 	let thinkingSince: number | null = null;
@@ -348,6 +352,14 @@ async function attempt(
 			}
 		} else if (message.type === 'assistant') {
 			answered = true;
+			const usage = message.message?.usage;
+			if (usage) {
+				tokens =
+					(usage.input_tokens ?? 0) +
+					(usage.cache_read_input_tokens ?? 0) +
+					(usage.cache_creation_input_tokens ?? 0) +
+					(usage.output_tokens ?? 0);
+			}
 			for (const block of message.message?.content ?? []) {
 				if (block.type === 'thinking' && block.thinking) {
 					steps.push({ type: 'thinking', text: block.thinking });
@@ -378,7 +390,8 @@ async function attempt(
 				sessionId: message.session_id ?? sessionId,
 				model,
 				resumed: options.resume !== undefined,
-				thinkingMs
+				thinkingMs,
+				tokens
 			};
 		}
 	}

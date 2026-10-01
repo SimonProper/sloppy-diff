@@ -65,6 +65,8 @@ export interface Thread {
 	sessionId?: string;
 	/** what the session has cost so far, claude reports a running total */
 	sessionCost?: number;
+	/** how many tokens of context the session holds, as of its last answer */
+	sessionTokens?: number;
 	/** set when loaded: the lines it's about aren't in the diff anymore */
 	outdated?: boolean;
 }

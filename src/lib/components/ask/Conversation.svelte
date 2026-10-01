@@ -4,6 +4,7 @@
 	import type { Message, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
 	import AskField from './AskField.svelte';
+	import StreamText from './StreamText.svelte';
 	import Trail from './Trail.svelte';
 
 	interface Props {
@@ -72,6 +73,8 @@
 	const seconds = (ms?: number) => `${Math.max(1, Math.round((ms ?? 0) / 1000))}s`;
 	const money = (usd: number) => (usd < 0.001 ? '<$0.001' : `$${usd.toFixed(usd < 0.1 ? 3 : 2)}`);
 
+	const tokens = (n: number) => (n < 1000 ? `${n}` : `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`);
+
 	function meta(message: Message): string {
 		return [
 			message.model?.replace(/\[.*\]$/, ''),
@@ -93,9 +96,10 @@
 	// makes a new one of these for each question, so it starts at the bottom
 	let body = $state<HTMLElement>();
 	let pinned = true;
+	let shown = $state(0);
 	$effect(() => {
 		void thread.messages.length;
-		void live?.text.length;
+		void shown;
 		void live?.steps.length;
 		void live?.steps.at(-1)?.text.length;
 		if (body && pinned) body.scrollTop = body.scrollHeight;
@@ -103,8 +107,12 @@
 </script>
 
 {#snippet spent()}
-	{#if cost > 0}
-		<span class="tabular-nums" title="What this conversation has cost">{money(cost)} so far</span>
+	{#if cost > 0 || thread.sessionTokens}
+		<span class="shrink-0 tabular-nums" title="What this conversation holds and has cost so far"
+			>{[thread.sessionTokens && `${tokens(thread.sessionTokens)} tokens`, cost > 0 && money(cost)]
+				.filter(Boolean)
+				.join(' · ')}</span
+		>
 	{/if}
 {/snippet}
 
@@ -210,9 +218,7 @@
 			<div class="mt-3.5">
 				<Trail steps={live.steps} {live} {now} preferOpen={threads.trailOpen} />
 				{#if live.text}
-					<p class="text-[13.5px] leading-relaxed whitespace-pre-wrap">
-						{live.text}<span class="caret"></span>
-					</p>
+					<StreamText text={live.text} bind:shown />
 				{/if}
 			</div>
 		{:else if lost && thread.messages.at(-1)?.role === 'user'}
@@ -227,69 +233,19 @@
 		{/if}
 	</div>
 
-	<!-- one place to look: the follow-up field, or while Claude answers, its progress -->
+	<!-- the follow-up field, send turns to stop while Claude answers -->
 	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup>
-		{#if live}
-			<!-- the field's shape, so nothing jumps when the answer comes back -->
-			<div
-				class="flex h-[74px] flex-col justify-between rounded-xl border border-line px-3 pt-2.5 pb-2 text-[12px] text-muted"
-			>
-				<div class="flex h-[22px] items-center gap-2">
-					<span
-						class="spin size-3 shrink-0 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
-					></span>
-					<span class="min-w-0 truncate">{live.status}</span>
-					<span class="tabular-nums"
-						>· {Math.max(0, Math.round((now - live.startedAt) / 1000))}s</span
-					>
-				</div>
-				<div class="flex h-6 items-center justify-end gap-2 text-[11px]">
-					{@render spent()}
-					<button
-						type="button"
-						class="h-6 shrink-0 rounded-md px-2 text-[11.5px] text-muted hover:bg-subtle hover:text-fg"
-						onclick={() => threads.cancel(thread.id)}
-						>Stop <kbd class="pl-1 font-mono text-[10.5px]">⌘.</kbd></button
-					>
-				</div>
-			</div>
-		{:else}
-			<AskField
-				bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
-				placeholder="Follow up"
-				hints={['same session · ~$0.01', '↵ to send']}
-				busy={sending}
-				onsend={(text) => send(text)}
-				trailing={spent}
-			/>
-		{/if}
+		<AskField
+			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
+			placeholder="Follow up"
+			hints={['', '↵ to send']}
+			busy={sending || !!live}
+			onsend={(text) => send(text)}
+			onstop={live ? () => threads.cancel(thread.id) : undefined}
+			trailing={spent}
+		/>
 		{#if failure}
 			<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>
 		{/if}
 	</div>
 </section>
-
-<style>
-	.spin {
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-	.caret {
-		display: inline-block;
-		width: 7px;
-		height: 1.05em;
-		margin-left: 1px;
-		vertical-align: -2px;
-		background: var(--ink);
-		animation: blink 1s steps(1) infinite;
-	}
-	@keyframes blink {
-		50% {
-			opacity: 0;
-		}
-	}
-</style>
