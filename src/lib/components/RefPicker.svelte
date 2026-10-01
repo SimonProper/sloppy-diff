@@ -2,9 +2,10 @@
 	import { tick } from 'svelte';
 	import { listNav } from '$lib/list-nav';
 	import { sameSha, timeAgo, type Branch, type Commit } from '$lib/refs';
+	import type { PrSummary } from '$lib/pr/types';
 	import Popover from './Popover.svelte';
 
-	type Tab = 'branches' | 'tags' | 'commits';
+	type Tab = 'branches' | 'tags' | 'commits' | 'prs';
 
 	interface Props {
 		label: string;
@@ -17,6 +18,8 @@
 		/** a second group of commits under the first, headed by `moreLabel` */
 		more?: Commit[];
 		moreLabel?: string;
+		/** pull requests, their number is the value */
+		prs?: PrSummary[];
 		/** limit which tabs are offered */
 		only?: Tab[];
 		/** placeholder for the filter input */
@@ -32,6 +35,7 @@
 		commits,
 		more = [],
 		moreLabel = '',
+		prs = [],
 		only,
 		placeholder = 'Filter, or type any revision',
 		onselect
@@ -42,7 +46,7 @@
 		title: string;
 		detail: string;
 		date: string;
-		kind: Branch['kind'] | 'commit';
+		kind: Branch['kind'] | 'commit' | 'pr';
 		current?: boolean;
 		refs?: string[];
 		/** heading shown above the first item of a group */
@@ -74,21 +78,29 @@
 			group
 		});
 		const all: Item[] =
-			tab === 'commits'
-				? [
-						...commits.map((c) => commit(c)),
-						...more.map((c, i) => commit(c, i === 0 ? moreLabel : undefined))
-					]
-				: branches
-						.filter((b) => (tab === 'tags' ? b.kind === 'tag' : b.kind !== 'tag'))
-						.map((b) => ({
-							value: b.name,
-							title: b.name,
-							detail: `${b.sha} · ${b.subject}`,
-							date: b.date,
-							kind: b.kind,
-							current: b.current
-						}));
+			tab === 'prs'
+				? prs.map((p) => ({
+						value: String(p.number),
+						title: p.title,
+						detail: `#${p.number} · ${p.author} · ${p.baseRefName} ← ${p.headRefName}${p.isDraft ? ' · draft' : ''}`,
+						date: p.updatedAt,
+						kind: 'pr'
+					}))
+				: tab === 'commits'
+					? [
+							...commits.map((c) => commit(c)),
+							...more.map((c, i) => commit(c, i === 0 ? moreLabel : undefined))
+						]
+					: branches
+							.filter((b) => (tab === 'tags' ? b.kind === 'tag' : b.kind !== 'tag'))
+							.map((b) => ({
+								value: b.name,
+								title: b.name,
+								detail: `${b.sha} · ${b.subject}`,
+								date: b.date,
+								kind: b.kind,
+								current: b.current
+							}));
 
 		const q = query.trim().toLowerCase();
 		if (!q) return all;
@@ -102,6 +114,8 @@
 
 	const display = $derived.by(() => {
 		if (!value) return { title: fallback, sha: '' };
+		const pr = prs.find((p) => String(p.number) === value);
+		if (pr) return { title: pr.title, sha: `#${pr.number}` };
 		const commit = [...commits, ...more].find((c) => sameSha(c.sha, value));
 		if (commit) return { title: commit.subject, sha: commit.sha };
 		return { title: value, sha: '' };
@@ -113,11 +127,13 @@
 			query = '';
 			active = 0;
 			// start on the tab that holds the current selection
-			const guess: Tab = [...commits, ...more].some((c) => sameSha(c.sha, value))
-				? 'commits'
-				: tags.some((t) => t.name === value)
-					? 'tags'
-					: 'branches';
+			const guess: Tab = prs.some((p) => String(p.number) === value)
+				? 'prs'
+				: [...commits, ...more].some((c) => sameSha(c.sha, value))
+					? 'commits'
+					: tags.some((t) => t.name === value)
+						? 'tags'
+						: 'branches';
 			tab = tabs.includes(guess) ? guess : tabs[0];
 		}
 	}
@@ -280,6 +296,20 @@
 							stroke-width="1.5"
 							><circle cx="8" cy="8" r="2.5" /><path d="M1 8h4.5M10.5 8H15" /></svg
 						>
+					{:else if item.kind === 'pr'}
+						<svg
+							viewBox="0 0 16 16"
+							class="size-3.5"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							><circle cx="4" cy="3.5" r="1.5" /><circle cx="4" cy="12.5" r="1.5" /><circle
+								cx="12"
+								cy="12.5"
+								r="1.5"
+							/><path d="M4 5v6M12 11V6.5c0-1.5-1-2.5-2.5-2.5H7m1.5-1.5L7 4l1.5 1.5" /></svg
+						>
 					{:else if item.kind === 'tag'}
 						<svg
 							viewBox="0 0 16 16"
@@ -316,7 +346,7 @@
 						<span
 							class={[
 								'truncate text-[12.5px]',
-								item.kind !== 'commit' && 'font-mono',
+								item.kind !== 'commit' && item.kind !== 'pr' && 'font-mono',
 								item.kind === 'remote' && 'text-muted'
 							]}>{item.title}</span
 						>

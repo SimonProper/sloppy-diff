@@ -12,6 +12,7 @@
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
 	import CommitCard from '$lib/components/CommitCard.svelte';
 	import CommitList from '$lib/components/CommitList.svelte';
+	import PrCard from '$lib/components/PrCard.svelte';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import FileList from '$lib/components/FileList.svelte';
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
@@ -26,6 +27,8 @@
 	import { displayPath } from '$lib/diff/path';
 	import { lineStats } from '$lib/diff/hunks';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
+	import { getPullRequests } from '$lib/pr/pr.remote';
+	import type { PrSummary } from '$lib/pr/types';
 
 	let { data } = $props();
 
@@ -42,6 +45,24 @@
 	const range = $derived(data.selection?.range ?? null);
 	const branchSel = $derived(data.selection?.branch ?? null);
 	const commit = $derived(data.selection?.commit ?? null);
+	const pr = $derived(data.selection?.pr ?? null);
+
+	// the repo's open pull requests, asked of gh after the page is up, it takes a moment.
+	// Null without gh, a sign in or a GitHub remote
+	let prs = $state<PrSummary[] | null>(null);
+	$effect(() => {
+		const repo = data.repo;
+		getPullRequests(repo).then(
+			(list) => repo === data.repo && (prs = list),
+			() => (prs = null)
+		);
+	});
+	/** the PRs to pick from, with the one on screen when it isn't open anymore */
+	const prChoices = $derived(
+		pr && !prs?.some((p) => p.number === pr.number)
+			? [{ ...pr, updatedAt: '' }, ...(prs ?? [])]
+			: (prs ?? [])
+	);
 
 	const lane = $derived(data.lane);
 	/** the lane's commits oldest first, what came before it included */
@@ -158,7 +179,7 @@
 		};
 	});
 
-	const COMPARE_KEYS = ['from', 'to', 'branch', 'commits', 'commit', 'on'];
+	const COMPARE_KEYS = ['from', 'to', 'branch', 'commits', 'commit', 'on', 'pr'];
 
 	/** The url with `next` applied, `reset` drops the current comparison first. */
 	function url(next: Record<string, string | null>, reset = false) {
@@ -211,12 +232,14 @@
 	}
 
 	// a single commit is part of Branch, reached from the branch's commit list
-	type Tab = 'worktree' | 'branch' | 'range';
-	const MODES: { mode: Tab; label: string }[] = [
+	type Tab = 'worktree' | 'branch' | 'range' | 'pr';
+	const MODES = $derived<{ mode: Tab; label: string }[]>([
 		{ mode: 'worktree', label: 'Uncommitted' },
 		{ mode: 'branch', label: 'Branch' },
-		{ mode: 'range', label: 'Range' }
-	];
+		{ mode: 'range', label: 'Range' },
+		// only with pull requests to show
+		...(prChoices.length ? [{ mode: 'pr' as const, label: 'Pull request' }] : [])
+	]);
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
 	/** The checked-out branch, or the most recent one that isn't the base. */
@@ -231,6 +254,7 @@
 	function setMode(mode: Tab) {
 		if (mode === tab) return;
 		if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
+		else if (mode === 'pr') navigate({ pr: String(prChoices[0].number), view: null }, true);
 		else if (mode === 'range')
 			navigate({ from: range?.from ?? 'HEAD~1', to: range?.to ?? 'HEAD', view: null }, true);
 		else navigate({ view: null }, true);
@@ -436,6 +460,18 @@
 							<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
 						{/if}
 					{/if}
+				{:else if data.mode === 'pr'}
+					<RefPicker
+						label="PR"
+						value={data.inputs.pr}
+						fallback=""
+						branches={[]}
+						commits={[]}
+						prs={prChoices}
+						only={['prs']}
+						placeholder="Filter pull requests, or type a number"
+						onselect={(number) => navigate({ pr: number, view: null }, true)}
+					/>
 				{:else if data.mode === 'range'}
 					<RefPicker
 						label="from"
@@ -750,6 +786,9 @@
 				{@render toolbar()}
 				{#if commit}
 					<CommitCard {commit} />
+				{/if}
+				{#if pr}
+					<PrCard {pr} body={data.prBody} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
 					<FileDiff

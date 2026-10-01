@@ -6,6 +6,7 @@ import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, ChangeSummary, DiffFile } from '$lib/diff/types';
 import type { Scope, Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
+import type { PullRequest } from '$lib/pr/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 import {
 	branchBase,
@@ -32,7 +33,9 @@ import { dev } from '$app/environment';
 import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
+import { checkPrNumber, readPullRequest } from '$lib/server/gh';
 import { highlightFiles } from '$lib/server/highlight';
+import { markdown } from '$lib/server/markdown';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
@@ -49,8 +52,9 @@ if (dev) clearDiffs();
  *   stepped through along the branch `on` (found from the commit when not given)
  * - range: `from` to `to`, any two revisions
  * - worktree: uncommitted changes against `from` (HEAD by default)
+ * - pr: GitHub pull request `pr`, the range from where it split off its base to its head
  */
-type Mode = 'branch' | 'commit' | 'range' | 'worktree';
+type Mode = 'pr' | 'branch' | 'commit' | 'range' | 'worktree';
 
 interface BranchSelection extends BranchInfo {
 	/** narrowed span, null when the whole branch is shown */
@@ -79,6 +83,7 @@ interface Selection {
 	commit: CommitInfo | null;
 	/** the branch a single commit is shown on */
 	on: string | null;
+	pr: PullRequest | null;
 }
 
 const CHANGE_MODES: ChangeMode[] = ['lines', 'tokens'];
@@ -94,16 +99,19 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		branch: param('branch'),
 		commits: param('commits'),
 		commit: param('commit'),
-		on: param('on')
+		on: param('on'),
+		pr: param('pr')
 	};
 	const repo = param('repo') || env.REPO || process.cwd();
-	const mode: Mode = inputs.branch
-		? 'branch'
-		: inputs.commit
-			? 'commit'
-			: inputs.to
-				? 'range'
-				: 'worktree';
+	const mode: Mode = inputs.pr
+		? 'pr'
+		: inputs.branch
+			? 'branch'
+			: inputs.commit
+				? 'commit'
+				: inputs.to
+					? 'range'
+					: 'worktree';
 	const view: 'files' | 'guide' = param('view') === 'guide' ? 'guide' : 'files';
 	// how changes within lines are shown, remembered across visits by a cookie
 	const requested = param('changes') || cookies.get('changes') || 'lines';
@@ -170,7 +178,8 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 
 	// the diff doesn't wait for the lists above, both run at once
 	const work = head.then(async ([current, defaultBase]) => {
-		const selection = await (mode === 'worktree'
+		// a PR's comments and head move without any ref here moving
+		const selection = await (mode === 'worktree' || mode === 'pr'
 			? select(root, mode, inputs, current, defaultBase)
 			: cached(
 					'select',
@@ -237,17 +246,29 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		)
 	]);
 	report();
-	return { ...context, selection, lane, files, changes, guide, scope, threads, error: null };
+	const prBody = selection.pr ? markdown.render(selection.pr.body) : '';
+	return {
+		...context,
+		selection,
+		lane,
+		files,
+		changes,
+		guide,
+		scope,
+		threads,
+		prBody,
+		error: null
+	};
 };
 
 async function select(
 	root: string,
 	mode: Mode,
-	inputs: Record<'from' | 'to' | 'branch' | 'commits' | 'commit' | 'on', string>,
+	inputs: Record<'from' | 'to' | 'branch' | 'commits' | 'commit' | 'on' | 'pr', string>,
 	current: string | null,
 	defaultBase: string | null
 ): Promise<Selection> {
-	const none = { branch: null, commit: null, on: null };
+	const none = { branch: null, commit: null, on: null, pr: null };
 	if (mode === 'worktree') {
 		// a repository without commits yet compares its files against nothing
 		const from = inputs.from || ((await hasCommits(root)) ? 'HEAD' : await emptyTree(root));
@@ -263,7 +284,12 @@ async function select(
 			commit.parentHashes.length ? commit.parentHashes[0].slice(0, 12) : emptyTree(root),
 			inputs.on || nearestBranch(root, commit.hash, defaultBase, [current]).catch(() => null)
 		]);
-		return { from, to, range: { from, to }, branch: null, commit, on };
+		return { from, to, range: { from, to }, branch: null, commit, on, pr: null };
+	}
+
+	if (mode === 'pr') {
+		const { pr, from, to } = await readPullRequest(root, checkPrNumber(inputs.pr));
+		return { from, to, range: { from, to }, ...none, pr };
 	}
 
 	if (mode === 'range') {
@@ -296,7 +322,8 @@ async function select(
 			range,
 			branch: { ...about, first: commits[i].sha, last: commits[j].sha },
 			commit: null,
-			on: null
+			on: null,
+			pr: null
 		};
 	}
 
@@ -306,7 +333,8 @@ async function select(
 		range,
 		branch: { ...about, first: null, last: null },
 		commit: null,
-		on: null
+		on: null,
+		pr: null
 	};
 }
 
@@ -368,6 +396,7 @@ function empty() {
 		changes: null,
 		guide: null,
 		scope: null,
-		threads: [] as Thread[]
+		threads: [] as Thread[],
+		prBody: ''
 	};
 }
