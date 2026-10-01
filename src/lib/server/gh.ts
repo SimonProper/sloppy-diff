@@ -1,14 +1,17 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import type { Suggestion } from '$lib/ask/types';
 import type { PrComment, PrSummary, PullRequest, ReviewThread } from '$lib/pr/types';
 import { mergeBase, resolveCommit } from './git';
 
 const exec = promisify(execFile);
 
-/** gh run in the repo, it finds the GitHub repository from its remotes. */
-async function gh(root: string, args: string[]): Promise<string> {
+/** gh run in the repo, it finds the GitHub repository from its remotes. `input` goes in on stdin. */
+async function gh(root: string, args: string[], input?: string): Promise<string> {
 	try {
-		const { stdout } = await exec('gh', args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+		const run = exec('gh', args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+		run.child.stdin?.end(input);
+		const { stdout } = await run;
 		return stdout;
 	} catch (error) {
 		if ((error as { code?: string }).code === 'ENOENT') {
@@ -199,5 +202,97 @@ export async function listPullRequests(root: string): Promise<PrSummary[] | null
 		);
 	} catch {
 		return null;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// drafts: comments added to your pending review, finished and submitted on GitHub
+
+/** A GraphQL request with its variables as the request body, nothing in them needs escaping. */
+async function graphql(root: string, query: string, variables: Record<string, unknown>) {
+	const out = await gh(
+		root,
+		['api', 'graphql', '--input', '-'],
+		JSON.stringify({ query, variables })
+	);
+	const { data, errors } = JSON.parse(out);
+	if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(', '));
+	return data;
+}
+
+const PENDING = `query($pr: ID!) {
+  node(id: $pr) { ... on PullRequest { reviews(states: PENDING, first: 1) { nodes { id } } } }
+}`;
+const START = `mutation($pr: ID!, $commit: GitObjectID) {
+  addPullRequestReview(input: { pullRequestId: $pr, commitOID: $commit }) { pullRequestReview { id } }
+}`;
+const THREAD = `mutation($input: AddPullRequestReviewThreadInput!) {
+  addPullRequestReviewThread(input: $input) { thread { id } }
+}`;
+const REPLY = `mutation($input: AddPullRequestReviewThreadReplyInput!) {
+  addPullRequestReviewThreadReply(input: $input) { comment { id } }
+}`;
+
+const NODE_ID = /^[A-Za-z0-9_-]{1,100}$/;
+const SHA = /^[0-9a-f]{40}$/;
+const LINE = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) > 0);
+
+/** Checks a suggestion from the page before it goes anywhere near GitHub. */
+export function checkSuggestion(s: Suggestion): Suggestion {
+	const valid =
+		typeof s?.body === 'string' &&
+		s.body.trim() !== '' &&
+		(s.kind === 'reply'
+			? NODE_ID.test(s.thread)
+			: s.kind === 'review' &&
+				typeof s.path === 'string' &&
+				s.path !== '' &&
+				(s.side === 'old' || s.side === 'new') &&
+				LINE(s.line) &&
+				LINE(s.startLine) &&
+				(s.startLine === undefined || (s.line !== undefined && s.startLine <= s.line)));
+	if (!valid) throw new Error('That comment is not one GitHub can take');
+	return s;
+}
+
+/** The input for a new thread in the review: on lines, or on the whole file without them. */
+export function threadInput(review: string, s: Extract<Suggestion, { kind: 'review' }>) {
+	const side = s.side === 'old' ? 'LEFT' : 'RIGHT';
+	if (s.line === undefined) {
+		return { pullRequestReviewId: review, path: s.path, body: s.body, subjectType: 'FILE' };
+	}
+	return {
+		pullRequestReviewId: review,
+		path: s.path,
+		body: s.body,
+		subjectType: 'LINE',
+		line: s.line,
+		side,
+		// one line is no range
+		...(s.startLine !== undefined &&
+			s.startLine < s.line && { startLine: s.startLine, startSide: side })
+	};
+}
+
+/**
+ * Adds a comment to your pending review on the pull request, starting one at `commit`
+ * (the head the diff shows) when there's none. Only you see it until you finish the
+ * review on GitHub.
+ */
+export async function addToDraft(root: string, pr: string, commit: string, suggestion: Suggestion) {
+	if (!NODE_ID.test(pr) || !SHA.test(commit)) throw new Error('Invalid pull request');
+	const s = checkSuggestion(suggestion);
+	// asked every time, a review finished on GitHub since the page loaded is gone
+	const found = await graphql(root, PENDING, { pr });
+	const review: string =
+		found.node?.reviews?.nodes[0]?.id ??
+		(await graphql(root, START, { pr, commit })).addPullRequestReview.pullRequestReview.id;
+	// ponytail: a pending review started at an older head keeps that head, lines that moved since may land off
+	if (s.kind === 'reply') {
+		await graphql(root, REPLY, {
+			input: { pullRequestReviewId: review, pullRequestReviewThreadId: s.thread, body: s.body }
+		});
+	} else {
+		await graphql(root, THREAD, { input: threadInput(review, s) });
 	}
 }

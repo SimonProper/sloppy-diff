@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { prContext } from './ask';
-import { checkPrNumber, toPullRequest } from './gh';
+import { checkPrNumber, checkSuggestion, threadInput, toPullRequest } from './gh';
 import response from './testing/pr.json';
 
 test('maps the GraphQL response to a PullRequest', () => {
@@ -65,4 +65,43 @@ test("a PR's text can't close the block it's in or pass for the prompt", () => {
 	expect(context.match(/<\/description>/g)).toHaveLength(1);
 	expect(context).toContain('fine<\\/description>');
 	expect(context).toContain('"a&quot; by me"');
+});
+
+test('turns a suggested comment into a review thread on its lines or its file', () => {
+	const review = { kind: 'review', path: 'a.ts', body: 'hm' } as const;
+	expect(threadInput('R', { ...review, side: 'new', line: 12, startLine: 10 })).toEqual({
+		pullRequestReviewId: 'R',
+		path: 'a.ts',
+		body: 'hm',
+		subjectType: 'LINE',
+		line: 12,
+		side: 'RIGHT',
+		startLine: 10,
+		startSide: 'RIGHT'
+	});
+	expect(threadInput('R', { ...review, side: 'old', line: 3, startLine: 3 })).toMatchObject({
+		line: 3,
+		side: 'LEFT'
+	});
+	expect(threadInput('R', { ...review, side: 'old', line: 3 })).not.toHaveProperty('startLine');
+	expect(threadInput('R', { ...review, side: 'new' })).toEqual({
+		pullRequestReviewId: 'R',
+		path: 'a.ts',
+		body: 'hm',
+		subjectType: 'FILE'
+	});
+});
+
+test('turns down a suggestion GitHub could not take', () => {
+	const ok = { kind: 'review', path: 'a.ts', side: 'new', line: 2, body: 'x' } as const;
+	expect(checkSuggestion(ok)).toBe(ok);
+	for (const bad of [
+		{ ...ok, body: ' ' },
+		{ ...ok, line: 0 },
+		{ ...ok, startLine: 5 },
+		{ ...ok, side: 'up' },
+		{ kind: 'reply', thread: 'a b', body: 'x' }
+	]) {
+		expect(() => checkSuggestion(bad as never)).toThrow();
+	}
 });

@@ -44,6 +44,8 @@ interface Config {
 	threads: Thread[];
 	/** the GitHub pull request the range is, for Claude to know about */
 	pr?: number;
+	/** its node id, suggested comments are added to your pending review on it */
+	prId?: string;
 }
 
 /**
@@ -94,6 +96,12 @@ export class Threads {
 	in(hunks: string[]): Thread[] {
 		const ids = new Set(hunks);
 		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk ?? ''));
+	}
+
+	/** where Add to draft puts a suggested comment, null outside a pull request */
+	get review(): { repo: string; pr: string; commit: string } | null {
+		const { repo, prId, to } = this.#config();
+		return prId ? { repo, pr: prId, commit: to } : null;
 	}
 
 	get(id: string | null): Thread | undefined {

@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
+	import { addDraft } from '$lib/pr/pr.remote';
 	import AskField from './AskField.svelte';
 	import StreamText from './StreamText.svelte';
 	import Trail from './Trail.svelte';
@@ -93,6 +95,22 @@
 		await navigator.clipboard.writeText(text).catch(() => {});
 		copied = key;
 		setTimeout(() => (copied = null), 1200);
+	}
+
+	/** suggestions on their way to the pending review, in it, or turned down, by key */
+	let drafted = $state<Record<string, 'adding' | 'added' | { error: string }>>({});
+	async function draft({ html: _, span: __, ...suggestion }: ShownSuggestion, key: string) {
+		const review = threads.review;
+		if (!review || drafted[key] === 'adding' || drafted[key] === 'added') return;
+		drafted[key] = 'adding';
+		try {
+			await addDraft({ ...review, suggestion });
+			drafted[key] = 'added';
+			// shows it in the diff as one of your pending comments
+			await invalidateAll();
+		} catch (e) {
+			drafted[key] = { error: errorText(e) };
+		}
 	}
 
 	/** Where a suggested comment goes, labelled like a thread's lines. */
@@ -247,7 +265,25 @@
 												onclick={() => copy(suggestion.body, key)}
 												>{copied === key ? 'Copied' : 'Copy'}</button
 											>
+											{#if threads.review}
+												{@const drafting = drafted[key]}
+												<button
+													type="button"
+													class="shrink-0 hover:text-fg disabled:hover:text-faint"
+													disabled={drafting === 'adding' || drafting === 'added'}
+													title="Adds it to your pending review, finish the review on GitHub"
+													onclick={() => draft(suggestion, key)}
+													>{drafting === 'adding'
+														? 'Adding…'
+														: drafting === 'added'
+															? 'In draft'
+															: 'Add to draft'}</button
+												>
+											{/if}
 										</p>
+										{#if typeof drafted[key] === 'object'}
+											<p class="mt-1 text-[11px] text-del">{drafted[key].error}</p>
+										{/if}
 										<div class="prose mt-1.5 text-[13px] leading-relaxed">
 											{@html suggestion.html}
 										</div>
