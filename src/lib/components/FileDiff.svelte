@@ -869,10 +869,11 @@
 		}
 	}
 
-	/* a pull request's review threads: a small count on the thread's last line, outlined
-	   when posted, dashed when it holds your comments not posted yet, a bare faint numeral
-	   once resolved. Nothing is filled, so it sits on any row's colour. The covered lines
-	   show as a hairline only while the thread is open */
+	/* a pull request's review threads: a count on the thread's last line in a small
+	   speech bubble, its squared lower-left corner the tail. A translucent fill, so it
+	   sits on any row's colour. Yours not posted yet carry a dot, like an unread badge,
+	   and a resolved one is just an outline. The covered lines show as a hairline only
+	   while the thread is open */
 	.rv {
 		position: absolute;
 		top: 0;
@@ -892,30 +893,36 @@
 		top: 3px;
 		left: 4px;
 		z-index: 2;
-		box-sizing: border-box;
-		min-width: 14px;
+		min-width: 15px;
 		height: 14px;
-		padding: 0 3px;
-		border-radius: 4px;
-		border: 1px solid var(--ink-mark-seen);
-		font: 500 10px/12px var(--font-sans);
+		padding: 0 4px;
+		border-radius: 5px 5px 5px 1.5px;
+		background: color-mix(in oklab, var(--fg) 10%, transparent);
+		font: 600 9.5px/14px var(--font-sans);
 		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
 		text-align: center;
 		color: var(--muted);
 		cursor: pointer;
 		transition:
-			border-color 0.15s ease,
+			background-color 0.15s ease,
 			color 0.15s ease,
 			transform 0.1s ease-out;
 	}
-	/* yours, not posted yet: a draft's dashed edge. Quiet at rest like the others, every
-	   chip brightens only when hovered or open */
-	.rv-open.pending {
-		border-style: dashed;
+	.rv-open.pending::after {
+		content: '';
+		position: absolute;
+		top: -2px;
+		right: -2px;
+		width: 5px;
+		height: 5px;
+		border-radius: 99px;
+		background: var(--ink);
+		box-shadow: 0 0 0 1.5px var(--gutter-bg, var(--surface));
 	}
-	/* done: just the number, faint */
 	.rv-open.resolved {
-		border-color: transparent;
+		background: transparent;
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 14%, transparent);
 		color: var(--faint);
 	}
 	.rv-open:active {
@@ -923,12 +930,12 @@
 	}
 	@media (hover: hover) and (pointer: fine) {
 		.rv-open:hover {
-			border-color: var(--ink-mark);
+			background: color-mix(in oklab, var(--fg) 18%, transparent);
 			color: var(--fg);
 		}
 	}
 	.rv-open.open {
-		border-color: var(--ink-mark);
+		background: color-mix(in oklab, var(--fg) 18%, transparent);
 		color: var(--fg);
 	}
 
