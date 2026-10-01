@@ -234,7 +234,8 @@ const REPLY = `mutation($input: AddPullRequestReviewThreadReplyInput!) {
 }`;
 
 const NODE_ID = /^[A-Za-z0-9_-]{1,100}$/;
-const SHA = /^[0-9a-f]{40}$/;
+// the page names commits by short shas, GitHub takes full ones
+const SHA = /^[0-9a-f]{7,40}$/;
 const LINE = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) > 0);
 
 /** Checks a suggestion from the page before it goes anywhere near GitHub. */
@@ -280,13 +281,19 @@ export function threadInput(review: string, s: Extract<Suggestion, { kind: 'revi
  * review on GitHub.
  */
 export async function addToDraft(root: string, pr: string, commit: string, suggestion: Suggestion) {
-	if (!NODE_ID.test(pr) || !SHA.test(commit)) throw new Error('Invalid pull request');
+	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	if (!SHA.test(commit)) throw new Error(`Invalid commit: ${commit}`);
 	const s = checkSuggestion(suggestion);
 	// asked every time, a review finished on GitHub since the page loaded is gone
 	const found = await graphql(root, PENDING, { pr });
 	const review: string =
 		found.node?.reviews?.nodes[0]?.id ??
-		(await graphql(root, START, { pr, commit })).addPullRequestReview.pullRequestReview.id;
+		(
+			await graphql(root, START, {
+				pr,
+				commit: (await git(root, ['rev-parse', '--verify', `${commit}^{commit}`])).trim()
+			})
+		).addPullRequestReview.pullRequestReview.id;
 	// ponytail: a pending review started at an older head keeps that head, lines that moved since may land off
 	if (s.kind === 'reply') {
 		await graphql(root, REPLY, {
