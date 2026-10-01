@@ -42,8 +42,8 @@
 	}
 </script>
 
-<!-- as wide as the diff it opens -->
-<div class="flex flex-col p-4">
+<!-- as wide as the diff it opens, up to a wide screen -->
+<div class="mx-auto flex w-full max-w-screen-2xl flex-col p-4">
 	<p class="px-1 pb-2 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 		Open pull requests
 	</p>
@@ -65,8 +65,10 @@
 			No open pull requests
 		</p>
 	{:else}
-		<div class="overflow-hidden rounded-xl border border-line bg-surface">
-			<div class="border-b border-line p-2">
+		<!-- not overflow-hidden, that would keep the filter from sticking -->
+		<div class="rounded-xl border border-line bg-surface">
+			<!-- stays under the page's header while the list scrolls -->
+			<div class="sticky top-12 z-10 rounded-t-xl border-b border-line bg-surface p-2">
 				<!-- the filter keeps focus, arrows move the active row -->
 				<input
 					bind:value={query}
