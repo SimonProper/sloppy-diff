@@ -168,17 +168,18 @@ export async function readPullRequest(
 	const raw = await fetchRaw(root, checkPrNumber(number));
 	const pr = toPullRequest(raw);
 	const have = (sha: string) => resolveCommit(root, sha).then(Boolean, () => false);
-	if (!(await have(pr.headRefOid)) || !(await have(pr.baseRefOid))) {
+	const [haveHead, haveBase] = await Promise.all([have(pr.headRefOid), have(pr.baseRefOid)]);
+	if (!haveHead || !haveBase) {
 		const ssh = (await gh(root, ['config', 'get', 'git_protocol']).catch(() => '')).trim();
 		const url = ssh === 'ssh' ? raw.baseRepository.sshUrl : raw.baseRepository.url;
 		// into FETCH_HEAD only, no refs of the repo change
-		await git(root, [
-			'fetch',
-			'--quiet',
-			url,
-			`refs/pull/${number}/head`,
-			`refs/heads/${pr.baseRefName}`
-		]);
+		if (!haveHead) await git(root, ['fetch', '--quiet', url, `refs/pull/${number}/head`]);
+		// the base by its commit, its branch may have been deleted since. GitHub still hands
+		// out a commit it has, so only a base that's gone from it fails
+		if (!haveBase) await git(root, ['fetch', '--quiet', url, pr.baseRefOid]).catch(() => {});
+	}
+	if (!(await have(pr.baseRefOid))) {
+		throw new Error(`The base of #${number}, ${pr.baseRefName}, can't be fetched from GitHub`);
 	}
 	const [from, to] = await Promise.all([
 		mergeBase(root, pr.baseRefOid, pr.headRefOid),
