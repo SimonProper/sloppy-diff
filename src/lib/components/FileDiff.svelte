@@ -568,7 +568,8 @@
 	{/if}
 {/snippet}
 
-<!-- a review thread's bar down the gutter's left edge, and the marker on its last line -->
+<!-- a review thread's bar down the gutter's left edge and a dot on its last line, drawn
+     like a question's marker on the other side of the line -->
 {#snippet reviewMark(mark: ReviewMark | undefined)}
 	{#if mark}
 		<span class={['rv', mark.first && 'first', mark.last && 'last', mark.pending && 'pending']}
@@ -592,11 +593,6 @@
 						at: (e.currentTarget as HTMLElement).getBoundingClientRect()
 					})}
 			>
-				<svg viewBox="0 0 16 16" fill="currentColor"
-					><path
-						d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7l-3 3v-3H3a1 1 0 0 1-1-1z"
-					/></svg
-				>
 			</button>
 		{/if}
 	{/if}
@@ -870,61 +866,60 @@
 		}
 	}
 
-	/* a pull request's review threads, in ink like the questions to Claude but on the
-	   gutter's left edge and ending in a bubble. Yours not posted yet are dotted, as heavy
-	   as a posted line, told apart by texture */
+	/* a pull request's review threads: a bar down the gutter's left edge and a dot on the
+	   last line, like a question's marker on the right. A thread holding your comments not
+	   posted yet is darker and its dot filled, it wants doing. Resolved ones fade */
 	.rv {
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		left: 0;
+		left: 3px;
 		width: 2px;
 		background: var(--ink-mark-seen);
 	}
 	.rv.first {
-		top: 2px;
+		top: 3px;
+		border-radius: 1px 1px 0 0;
 	}
 	.rv.last {
-		bottom: 2px;
+		bottom: 3px;
+		border-radius: 0 0 1px 1px;
 	}
 	.rv.pending {
-		background: repeating-linear-gradient(to bottom, var(--ink-mark) 0 2px, transparent 2px 5px);
-	}
-	/* a first row's line starts lower, its dots stay on the beat of the rows above */
-	.rv.pending.first {
-		background-position-y: -2px;
+		background: var(--ink-mark);
 	}
 	.rv-open {
 		position: absolute;
 		top: 2px;
-		left: 5px;
+		/* centred on the bar, the dot itself stays inside the gutter */
+		left: -4px;
 		z-index: 2;
 		display: grid;
 		place-items: center;
 		width: 16px;
 		height: 16px;
-		border-radius: 4px;
-		color: var(--muted);
-		/* the gutter's own colour, whatever the row is, to cover a long line number */
-		background: inherit;
 		cursor: pointer;
 	}
-	.rv-open svg {
-		width: 13px;
-		height: 13px;
+	.rv-open::after {
+		content: '';
+		box-sizing: border-box;
+		width: 8px;
+		height: 8px;
+		border-radius: 99px;
+		background: var(--surface);
+		border: 2px solid var(--ink-mark);
+		box-shadow: 0 0 0 2px var(--surface);
+		transition: transform 0.12s;
 	}
-	.rv-open:hover {
-		/* over the inherited colour, not instead of it */
-		box-shadow: inset 0 0 0 100vmax var(--ink-wash);
-		color: var(--fg);
+	.rv-open.pending::after {
+		background: var(--ink);
+		border: 0;
 	}
-	/* your comments waiting to be posted want doing, full ink */
-	.rv-open.pending {
-		color: var(--ink);
+	.rv-open.resolved::after {
+		border-color: var(--ink-mark-seen);
 	}
-	/* fainter by colour, an opacity would let the line number show through */
-	.rv-open.resolved {
-		color: var(--ink-mark-seen);
+	.rv-open:hover::after {
+		transform: scale(1.35);
 	}
 
 	/* split layout */
