@@ -590,6 +590,7 @@
 				]}
 				aria-label={label}
 				title={label}
+				data-review={mark.threads.map((t) => t.id).join(' ')}
 				onpointerdown={(e) => e.stopPropagation()}
 				onclick={(e) =>
 					(reviewOpen = {

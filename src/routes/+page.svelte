@@ -14,6 +14,7 @@
 	import CommitList from '$lib/components/CommitList.svelte';
 	import PrCard from '$lib/components/PrCard.svelte';
 	import PrList from '$lib/components/pr/PrList.svelte';
+	import ReviewNav from '$lib/components/pr/ReviewNav.svelte';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import FileList from '$lib/components/FileList.svelte';
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
@@ -622,6 +623,9 @@
 					}
 				/>
 			</div>
+			{#if pr?.threads.length}
+				<ReviewNav threads={pr.threads} files={data.files} />
+			{/if}
 			{#if asking}
 				<!-- a question about the whole change, the composer floats under this -->
 				<button
