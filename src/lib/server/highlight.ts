@@ -1,5 +1,6 @@
 import * as bash from '@twinkleplop/bash';
 import * as css from '@twinkleplop/css';
+import * as cpp from './cpp';
 import * as go from '@twinkleplop/go';
 import * as html from '@twinkleplop/html';
 import * as javascript from '@twinkleplop/javascript';
@@ -24,6 +25,7 @@ type Tokenizer = (input: string) => TokenizeResult;
 
 const packages = {
 	bash,
+	cpp,
 	css,
 	go,
 	html,
@@ -45,6 +47,14 @@ const extensions: Record<string, Language> = {
 	sh: 'bash',
 	bash: 'bash',
 	zsh: 'bash',
+	c: 'cpp',
+	h: 'cpp',
+	cc: 'cpp',
+	cpp: 'cpp',
+	cxx: 'cpp',
+	hh: 'cpp',
+	hpp: 'cpp',
+	hxx: 'cpp',
 	css: 'css',
 	scss: 'css',
 	pcss: 'css',
