@@ -283,7 +283,8 @@
 	}
 
 	function setMode(mode: Tab) {
-		if (mode === tab) return;
+		// a picked pull request's tab still goes back to the list of them
+		if (mode === tab && mode !== 'pr') return;
 		if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
 		else if (mode === 'pr') goto(prList(), { keepFocus: true });
 		else if (mode === 'range')
