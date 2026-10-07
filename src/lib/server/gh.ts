@@ -195,15 +195,62 @@ export async function readPullRequest(
 
 /** Open pull requests, null when gh isn't installed or signed in, or the repo isn't on GitHub. */
 export async function listPullRequests(root: string): Promise<PrSummary[] | null> {
-	const fields = 'number,title,author,headRefName,baseRefName,isDraft,updatedAt';
+	const fields =
+		'number,title,author,headRefName,baseRefName,isDraft,updatedAt,reviewDecision,reviewRequests,latestReviews';
 	try {
-		const out = await gh(root, ['pr', 'list', '--limit', '100', '--json', fields]);
-		return (JSON.parse(out) as (Omit<PrSummary, 'author'> & { author: { login: string } })[]).map(
-			(p) => ({ ...p, author: p.author?.login ?? 'ghost' })
-		);
+		const [out, me] = await Promise.all([
+			gh(root, ['pr', 'list', '--limit', '100', '--json', fields]),
+			viewer(root)
+		]);
+		return (JSON.parse(out) as RawSummary[]).map((p) => toPrSummary(p, me));
 	} catch {
 		return null;
 	}
+}
+
+export interface RawSummary extends Omit<
+	PrSummary,
+	'author' | 'mine' | 'requested' | 'reviewed' | 'reviewDecision'
+> {
+	author: { login: string } | null;
+	reviewDecision: string;
+	/** a team's has a slug instead of a login */
+	reviewRequests: { login?: string }[];
+	latestReviews: { author: { login: string } | null; state: string }[];
+}
+
+/** A listed pull request, with where you stand on it worked out for `me`. */
+export function toPrSummary(raw: RawSummary, me: string): PrSummary {
+	const { reviewRequests, latestReviews, ...rest } = raw;
+	const review = latestReviews.find((r) => r.author?.login === me)?.state;
+	const author = raw.author?.login ?? 'ghost';
+	return {
+		...rest,
+		author,
+		reviewDecision: (raw.reviewDecision || null) as PrSummary['reviewDecision'],
+		mine: author === me,
+		// ponytail: only requests to you by name, team membership isn't in this data.
+		// A second `gh pr list --search review-requested:@me` would add your teams'
+		requested: reviewRequests.some((r) => r.login === me),
+		reviewed:
+			review === 'APPROVED' || review === 'CHANGES_REQUESTED' || review === 'COMMENTED'
+				? review
+				: null
+	};
+}
+
+/** The signed-in login, asked once: it doesn't change while the server runs. */
+let login: Promise<string> | undefined;
+function viewer(root: string): Promise<string> {
+	login ??= gh(root, ['api', 'user', '--jq', '.login']).then(
+		(out) => out.trim(),
+		(error) => {
+			// not signed in yet, ask again next time
+			login = undefined;
+			throw error;
+		}
+	);
+	return login;
 }
 
 // ---------------------------------------------------------------------------

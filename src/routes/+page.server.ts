@@ -6,7 +6,7 @@ import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, ChangeSummary, DiffFile } from '$lib/diff/types';
 import type { Scope, Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
-import type { PrSummary, PullRequest } from '$lib/pr/types';
+import { PR_VIEWS, type PrSummary, type PrView, type PullRequest } from '$lib/pr/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
 import {
 	branchBase,
@@ -120,9 +120,12 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		? (requested as ChangeMode)
 		: 'lines';
 	const layout: Layout = cookies.get('layout') === 'split' ? 'split' : 'unified';
+	const prView = (PR_VIEWS as readonly string[]).includes(cookies.get('prs') ?? '')
+		? (cookies.get('prs') as PrView)
+		: 'all';
 	// saved guides are listed whatever state the current repo is in
 	const guides = await timing.measure('guides', listGuides());
-	const base = { repo, mode, view, inputs, changeMode, layout, guides };
+	const base = { repo, mode, view, inputs, changeMode, layout, prView, guides };
 
 	let root: string;
 	let version: string;

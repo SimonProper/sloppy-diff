@@ -59,6 +59,10 @@ export interface ReviewThread {
 	comments: PrComment[];
 }
 
+/** The pull requests listed: all open ones, those waiting on your review, or yours. */
+export const PR_VIEWS = ['all', 'review', 'mine'] as const;
+export type PrView = (typeof PR_VIEWS)[number];
+
 /** A pull request as `gh pr list` lists it, to pick one. */
 export interface PrSummary {
 	number: number;
@@ -68,4 +72,12 @@ export interface PrSummary {
 	baseRefName: string;
 	isDraft: boolean;
 	updatedAt: string;
+	/** null when the repo doesn't require reviews */
+	reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+	/** you opened it */
+	mine: boolean;
+	/** your review is requested */
+	requested: boolean;
+	/** your latest review */
+	reviewed: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | null;
 }

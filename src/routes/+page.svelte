@@ -64,7 +64,17 @@
 	/** the PRs to pick from, with the one on screen when it isn't open anymore */
 	const prChoices = $derived(
 		pr && !prs?.some((p) => p.number === pr.number)
-			? [{ ...pr, updatedAt: '' }, ...(prs ?? [])]
+			? [
+					{
+						...pr,
+						updatedAt: '',
+						reviewDecision: null,
+						mine: false,
+						requested: false,
+						reviewed: null
+					},
+					...(prs ?? [])
+				]
 			: (prs ?? [])
 	);
 
@@ -156,6 +166,8 @@
 	// switched in the browser only, so changing it never re-runs the diff
 	// svelte-ignore state_referenced_locally
 	let layout = $state(data.layout);
+	// svelte-ignore state_referenced_locally
+	let prView = $state(data.prView);
 
 	// a split diff beside the question panel needs a wide screen. Narrower, it reads
 	// unified while the panel is open, unless split is picked again meanwhile
@@ -713,7 +725,11 @@
 			{@render saved()}
 		</div>
 	{:else if data.mode === 'pr' && !pr}
-		<PrList prs={data.prs} href={(number) => url({ pr: String(number), view: null }, true)} />
+		<PrList
+			prs={data.prs}
+			bind:view={prView}
+			href={(number) => url({ pr: String(number), view: null }, true)}
+		/>
 	{:else if data.view === 'guide' && data.guide}
 		{#snippet prIntro()}
 			{#if pr}<PrCard {pr} body={data.prBody} />{/if}

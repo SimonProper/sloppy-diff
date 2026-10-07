@@ -2,26 +2,61 @@
 	import { goto } from '$app/navigation';
 	import { listNav } from '$lib/list-nav';
 	import { timeAgo } from '$lib/refs';
-	import type { PrSummary } from '$lib/pr/types';
+	import { remember } from '$lib/prefs';
+	import type { PrSummary, PrView } from '$lib/pr/types';
+	import SegmentedControl from '../SegmentedControl.svelte';
 
 	interface Props {
 		/** null when gh couldn't list them */
 		prs: PrSummary[] | null;
 		/** where picking one goes */
 		href: (number: number) => string;
+		/** the view picked last time */
+		view: PrView;
 	}
 
-	let { prs, href }: Props = $props();
+	let { prs, href, view = $bindable() }: Props = $props();
+
+	const VIEWS: { value: PrView; label: string; empty: string; keep: (p: PrSummary) => boolean }[] =
+		[
+			{ value: 'all', label: 'All', empty: 'No open pull requests', keep: () => true },
+			{
+				value: 'review',
+				label: 'To review',
+				empty: 'Nothing waiting on your review',
+				keep: (p) => p.requested
+			},
+			{
+				value: 'mine',
+				label: 'Mine',
+				empty: 'You have no open pull requests',
+				keep: (p) => p.mine
+			}
+		];
+	const PILLS = {
+		APPROVED: ['approved', 'border-add/40 bg-add/10 text-add'],
+		CHANGES_REQUESTED: ['changes requested', 'border-del/40 bg-del/10 text-del']
+	} as const;
+	const REVIEWED = {
+		APPROVED: 'you approved',
+		CHANGES_REQUESTED: 'you requested changes',
+		COMMENTED: 'you commented'
+	} as const;
 
 	let query = $state('');
 	let active = $state(0);
 	let list = $state<HTMLElement>();
 	const listId = $props.id();
 
+	const counts = $derived(
+		Object.fromEntries(VIEWS.map((v) => [v.value, (prs ?? []).filter(v.keep).length]))
+	);
+	const current = $derived(VIEWS.find((v) => v.value === view) ?? VIEWS[0]);
 	const shown = $derived.by(() => {
 		const q = query.trim().toLowerCase();
-		if (!q) return prs ?? [];
-		return (prs ?? []).filter((p) =>
+		const inView = (prs ?? []).filter(current.keep);
+		if (!q) return inView;
+		return inView.filter((p) =>
 			`${p.title} #${p.number} ${p.author} ${p.baseRefName} ${p.headRefName}`
 				.toLowerCase()
 				.includes(q)
@@ -39,6 +74,12 @@
 				if (pr) goto(href(pr.number));
 			}
 		});
+	}
+
+	function choose(value: PrView) {
+		view = value;
+		remember('prs', value);
+		active = 0;
 	}
 </script>
 
@@ -68,7 +109,9 @@
 		<!-- not overflow-hidden, that would keep the filter from sticking -->
 		<div class="rounded-xl border border-line bg-surface">
 			<!-- stays under the page's header while the list scrolls -->
-			<div class="sticky top-12 z-10 rounded-t-xl border-b border-line bg-surface p-2">
+			<div
+				class="sticky top-12 z-10 flex items-center gap-2 rounded-t-xl border-b border-line bg-surface p-2"
+			>
 				<!-- the filter keeps focus, arrows move the active row -->
 				<input
 					bind:value={query}
@@ -84,8 +127,20 @@
 					placeholder="Filter by title, number, author or branch"
 					spellcheck="false"
 					autocomplete="off"
-					class="h-7 w-full bg-transparent px-1.5 text-[12.5px] outline-none placeholder:text-faint"
+					class="h-7 min-w-0 flex-1 bg-transparent px-1.5 text-[12.5px] outline-none placeholder:text-faint"
 				/>
+				<!-- the filter keeps focus, arrows and enter still work after picking a view -->
+				<SegmentedControl
+					options={VIEWS}
+					value={view}
+					onchange={choose}
+					label="Pull requests"
+					keepFocus
+				>
+					{#snippet after(option)}
+						<span class="text-faint tabular-nums">{counts[option.value]}</span>
+					{/snippet}
+				</SegmentedControl>
 			</div>
 			<div bind:this={list} id={listId} class="p-1" role="listbox" aria-label="Pull requests">
 				{#each shown as pr, i (pr.number)}
@@ -108,13 +163,25 @@
 										class="shrink-0 rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
 										>draft</span
 									>
+								{:else if pr.reviewDecision === 'APPROVED' || pr.reviewDecision === 'CHANGES_REQUESTED'}
+									{@const [label, colors] = PILLS[pr.reviewDecision]}
+									<span class="shrink-0 rounded-[4px] border px-1 text-[10px] font-medium {colors}"
+										>{label}</span
+									>
 								{/if}
 							</span>
 							<span class="mt-0.5 block truncate text-[11px] text-faint">
-								{pr.author} ·
+								{pr.mine ? 'you' : pr.author} ·
 								<span class="font-mono">{pr.baseRefName} ← {pr.headRefName}</span>
 							</span>
 						</span>
+						{#if pr.requested}
+							<span class="mt-0.5 flex shrink-0 items-center gap-1.5 text-[11px] text-accent">
+								<span class="size-1.5 rounded-full bg-accent"></span>your review
+							</span>
+						{:else if pr.reviewed}
+							<span class="mt-0.5 shrink-0 text-[11px] text-faint">{REVIEWED[pr.reviewed]}</span>
+						{/if}
 						<span
 							class="mt-0.5 shrink-0 text-[11px] text-faint tabular-nums"
 							title="Updated {new Date(pr.updatedAt).toLocaleString()}"
@@ -122,7 +189,9 @@
 						>
 					</a>
 				{:else}
-					<p class="px-3 py-6 text-center text-[12px] text-muted">No pull requests match</p>
+					<p class="px-3 py-6 text-center text-[12px] text-muted">
+						{query.trim() ? 'No pull requests match' : current.empty}
+					</p>
 				{/each}
 			</div>
 		</div>

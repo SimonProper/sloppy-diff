@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { prContext } from './ask';
-import { checkPrNumber, checkSuggestion, draftStep, threadInput, toPullRequest } from './gh';
+import {
+	checkPrNumber,
+	checkSuggestion,
+	draftStep,
+	threadInput,
+	toPrSummary,
+	toPullRequest
+} from './gh';
 import response from './testing/pr.json';
 
 test('maps the GraphQL response to a PullRequest', () => {
@@ -145,4 +152,44 @@ test('turns down a reply without a thread, and a body longer than GitHub takes',
 	expect(() =>
 		checkSuggestion({ kind: 'review', path: 'a.ts', side: 'new', body: 'x'.repeat(70_000) })
 	).toThrow();
+});
+
+describe('toPrSummary', () => {
+	const raw = {
+		number: 7,
+		title: 'Speed up blame',
+		author: { login: 'bob' },
+		headRefName: 'perf/blame',
+		baseRefName: 'main',
+		isDraft: false,
+		updatedAt: '2026-10-01T00:00:00Z',
+		reviewDecision: '',
+		reviewRequests: [{ login: 'me' }, { slug: 'core' }],
+		latestReviews: [
+			{ author: { login: 'alice' }, state: 'APPROVED' },
+			{ author: { login: 'me' }, state: 'COMMENTED' }
+		]
+	};
+
+	test('where you stand on it', () => {
+		expect(toPrSummary(raw, 'me')).toMatchObject({
+			author: 'bob',
+			reviewDecision: null,
+			mine: false,
+			requested: true,
+			reviewed: 'COMMENTED'
+		});
+	});
+
+	test('someone else, a dismissed review and a missing author', () => {
+		const dismissed = { ...raw, author: null, reviewDecision: 'APPROVED' };
+		dismissed.latestReviews = [{ author: { login: 'me' }, state: 'DISMISSED' }];
+		expect(toPrSummary(dismissed, 'me')).toMatchObject({
+			author: 'ghost',
+			reviewDecision: 'APPROVED',
+			requested: true,
+			reviewed: null
+		});
+		expect(toPrSummary(raw, 'bob')).toMatchObject({ mine: true, requested: false, reviewed: null });
+	});
 });
