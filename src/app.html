@@ -5,10 +5,23 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
-			// follow the OS colour scheme before first paint, see layout.css
+			// the theme picked in ThemeToggle, or the OS colour scheme, before first paint, see layout.css
 			(() => {
 				const query = matchMedia('(prefers-color-scheme: dark)');
-				const apply = () => document.documentElement.classList.toggle('dark', query.matches);
+				const picked = () => {
+					try {
+						return localStorage.getItem('sloppy-diff:theme');
+					} catch {
+						return null;
+					}
+				};
+				const apply = () => {
+					const theme = picked();
+					document.documentElement.classList.toggle(
+						'dark',
+						theme ? theme === 'dark' : query.matches
+					);
+				};
 				apply();
 				query.addEventListener('change', apply);
 			})();

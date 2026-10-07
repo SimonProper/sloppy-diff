@@ -30,6 +30,7 @@
 	import { lineStats } from '$lib/diff/hunks';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
 	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import type { PrSummary } from '$lib/pr/types';
 
@@ -599,6 +600,7 @@
 					>
 				{/if}
 			</button>
+			<ThemeToggle />
 		</div>
 
 		{#if loading.current}
