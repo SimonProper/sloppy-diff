@@ -10,6 +10,7 @@
 	import { commentOn } from '$lib/pr/comment';
 	import type { Guide } from '$lib/guide/types';
 	import AskField from './AskField.svelte';
+	import SegmentedControl from '../SegmentedControl.svelte';
 
 	interface Props {
 		threads: Threads;
@@ -161,24 +162,18 @@
 	>
 		{#if choosing}
 			<!-- what ↵ does, Tab switches it. Clicking leaves the focus in the text -->
-			<div class="flex px-2 pt-2" role="radiogroup" aria-label="Send to">
-				<div class="flex rounded-lg border border-line p-0.5">
-					{#each [{ intent: 'ask', label: 'Ask Claude' }, { intent: 'comment', label: 'Comment' }] as const as option (option.intent)}
-						<button
-							type="button"
-							role="radio"
-							aria-checked={threads.intent === option.intent}
-							class={[
-								'h-6 rounded-md px-2 text-[11.5px]',
-								threads.intent === option.intent
-									? 'bg-subtle font-medium text-fg'
-									: 'text-muted hover:text-fg'
-							]}
-							onpointerdown={(e) => e.preventDefault()}
-							onclick={() => threads.setIntent(option.intent)}>{option.label}</button
-						>
-					{/each}
-				</div>
+			<div class="flex px-2 pt-2">
+				<SegmentedControl
+					options={[
+						{ value: 'ask', label: 'Ask Claude' },
+						{ value: 'comment', label: 'Comment' }
+					]}
+					value={threads.intent}
+					onchange={(intent) => threads.setIntent(intent)}
+					text="sm"
+					label="Send to"
+					keepFocus
+				/>
 			</div>
 		{/if}
 		<AskField

@@ -5,6 +5,7 @@
 	import { fileTree, type TreeNode } from '$lib/diff/tree';
 	import { reveal } from '$lib/scroll-spy.svelte';
 	import { readText, writeText } from '$lib/storage';
+	import SegmentedControl from './SegmentedControl.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 
 	interface Props {
@@ -48,9 +49,9 @@
 		if (row) reveal(row, Math.min(Number(row.dataset.depth), STICKY_DEPTH) * ROW);
 	});
 
-	const VIEWS: { view: View; label: string }[] = [
-		{ view: 'list', label: 'Flat list' },
-		{ view: 'tree', label: 'Folder tree' }
+	const VIEWS: { value: View; label: string }[] = [
+		{ value: 'list', label: 'Flat list' },
+		{ value: 'tree', label: 'Folder tree' }
 	];
 </script>
 
@@ -58,36 +59,31 @@
 	<p class="text-[10.5px] font-medium tracking-wide text-faint uppercase">
 		Files · {files.length}
 	</p>
-	<div class="flex rounded-md border border-line p-px" role="group" aria-label="File list view">
-		{#each VIEWS as option (option.view)}
-			<button
-				type="button"
-				class={[
-					'grid h-5 w-6 place-items-center rounded-[5px]',
-					view === option.view ? 'bg-subtle text-fg' : 'text-faint hover:text-fg'
-				]}
-				title={option.label}
-				aria-label={option.label}
-				aria-pressed={view === option.view}
-				onclick={() => choose(option.view)}
+	<SegmentedControl
+		options={VIEWS}
+		value={view}
+		onchange={choose}
+		size="sm"
+		label="File list view"
+		iconOnly
+	>
+		{#snippet before(option)}
+			<svg
+				viewBox="0 0 16 16"
+				class="size-3"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+				stroke-linecap="round"
 			>
-				<svg
-					viewBox="0 0 16 16"
-					class="size-3"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-				>
-					{#if option.view === 'list'}
-						<path d="M3 4h10M3 8h10M3 12h10" />
-					{:else}
-						<path d="M3 3.5h5M6 8h7M6 12.5h7M4.5 3.5v9H6M4.5 8H6" />
-					{/if}
-				</svg>
-			</button>
-		{/each}
-	</div>
+				{#if option.value === 'list'}
+					<path d="M3 4h10M3 8h10M3 12h10" />
+				{:else}
+					<path d="M3 3.5h5M6 8h7M6 12.5h7M4.5 3.5v9H6M4.5 8H6" />
+				{/if}
+			</svg>
+		{/snippet}
+	</SegmentedControl>
 </div>
 
 <nav bind:this={list} class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">

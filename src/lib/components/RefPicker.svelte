@@ -4,8 +4,15 @@
 	import { sameSha, timeAgo, type Branch, type Commit } from '$lib/refs';
 	import type { PrSummary } from '$lib/pr/types';
 	import Popover from './Popover.svelte';
+	import SegmentedControl from './SegmentedControl.svelte';
 
 	type Tab = 'branches' | 'tags' | 'commits' | 'prs';
+	const TAB_LABELS: Record<Tab, string> = {
+		branches: 'Branches',
+		tags: 'Tags',
+		commits: 'Commits',
+		prs: 'PRs'
+	};
 
 	interface Props {
 		label: string;
@@ -237,21 +244,20 @@
 			autocomplete="off"
 			class="h-7 min-w-0 flex-1 bg-transparent px-1.5 text-[12.5px] outline-none placeholder:text-faint"
 		/>
-		<div class={['flex shrink-0 rounded-lg border border-line p-0.5', tabs.length < 2 && 'hidden']}>
-			{#each tabs as t (t)}
-				<button
-					type="button"
-					class={[
-						'rounded-md px-2 py-0.5 text-[11.5px] capitalize',
-						t === tab ? 'bg-subtle text-fg' : 'text-muted hover:text-fg'
-					]}
-					onclick={() => {
-						tab = t;
-						active = 0;
-					}}>{t}</button
-				>
-			{/each}
-		</div>
+		{#if tabs.length > 1}
+			<!-- the filter keeps focus, arrows still move through the new tab's list -->
+			<SegmentedControl
+				options={tabs.map((t) => ({ value: t, label: TAB_LABELS[t] }))}
+				value={tab}
+				onchange={(t) => {
+					tab = t;
+					active = 0;
+				}}
+				text="sm"
+				label="Show"
+				keepFocus
+			/>
+		{/if}
 	</div>
 
 	<div

@@ -29,6 +29,7 @@
 	import { displayPath } from '$lib/diff/path';
 	import { lineStats } from '$lib/diff/hunks';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
+	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import type { PrSummary } from '$lib/pr/types';
 
@@ -248,11 +249,15 @@
 
 	// a single commit is part of Branch, reached from the branch's commit list
 	type Tab = 'worktree' | 'branch' | 'range' | 'pr';
-	const MODES: { mode: Tab; label: string }[] = [
-		{ mode: 'worktree', label: 'Uncommitted' },
-		{ mode: 'branch', label: 'Branch' },
-		{ mode: 'range', label: 'Range' },
-		{ mode: 'pr', label: 'Pull request' }
+	const MODES: { value: Tab; label: string }[] = [
+		{ value: 'worktree', label: 'Uncommitted' },
+		{ value: 'branch', label: 'Branch' },
+		{ value: 'range', label: 'Range' },
+		{ value: 'pr', label: 'Pull request' }
+	];
+	const VIEWS: { value: 'files' | 'guide'; label: string }[] = [
+		{ value: 'files', label: 'Diff' },
+		{ value: 'guide', label: 'Guide' }
 	];
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
@@ -316,17 +321,8 @@
 		<RepoButton repo={data.repo} />
 
 		{#if data.branches.length}
-			<div class="ml-1 flex rounded-lg border border-line bg-surface p-0.5">
-				{#each MODES as { mode, label } (mode)}
-					<button
-						type="button"
-						class={[
-							'h-6 rounded-md px-2.5 text-[12px]',
-							tab === mode ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
-						]}
-						onclick={() => setMode(mode)}>{label}</button
-					>
-				{/each}
+			<div class="ml-1">
+				<SegmentedControl options={MODES} value={tab} onchange={setMode} label="Compare" />
 			</div>
 
 			<div class="flex items-center gap-1.5">
@@ -550,24 +546,19 @@
 				</div>
 			{/if}
 			{#if range}
-				<div class="flex rounded-lg border border-line bg-surface p-0.5">
-					{#each [{ view: 'files', label: 'Diff' }, { view: 'guide', label: 'Guide' }] as { view, label } (view)}
-						<button
-							type="button"
-							class={[
-								'flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[12px]',
-								data.view === view ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
-							]}
-							onclick={() => navigate({ view: view === 'guide' ? 'guide' : null })}
-						>
-							{label}
-							{#if view === 'guide' && data.guide}
-								<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
-								></span>
-							{/if}
-						</button>
-					{/each}
-				</div>
+				<SegmentedControl
+					options={VIEWS}
+					value={data.view}
+					onchange={(view) => navigate({ view: view === 'guide' ? 'guide' : null })}
+					label="View"
+				>
+					{#snippet after(option)}
+						{#if option.value === 'guide' && data.guide}
+							<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
+							></span>
+						{/if}
+					{/snippet}
+				</SegmentedControl>
 			{/if}
 			<button
 				type="button"

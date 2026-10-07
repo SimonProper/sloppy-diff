@@ -15,6 +15,7 @@
 	import CommitList from './CommitList.svelte';
 	import RefPicker from './RefPicker.svelte';
 	import SavedGuides from './SavedGuides.svelte';
+	import SegmentedControl from './SegmentedControl.svelte';
 
 	interface Props {
 		repo: string;
@@ -278,18 +279,16 @@
 		<div class="flex flex-col gap-4 px-5 py-4">
 			{#if !onscreen}
 				<div class="flex items-center gap-2">
-					<div class="flex rounded-lg border border-line bg-surface p-0.5">
-						{#each [{ tab: 'branch', label: 'Branch' }, { tab: 'range', label: 'Range' }] as const as option (option.tab)}
-							<button
-								type="button"
-								class={[
-									'h-7 rounded-md px-2.5 text-[12px]',
-									tab === option.tab ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
-								]}
-								onclick={() => setTab(option.tab)}>{option.label}</button
-							>
-						{/each}
-					</div>
+					<SegmentedControl
+						options={[
+							{ value: 'branch', label: 'Branch' },
+							{ value: 'range', label: 'Range' }
+						]}
+						value={tab}
+						onchange={setTab}
+						size="lg"
+						label="Guide"
+					/>
 					{#if tab === 'branch'}
 						<RefPicker
 							label="branch"

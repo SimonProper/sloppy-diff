@@ -2,6 +2,7 @@
 	import type { Layout } from '$lib/diff/split';
 	import type { ChangeMode, ChangeSummary } from '$lib/diff/types';
 	import LayoutToggle from './LayoutToggle.svelte';
+	import SegmentedControl from './SegmentedControl.svelte';
 
 	interface Props {
 		mode: ChangeMode;
@@ -12,10 +13,10 @@
 
 	let { mode, summary, onchange, layout = $bindable() }: Props = $props();
 
-	const MODES: { mode: ChangeMode; label: string; title: string }[] = [
-		{ mode: 'lines', label: 'Lines', title: 'Whole lines, as git reports them' },
+	const MODES: { value: ChangeMode; label: string; title: string }[] = [
+		{ value: 'lines', label: 'Lines', title: 'Whole lines, as git reports them' },
 		{
-			mode: 'tokens',
+			value: 'tokens',
 			label: 'Tokens',
 			title: 'Highlight the changed tokens inside lines, and find reformatted code'
 		}
@@ -38,18 +39,6 @@
 		<LayoutToggle bind:layout />
 		<span class="h-3 w-px bg-line"></span>
 		<span class="text-[11px] text-faint">Changes</span>
-		<div class="flex rounded-lg border border-line bg-surface p-0.5">
-			{#each MODES as m (m.mode)}
-				<button
-					type="button"
-					title={m.title}
-					class={[
-						'h-6 rounded-md px-2.5 text-[12px]',
-						mode === m.mode ? 'bg-subtle font-medium text-fg' : 'text-muted hover:text-fg'
-					]}
-					onclick={() => onchange(m.mode)}>{m.label}</button
-				>
-			{/each}
-		</div>
+		<SegmentedControl options={MODES} value={mode} {onchange} label="Changes" />
 	</div>
 </div>
