@@ -26,7 +26,8 @@
 						{
 							"id": "IC_kwDOEiPr8c8AAAABTRLMhw",
 							"author": {
-								"login": "pkg-svelte-dev"
+								"login": "pkg-svelte-dev",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/pkg-svelte-dev?s=40"
 							},
 							"body": "<!-- automated-install-comment -->\n\nInstall the latest version of `@sveltejs/kit…",
 							"bodyHTML": "<p>&lt;!-- automated-install-comment --&gt;\n\nInstall the latest version of `@sveltejs/kit…</p>",
@@ -50,6 +51,70 @@
 						}
 					]
 				},
+				"submitted": {
+					"nodes": [
+						{
+							"id": "PRR_changes",
+							"author": {
+								"login": "teemingc",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/teemingc?s=40"
+							},
+							"state": "CHANGES_REQUESTED",
+							"body": "The redirects need a test.",
+							"bodyHTML": "<p>The redirects need a test.</p>",
+							"submittedAt": "2026-09-09T10:00:00Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#pullrequestreview-1"
+						},
+						{
+							"id": "PRR_lines",
+							"author": {
+								"login": "vercel",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/vercel?s=40"
+							},
+							"state": "COMMENTED",
+							"body": "",
+							"bodyHTML": "",
+							"submittedAt": "2026-09-08T16:08:54Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#pullrequestreview-2"
+						},
+						{
+							"id": "PRR_reply",
+							"author": {
+								"login": "vercel",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/vercel?s=40"
+							},
+							"state": "COMMENTED",
+							"body": "",
+							"bodyHTML": "",
+							"submittedAt": "2026-09-09T15:15:48Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#pullrequestreview-4"
+						},
+						{
+							"id": "PRR_approved",
+							"author": {
+								"login": "benmccann",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/benmccann?s=40"
+							},
+							"state": "APPROVED",
+							"body": "",
+							"bodyHTML": "",
+							"submittedAt": "2026-09-10T09:00:00Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#pullrequestreview-3"
+						},
+						{
+							"id": "PRR_empty",
+							"author": {
+								"login": "teemingc",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/teemingc?s=40"
+							},
+							"state": "COMMENTED",
+							"body": "",
+							"bodyHTML": "",
+							"submittedAt": "2026-09-10T10:00:00Z",
+							"url": "https://github.com/sveltejs/kit/pull/17066#pullrequestreview-5"
+						}
+					]
+				},
 				"reviewThreads": {
 					"nodes": [
 						{
@@ -66,26 +131,34 @@
 									{
 										"id": "PRRC_kwDOEiPr8c7sB4n6",
 										"author": {
-											"login": "vercel"
+											"login": "vercel",
+											"avatarUrl": "https://avatars.githubusercontent.com/u/vercel?s=40"
 										},
 										"body": "A fully\\-prerendered app no longer emits any Netlify function\\, so unknown paths…",
 										"bodyHTML": "<p>A fully\\-prerendered app no longer emits any Netlify function\\, so unknown paths…</p>",
 										"createdAt": "2026-09-08T16:08:54Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3959917050",
 										"state": "SUBMITTED",
-										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+"
+										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+",
+										"pullRequestReview": {
+											"id": "PRR_lines"
+										}
 									},
 									{
 										"id": "PRRC_kwDOEiPr8c7soksC",
 										"author": {
-											"login": "vercel"
+											"login": "vercel",
+											"avatarUrl": "https://avatars.githubusercontent.com/u/vercel?s=40"
 										},
 										"body": "This suggestion has been addressed\\.\n",
 										"bodyHTML": "<p>This suggestion has been addressed\\.\n</p>",
 										"createdAt": "2026-09-09T15:15:48Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3970059010",
 										"state": "SUBMITTED",
-										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+"
+										"diffHunk": "+\tconst route_groups = Array.from(groups.values()).flat();\n+\tif (route_groups.length === 0) return [];\n+",
+										"pullRequestReview": {
+											"id": "PRR_reply"
+										}
 									}
 								]
 							}
@@ -104,14 +177,18 @@
 									{
 										"id": "PRRC_kwDOEiPr8c7sDIqV",
 										"author": {
-											"login": "teemingc"
+											"login": "teemingc",
+											"avatarUrl": "https://avatars.githubusercontent.com/u/teemingc?s=40"
 										},
 										"body": "we need to add `@sveltejs/adapter-netlify` to the site types package to get the …",
 										"bodyHTML": "<p>we need to add `@sveltejs/adapter-netlify` to the site types package to get the …</p>",
 										"createdAt": "2026-09-08T16:48:58Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3960244885",
 										"state": "PENDING",
-										"diffHunk": "+```js\n+/// file: src/routes/admin/+page.server.js\n+/** @type {import('@sveltejs/adapter-netlify').Config} */"
+										"diffHunk": "+```js\n+/// file: src/routes/admin/+page.server.js\n+/** @type {import('@sveltejs/adapter-netlify').Config} */",
+										"pullRequestReview": {
+											"id": "PRR_pending"
+										}
 									}
 								]
 							}

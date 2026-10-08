@@ -23,7 +23,8 @@ export interface PullRequest {
 	baseRefOid: string;
 	/** comments are pinned to this commit, the one the diff shows */
 	headRefOid: string;
-	/** the conversation, comments not on any lines */
+	/** the conversation, latest activity last: comments not on any lines, and reviews that say
+	 * something or started threads */
 	comments: PrComment[];
 	threads: ReviewThread[];
 	/** your pending review, where drafted comments go, null until there is one */
@@ -33,6 +34,8 @@ export interface PullRequest {
 export interface PrComment {
 	id: string;
 	author: string;
+	/** the author's picture on GitHub, none for a deleted account */
+	avatar: string;
 	/** markdown */
 	body: string;
 	createdAt: string;
@@ -41,7 +44,13 @@ export interface PrComment {
 	pending: boolean;
 	/** `body` as GitHub renders it, sanitized */
 	html: string;
+	/** a review's verdict, where the conversation has one */
+	review?: ReviewState;
+	/** the threads a review started, by id, their replies in them whichever review they came in */
+	threads?: string[];
 }
+
+export type ReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
 
 /** Comments on lines or a whole file of the diff, and the replies to them. */
 export interface ReviewThread {

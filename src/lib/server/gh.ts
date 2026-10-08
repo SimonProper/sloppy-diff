@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Suggestion } from '$lib/ask/types';
-import type { PrComment, PrSummary, PullRequest, ReviewThread } from '$lib/pr/types';
+import type { PrComment, PrSummary, PullRequest, ReviewState, ReviewThread } from '$lib/pr/types';
 import { sameSha } from '$lib/refs';
 import { mergeBase, resolveCommit } from './git';
 import { cleanGithubHtml } from './github-html';
@@ -35,7 +35,8 @@ export function checkPrNumber(value: string | number): number {
 	return Number(text);
 }
 
-// ponytail: the first 100 of each, no paging. A PR with more threads or comments loses the rest
+// ponytail: the first 100 of each, no paging. A PR with more threads or comments loses the rest.
+// Avatars at twice the size they're shown, for sharp screens
 const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
@@ -43,12 +44,17 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
       author { login }
       baseRefName headRefName baseRefOid headRefOid
       baseRepository { url sshUrl }
-      comments(first: 100) { nodes { id author { login } body bodyHTML createdAt url } }
+      comments(first: 100) { nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url } }
       reviews(states: PENDING, first: 1) { nodes { id } }
+      submitted: reviews(states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED], first: 100) {
+        nodes { id author { login avatarUrl(size: 40) } state body bodyHTML submittedAt url }
+      }
       reviewThreads(first: 100) {
         nodes {
           id path line startLine diffSide subjectType isResolved isOutdated
-          comments(first: 100) { nodes { id author { login } body bodyHTML createdAt url state diffHunk } }
+          comments(first: 100) {
+            nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url state diffHunk pullRequestReview { id } }
+          }
         }
       }
     }
@@ -57,13 +63,15 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
 
 interface RawComment {
 	id: string;
-	author: { login: string } | null;
+	author: { login: string; avatarUrl: string } | null;
 	body: string;
 	bodyHTML: string;
 	createdAt: string;
 	url: string;
 	state?: string;
 	diffHunk?: string;
+	/** the review a line comment was made in */
+	pullRequestReview?: { id: string } | null;
 }
 
 export interface RawPullRequest {
@@ -83,6 +91,12 @@ export interface RawPullRequest {
 	baseRepository: { url: string; sshUrl: string };
 	comments: { nodes: RawComment[] };
 	reviews: { nodes: { id: string }[] };
+	submitted: {
+		nodes: (Omit<RawComment, 'createdAt' | 'diffHunk'> & {
+			state: ReviewState;
+			submittedAt: string;
+		})[];
+	};
 	reviewThreads: {
 		nodes: {
 			id: string;
@@ -104,6 +118,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		id: c.id,
 		// a deleted account has no author
 		author: c.author?.login ?? 'ghost',
+		avatar: c.author?.avatarUrl ?? '',
 		body: c.body,
 		html: cleanGithubHtml(c.bodyHTML),
 		createdAt: c.createdAt,
@@ -122,6 +137,32 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		diffHunk: t.comments.nodes[0]?.diffHunk ?? '',
 		comments: t.comments.nodes.map(comment)
 	}));
+	// a thread belongs to the review that started it, replies and all: answering with
+	// "Add single comment" makes a review of each reply, it says nothing on its own
+	const started = new Map<string, string[]>();
+	for (const t of raw.reviewThreads.nodes) {
+		const review = t.comments.nodes[0]?.pullRequestReview?.id;
+		if (review) started.set(review, [...(started.get(review) ?? []), t.id]);
+	}
+	const reviews = raw.submitted.nodes
+		.filter(
+			(r) =>
+				r.body.trim() ||
+				r.state === 'APPROVED' ||
+				r.state === 'CHANGES_REQUESTED' ||
+				started.has(r.id)
+		)
+		.map((r) => ({
+			...comment({ ...r, createdAt: r.submittedAt }),
+			review: r.state,
+			threads: started.get(r.id) ?? []
+		}));
+	// newest activity last: a fresh reply brings its review along, among the latest
+	const activity = (c: PrComment) =>
+		(c.threads ?? []).reduce((at, id) => {
+			const last = threads.find((t) => t.id === id)?.comments.at(-1)?.createdAt ?? '';
+			return last > at ? last : at;
+		}, c.createdAt);
 	return {
 		id: raw.id,
 		number: raw.number,
@@ -136,7 +177,9 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		headRefName: raw.headRefName,
 		baseRefOid: raw.baseRefOid,
 		headRefOid: raw.headRefOid,
-		comments: raw.comments.nodes.map(comment),
+		comments: [...raw.comments.nodes.map(comment), ...reviews].sort((a, b) =>
+			activity(a).localeCompare(activity(b))
+		),
 		threads,
 		pendingReviewId: raw.reviews.nodes[0]?.id ?? null
 	};

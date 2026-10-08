@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { errorText } from '$lib/errors';
-	import { timeAgo } from '$lib/refs';
 	import type { ReviewThread } from '$lib/pr/types';
 	import AskField from '../ask/AskField.svelte';
+	import Comment from './Comment.svelte';
 
 	interface Props {
 		thread: ReviewThread;
@@ -33,25 +33,7 @@
 
 <ul class="flex flex-col gap-3">
 	{#each thread.comments as comment (comment.id)}
-		<li>
-			<p class="flex items-center gap-1.5 text-[11.5px] text-faint">
-				<span class="font-medium text-fg">{comment.author}</span>
-				{#if comment.pending}
-					<span
-						class="rounded-[4px] border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
-						title="In your pending review, not posted yet">Pending</span
-					>
-				{/if}
-				<a
-					class="hover:underline"
-					href={comment.url}
-					target="_blank"
-					rel="noopener noreferrer"
-					title={new Date(comment.createdAt).toLocaleString()}>{timeAgo(comment.createdAt)} ago</a
-				>
-			</p>
-			<div class="prose mt-1 text-[12.5px] leading-relaxed">{@html comment.html}</div>
-		</li>
+		<li><Comment {comment} /></li>
 	{/each}
 </ul>
 

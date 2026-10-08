@@ -188,8 +188,9 @@ html:has(dialog:modal) {
 	text-decoration: underline;
 	text-underline-offset: 2px;
 }
-/* an answer's straight answer, the explanation below the rule */
-.prose > :first-child:has(+ hr) {
+/* an answer's straight answer, the explanation below the rule. Only an answer's:
+   PR text often opens with a line and a rule too */
+.answer > :first-child:has(+ hr) {
 	color: var(--fg);
 	font-weight: 500;
 }
@@ -221,14 +222,12 @@ html:has(dialog:modal) {
 .prose > :first-child > :first-child:is(h1, h2, h3, h4, h5, h6) {
 	margin-top: 0;
 }
+/* weight and colour set headings apart, not size: none outgrows the title it's under */
 .prose h1 {
-	font-size: 1.35em;
+	font-size: 1.1em;
 }
-.prose h2 {
-	font-size: 1.2em;
-}
-.prose h3 {
-	font-size: 1.08em;
+.prose :is(h1, h2) {
+	margin-top: 1.25em;
 }
 .prose :is(blockquote, details, .markdown-alert) {
 	margin-top: 0.5em;

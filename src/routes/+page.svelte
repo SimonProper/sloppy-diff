@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { slowNavigation } from '$lib/slow.svelte';
@@ -32,7 +33,8 @@
 	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
-	import type { PrSummary } from '$lib/pr/types';
+	import { jumpToThread } from '$lib/pr/jump';
+	import type { PrSummary, ReviewThread } from '$lib/pr/types';
 
 	let { data } = $props();
 
@@ -50,6 +52,21 @@
 	const branchSel = $derived(data.selection?.branch ?? null);
 	const commit = $derived(data.selection?.commit ?? null);
 	const pr = $derived(data.selection?.pr ?? null);
+
+	// a review comment picked in the guide is shown among the changes, where every thread
+	// has its lines: there once they've loaded
+	let jumpAfterSwitch = $state.raw<ReviewThread | null>(null);
+	function jump(thread: ReviewThread) {
+		if (data.view !== 'guide') return jumpToThread(thread, data.files);
+		jumpAfterSwitch = thread;
+		navigate({ view: null });
+	}
+	$effect(() => {
+		const thread = jumpAfterSwitch;
+		if (!thread || data.view === 'guide' || navigating.to) return;
+		jumpAfterSwitch = null;
+		tick().then(() => jumpToThread(thread, data.files));
+	});
 
 	// the repo's open pull requests for the picker on a pull request, asked of gh after
 	// the page is up, it takes a moment. Null without gh, a sign in or a GitHub remote
@@ -735,7 +752,7 @@
 		/>
 	{:else if data.view === 'guide' && data.guide}
 		{#snippet prIntro()}
-			{#if pr}<PrCard {pr} />{/if}
+			{#if pr}<PrCard {pr} onjump={jump} />{/if}
 		{/snippet}
 		<GuideView
 			guide={data.guide}
@@ -828,7 +845,7 @@
 					<CommitCard {commit} />
 				{/if}
 				{#if pr}
-					<PrCard {pr} />
+					<PrCard {pr} onjump={jump} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
 					<FileDiff

@@ -226,7 +226,7 @@
 								>{/if}
 						</p>
 					{:else}
-						<div class="prose text-[13.5px] leading-relaxed">{@html message.html}</div>
+						<div class="answer prose text-[13.5px] leading-relaxed">{@html message.html}</div>
 						{#if message.suggestions}
 							<ol class="mt-3 flex flex-col gap-2">
 								{#each message.suggestions as suggestion, n (n)}

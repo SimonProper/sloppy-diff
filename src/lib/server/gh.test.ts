@@ -21,10 +21,21 @@ test('maps the GraphQL response to a PullRequest', () => {
 		headRefOid: '4c57bd392961ff1cadc7225396536274c92dc6dc',
 		pendingReviewId: 'PRR_pending'
 	});
-	expect(pr.comments.map((c) => [c.author, c.pending])).toEqual([
-		['pkg-svelte-dev', false],
-		['ghost', false]
+	// comments and the reviews that say something or started threads, by latest activity.
+	// A reply-only review is in its thread, vercel's started one and comes in with its reply
+	expect(pr.comments.map((c) => [c.author, c.review, c.threads])).toEqual([
+		['ghost', undefined, undefined],
+		['pkg-svelte-dev', undefined, undefined],
+		['teemingc', 'CHANGES_REQUESTED', []],
+		['vercel', 'COMMENTED', ['PRRT_kwDOEiPr8c6gUYvj']],
+		['benmccann', 'APPROVED', []]
 	]);
+	// a deleted account has no picture either
+	expect(pr.comments.map((c) => c.avatar).slice(0, 2)).toEqual([
+		'',
+		'https://avatars.githubusercontent.com/u/pkg-svelte-dev?s=40'
+	]);
+	expect(pr.comments[2].html).toBe('<p>The redirects need a test.</p>');
 
 	const [placed, outdated] = pr.threads;
 	expect(placed).toMatchObject({
@@ -55,6 +66,12 @@ test("Claude gets the PR's description and unresolved threads by id", () => {
 	const context = prContext(pr);
 	expect(context).toContain('#17066, "feat: configure per-route Netlify deployments" by teemingc');
 	expect(context).toContain('<description>\nNetlify deployment configuration');
+	expect(context).toContain(
+		'<conversation>\nghost: gone\n\npkg-svelte-dev: <!-- automated-install-comment -->'
+	);
+	expect(context).toContain(
+		'teemingc (requested changes): The redirects need a test.\n\nbenmccann (approved)\n</conversation>'
+	);
 	// resolved threads are done with
 	expect(context).not.toContain('PRRT_kwDOEiPr8c6gUYvj');
 	expect(context).toContain(

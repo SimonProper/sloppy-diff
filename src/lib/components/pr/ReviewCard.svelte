@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import type { ReviewThread } from '$lib/pr/types';
 	import ReviewComments from './ReviewComments.svelte';
 
@@ -15,18 +16,37 @@
 
 	let card: HTMLDivElement;
 	let placed = $state<{ top: number; left: number } | null>(null);
+	// the side of the marker it opened on, kept as it follows the marker
+	let below = true;
+
+	function place(marker: DOMRect, opening = false) {
+		const box = card.getBoundingClientRect();
+		if (opening) below = marker.bottom + 6 + box.height <= innerHeight - 8;
+		const top = below
+			? marker.bottom + 6
+			: opening
+				? Math.max(8, marker.top - 6 - box.height)
+				: marker.top - 6 - box.height;
+		placed = { top, left: Math.max(8, Math.min(marker.left, innerWidth - box.width - 8)) };
+	}
 
 	// in the top layer, the browser closes it on Escape or a click outside. Below the
 	// marker, above it where there's no room
 	$effect(() => {
 		card.showPopover();
-		const box = card.getBoundingClientRect();
-		let top = at.bottom + 6;
-		if (top + box.height > innerHeight - 8) top = Math.max(8, at.top - 6 - box.height);
-		placed = { top, left: Math.max(8, Math.min(at.left, innerWidth - box.width - 8)) };
-		// it stays where it opened, so it closes once the page moves away from the marker
-		addEventListener('scroll', onclose);
-		return () => removeEventListener('scroll', onclose);
+		place(at, true);
+		// it moves with the page, its marker found again each time in case the diff drew it anew
+		const id = untrack(() => threads[0]?.id);
+		const follow = () => {
+			const marker = id && document.querySelector(`[data-review~="${CSS.escape(id)}"]`);
+			if (marker) place(marker.getBoundingClientRect());
+		};
+		addEventListener('scroll', follow, { capture: true, passive: true });
+		addEventListener('resize', follow);
+		return () => {
+			removeEventListener('scroll', follow, { capture: true });
+			removeEventListener('resize', follow);
+		};
 	});
 </script>
 
