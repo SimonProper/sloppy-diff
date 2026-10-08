@@ -66,9 +66,9 @@
 		}
 		const row = last.getBoundingClientRect();
 		const { left: cardLeft, right: edge } = card.getBoundingClientRect();
-		// past the line numbers and the +/−, and clear of the markers down the right edge. A
+		// past the line numbers and the padding, and clear of the markers down the right edge. A
 		// unified row scrolls sideways with its hunk, the card doesn't
-		const left = side ? row.left + 48 + 20 : cardLeft + 1 + 96 + 20;
+		const left = side ? row.left + 48 + 12 : cardLeft + 1 + 96 + 12;
 		const width = Math.max(260, Math.min(460, edge - 24 - left));
 		// its own height, without measuring again whenever it shows up
 		const height = untrack(() => box?.offsetHeight) ?? 48;

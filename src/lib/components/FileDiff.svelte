@@ -465,11 +465,11 @@
 					</div>
 				{:else}
 					<div class="twinkleplop overflow-x-auto font-mono text-[12.5px] leading-5">
-						<!-- gutter (6rem), marker (1.25rem), right padding (2rem) and the question
-						     marker's slot (0.875rem) around the code -->
+						<!-- gutter (6rem), left padding (0.75rem), right padding (2rem) and the
+						     question marker's slot (0.875rem) around the code -->
 						<div
 							class="w-max min-w-full"
-							style:min-width="max(100%, calc({widths.get(hunk.id)}ch + 10.125rem))"
+							style:min-width="max(100%, calc({widths.get(hunk.id)}ch + 9.625rem))"
 						>
 							{#each chunk(hunk.lines, BLOCK) as lines, b (b)}
 								<LazyBlock estimate={lines.length * ROW} lazy={virtualize}>
@@ -499,9 +499,7 @@
 												<span class="w-12 pr-2">{line.old ?? ''}</span>
 												<span class="w-12 pr-2">{line.new ?? ''}</span>
 											</span>
-											<!-- pinned beside the gutter, the one sign of a change that isn't a colour -->
-											{@render marker(line, 'pinned sticky left-24')}
-											<span class="text pr-8 whitespace-pre">{@render code(line)}</span>
+											<span class="text pr-8 pl-3 whitespace-pre">{@render code(line)}</span>
 											<!-- pinned to the visible right edge while the hunk scrolls sideways -->
 											{@render slot(marks.get(`${hunk.id}:${index}`), on, 'sticky right-0 ml-auto')}
 										</div>
@@ -602,12 +600,6 @@
 	{/if}
 {/snippet}
 
-{#snippet marker(line: DiffLine, place: string)}
-	<span class={['marker w-5 shrink-0 text-center select-none', place]}
-		>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
-	>
-{/snippet}
-
 {#snippet code(line: DiffLine)}
 	{@html line.html}{#if line.noNewline}<span
 			class="ml-2 font-sans text-[10px] text-faint select-none"
@@ -646,8 +638,7 @@
 					? line.old
 					: line.new}</span
 			>
-			{@render marker(line, '')}
-			<span class="text min-w-0 flex-1 pr-4 break-all whitespace-pre-wrap"
+			<span class="text min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap"
 				>{@render code(line)}</span
 			>
 			<!-- on the edge of the side the question was asked on -->
@@ -660,9 +651,10 @@
 {/snippet}
 
 <style>
-	/* the gutter says a line was added or removed, with a saturated edge against the
-	   code. The code itself stays on the surface so the changed tokens are the only
-	   colour in it, and only a line with no tokens marked gets a faint tint */
+	/* the gutter says a line was added or removed, with a bar against the code: solid
+	   when added, dashed when removed, so it tells apart without the colour. The code
+	   itself stays on the surface so the changed tokens are the only colour in it, and
+	   only a line with no tokens marked gets a faint tint */
 	.gutter {
 		background: var(--surface);
 		border-right: 1px solid var(--line);
@@ -683,22 +675,21 @@
 	.row:is(.add, .del) .gutter {
 		background: var(--gutter-bg);
 		color: var(--number);
-		border-right-color: var(--hue);
 	}
-	.row:is(.add, .del) .marker {
-		color: var(--hue);
+	.row:is(.add, .del) .gutter::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: -1px;
+		width: 3px;
+		background: var(--hue);
+	}
+	.row.del .gutter::after {
+		background: repeating-linear-gradient(var(--hue) 0 1px, transparent 1px 2px);
 	}
 	.row.tinted {
 		background: var(--row-bg);
-	}
-
-	/* opaque, so the code scrolls under it, and washed like the rest of its row */
-	.marker.pinned {
-		background: var(--surface);
-		box-shadow: inherit;
-	}
-	.row.tinted .marker.pinned {
-		background: inherit;
 	}
 
 	/* the pieces of a line that are actually new */
@@ -712,18 +703,17 @@
 	}
 
 	/* changed according to git, but nothing new: re-indented or re-wrapped, so a
-	   quieter gutter with no edge */
+	   quieter gutter with no bar */
 	.row.reformatted.add {
 		--gutter-bg: var(--add-quiet);
 	}
 	.row.reformatted.del {
 		--gutter-bg: var(--del-quiet);
 	}
-	.row.reformatted .gutter {
-		border-right-color: var(--line);
+	.row.reformatted .gutter::after {
+		display: none;
 	}
-	.row.reformatted .text,
-	.row.reformatted .marker {
+	.row.reformatted .text {
 		opacity: 0.5;
 	}
 

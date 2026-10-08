@@ -135,15 +135,12 @@
 							data-asked={on && index === anchor.start ? '' : undefined}
 						>
 							<span
-								class="gutter flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
+								class="gutter relative flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
 							>
 								<span class="w-12 pr-2">{line.old ?? ''}</span>
 								<span class="w-12 pr-2">{line.new ?? ''}</span>
 							</span>
-							<span class="marker w-5 shrink-0 text-center select-none"
-								>{line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ''}</span
-							>
-							<span class="min-w-0 flex-1 pr-4 break-all whitespace-pre-wrap"
+							<span class="min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap"
 								>{@html line.html}</span
 							>
 							<span class={['mark w-3.5 shrink-0 self-stretch', on && 'on']}></span>
@@ -167,7 +164,7 @@
 		background: var(--surface);
 		border-right: 1px solid var(--line);
 	}
-	/* drawn like the diff: a tinted gutter with a saturated edge, the code only
+	/* drawn like the diff: a tinted gutter with a bar against the code, the code only
 	   tinted when no tokens in it are marked */
 	.row.add {
 		--hue: var(--add);
@@ -184,10 +181,18 @@
 	.row:is(.add, .del) .gutter {
 		background: var(--gutter-bg);
 		color: var(--number);
-		border-right-color: var(--hue);
 	}
-	.row:is(.add, .del) .marker {
-		color: var(--hue);
+	.row:is(.add, .del) .gutter::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: -1px;
+		width: 3px;
+		background: var(--hue);
+	}
+	.row.del .gutter::after {
+		background: repeating-linear-gradient(var(--hue) 0 1px, transparent 1px 2px);
 	}
 	.row.tinted {
 		background: var(--row-bg);
