@@ -22,7 +22,7 @@ pnpm dev
 
 Open the printed URL and pick a repository. The repo picker scans your home folder for git repositories. Its "Choose folder…" button opens the system folder picker on macOS, and on Linux with zenity or kdialog installed.
 
-sloppy-diff runs on the dev server, there's no production build to deploy. It refuses requests from other websites, since any page you visit can reach localhost.
+`pnpm build` then `pnpm preview` runs a built copy on its own port, so it stays put while `pnpm dev` changes underneath it. Rebuild and restart the preview to pick up changes. There's nothing to deploy. sloppy-diff refuses requests from other websites, since any page you visit can reach localhost.
 
 ## Keys
 
