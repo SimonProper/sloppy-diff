@@ -28,6 +28,28 @@ async function git(root: string, args: string[]): Promise<string> {
 	return stdout;
 }
 
+/**
+ * git fetch with gh's login, the one the pr list already works with. git's own may have
+ * none for GitHub, and without a terminal to prompt it fails instead of hanging the request
+ */
+async function gitFetch(root: string, args: string[]): Promise<string> {
+	const { stdout } = await exec(
+		'git',
+		[
+			'-C',
+			root,
+			'-c',
+			'credential.helper=',
+			'-c',
+			'credential.helper=!gh auth git-credential',
+			'fetch',
+			...args
+		],
+		{ env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }
+	);
+	return stdout;
+}
+
 /** A pull request number from the url, before it gets near gh. */
 export function checkPrNumber(value: string | number): number {
 	const text = String(value);
@@ -225,10 +247,10 @@ export async function readPullRequest(
 		const ssh = (await gh(root, ['config', 'get', 'git_protocol']).catch(() => '')).trim();
 		const url = ssh === 'ssh' ? raw.baseRepository.sshUrl : raw.baseRepository.url;
 		// into FETCH_HEAD only, no refs of the repo change
-		if (!haveHead) await git(root, ['fetch', '--quiet', url, `refs/pull/${number}/head`]);
+		if (!haveHead) await gitFetch(root, ['--quiet', url, `refs/pull/${number}/head`]);
 		// the base by its commit, its branch may have been deleted since. GitHub still hands
 		// out a commit it has, so only a base that's gone from it fails
-		if (!haveBase) await git(root, ['fetch', '--quiet', url, pr.baseRefOid]).catch(() => {});
+		if (!haveBase) await gitFetch(root, ['--quiet', url, pr.baseRefOid]).catch(() => {});
 	}
 	if (!(await have(pr.baseRefOid))) {
 		throw new Error(`The base of #${number}, ${pr.baseRefName}, can't be fetched from GitHub`);
