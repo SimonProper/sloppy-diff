@@ -4,6 +4,7 @@ import type { Suggestion } from '$lib/ask/types';
 import type { PrComment, PrSummary, PullRequest, ReviewThread } from '$lib/pr/types';
 import { sameSha } from '$lib/refs';
 import { mergeBase, resolveCommit } from './git';
+import { cleanGithubHtml } from './github-html';
 
 const exec = promisify(execFile);
 
@@ -38,16 +39,16 @@ export function checkPrNumber(value: string | number): number {
 const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      id number title body url state isDraft
+      id number title body bodyHTML url state isDraft
       author { login }
       baseRefName headRefName baseRefOid headRefOid
       baseRepository { url sshUrl }
-      comments(first: 100) { nodes { id author { login } body createdAt url } }
+      comments(first: 100) { nodes { id author { login } body bodyHTML createdAt url } }
       reviews(states: PENDING, first: 1) { nodes { id } }
       reviewThreads(first: 100) {
         nodes {
           id path line startLine diffSide subjectType isResolved isOutdated
-          comments(first: 100) { nodes { id author { login } body createdAt url state diffHunk } }
+          comments(first: 100) { nodes { id author { login } body bodyHTML createdAt url state diffHunk } }
         }
       }
     }
@@ -58,6 +59,7 @@ interface RawComment {
 	id: string;
 	author: { login: string } | null;
 	body: string;
+	bodyHTML: string;
 	createdAt: string;
 	url: string;
 	state?: string;
@@ -69,6 +71,7 @@ export interface RawPullRequest {
 	number: number;
 	title: string;
 	body: string;
+	bodyHTML: string;
 	url: string;
 	state: PullRequest['state'];
 	isDraft: boolean;
@@ -102,6 +105,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		// a deleted account has no author
 		author: c.author?.login ?? 'ghost',
 		body: c.body,
+		html: cleanGithubHtml(c.bodyHTML),
 		createdAt: c.createdAt,
 		url: c.url,
 		pending: c.state === 'PENDING'
@@ -123,6 +127,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		number: raw.number,
 		title: raw.title,
 		body: raw.body,
+		bodyHtml: cleanGithubHtml(raw.bodyHTML),
 		url: raw.url,
 		author: raw.author?.login ?? 'ghost',
 		state: raw.state,

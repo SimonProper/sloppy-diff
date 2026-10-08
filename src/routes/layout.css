@@ -132,7 +132,7 @@ html:has(dialog:modal) {
 	}
 }
 
-/* markdown written by Claude: guide descriptions and answers */
+/* markdown: guide descriptions and answers by Claude, PR text as GitHub renders it */
 .prose p + p,
 .prose ul,
 .prose ol,
@@ -197,9 +197,91 @@ html:has(dialog:modal) {
 	margin: 0.9em 0;
 	border-color: var(--line);
 }
+.prose img {
+	display: inline-block;
+	max-width: 100%;
+}
+.prose video {
+	max-width: 100%;
+	max-height: 480px;
+	border-radius: 8px;
+}
 .prose strong {
 	font-weight: 600;
 	color: var(--fg);
+}
+.prose :is(h1, h2, h3, h4, h5, h6) {
+	margin-top: 1em;
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--fg);
+}
+/* GitHub's come in a div of their own */
+.prose > :first-child:is(h1, h2, h3, h4, h5, h6),
+.prose > :first-child > :first-child:is(h1, h2, h3, h4, h5, h6) {
+	margin-top: 0;
+}
+.prose h1 {
+	font-size: 1.35em;
+}
+.prose h2 {
+	font-size: 1.2em;
+}
+.prose h3 {
+	font-size: 1.08em;
+}
+.prose :is(blockquote, details, .markdown-alert) {
+	margin-top: 0.5em;
+}
+.prose blockquote {
+	padding-left: 0.75em;
+	border-left: 3px solid var(--line);
+}
+.prose summary {
+	cursor: pointer;
+	color: var(--fg);
+}
+.prose kbd {
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	padding: 0.05em 0.35em;
+	border: 1px solid var(--line);
+	border-bottom-width: 2px;
+	border-radius: 4px;
+	color: var(--fg);
+}
+.prose li:has(> input[type='checkbox']) {
+	list-style: none;
+}
+.prose li > input[type='checkbox'] {
+	margin: 0 0.4em 0 -1.25em;
+	vertical-align: -0.1em;
+}
+/* `> [!NOTE]` and the like */
+.prose .markdown-alert {
+	padding: 0.35em 0.75em;
+	border-left: 3px solid var(--alert);
+	border-radius: 0 6px 6px 0;
+	background: color-mix(in oklab, var(--alert) 6%, transparent);
+}
+.prose .markdown-alert-title {
+	font-weight: 600;
+	color: var(--alert);
+}
+.markdown-alert-note {
+	--alert: var(--muted);
+}
+.markdown-alert-tip {
+	--alert: var(--add);
+}
+.markdown-alert-important {
+	--alert: var(--move);
+}
+.markdown-alert-warning {
+	--alert: var(--mod);
+}
+.markdown-alert-caution {
+	--alert: var(--del);
 }
 
 ::selection {

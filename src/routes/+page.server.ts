@@ -35,7 +35,6 @@ import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { checkPrNumber, listPullRequests, readPullRequest } from '$lib/server/gh';
 import { highlightFiles } from '$lib/server/highlight';
-import { markdown } from '$lib/server/markdown';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
@@ -272,10 +271,6 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		)
 	]);
 	report();
-	const prBody = selection.pr ? markdown.render(selection.pr.body) : '';
-	for (const comment of selection.pr?.threads.flatMap((t) => t.comments) ?? []) {
-		comment.html = markdown.render(comment.body);
-	}
 	return {
 		...context,
 		selection,
@@ -285,7 +280,6 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		guide,
 		scope,
 		threads,
-		prBody,
 		prs: null,
 		error: null
 	};
@@ -427,7 +421,6 @@ function empty() {
 		guide: null,
 		scope: null,
 		threads: [] as Thread[],
-		prBody: '',
 		/** the open pull requests, PR mode without one picked. Null without gh or GitHub */
 		prs: null as PrSummary[] | null
 	};

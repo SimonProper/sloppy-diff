@@ -50,7 +50,7 @@
 					title={new Date(comment.createdAt).toLocaleString()}>{timeAgo(comment.createdAt)} ago</a
 				>
 			</p>
-			<div class="prose mt-1 text-[12.5px] leading-relaxed">{@html comment.html ?? ''}</div>
+			<div class="prose mt-1 text-[12.5px] leading-relaxed">{@html comment.html}</div>
 		</li>
 	{/each}
 </ul>

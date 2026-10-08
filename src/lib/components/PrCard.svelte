@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { PullRequest } from '$lib/pr/types';
 
-	/** `body` is the description rendered on the server */
-	let { pr, body }: { pr: PullRequest; body: string } = $props();
+	let { pr }: { pr: PullRequest } = $props();
 
 	const status = $derived(pr.isDraft && pr.state === 'OPEN' ? 'Draft' : pr.state.toLowerCase());
 </script>
@@ -31,7 +30,9 @@
 			>Open on GitHub</a
 		>
 	</p>
-	{#if body}
-		<div class="prose mt-3 max-w-3xl text-[12.5px] leading-relaxed text-muted">{@html body}</div>
+	{#if pr.bodyHtml}
+		<div class="prose mt-3 max-w-3xl text-[12.5px] leading-relaxed text-muted">
+			{@html pr.bodyHtml}
+		</div>
 	{/if}
 </div>

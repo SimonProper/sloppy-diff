@@ -735,7 +735,7 @@
 		/>
 	{:else if data.view === 'guide' && data.guide}
 		{#snippet prIntro()}
-			{#if pr}<PrCard {pr} body={data.prBody} />{/if}
+			{#if pr}<PrCard {pr} />{/if}
 		{/snippet}
 		<GuideView
 			guide={data.guide}
@@ -828,7 +828,7 @@
 					<CommitCard {commit} />
 				{/if}
 				{#if pr}
-					<PrCard {pr} body={data.prBody} />
+					<PrCard {pr} />
 				{/if}
 				{#each data.files as file (file.id + file.newPath)}
 					<FileDiff

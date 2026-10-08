@@ -6,6 +6,7 @@
 				"number": 17066,
 				"title": "feat: configure per-route Netlify deployments",
 				"body": "Netlify deployment configuration is currently adapter-wide, preventing individua…",
+				"bodyHTML": "<p>Netlify deployment configuration is currently adapter-wide, preventing individua…</p>",
 				"url": "https://github.com/sveltejs/kit/pull/17066",
 				"state": "OPEN",
 				"isDraft": false,
@@ -28,6 +29,7 @@
 								"login": "pkg-svelte-dev"
 							},
 							"body": "<!-- automated-install-comment -->\n\nInstall the latest version of `@sveltejs/kit…",
+							"bodyHTML": "<p>&lt;!-- automated-install-comment --&gt;\n\nInstall the latest version of `@sveltejs/kit…</p>",
 							"createdAt": "2026-09-08T15:57:21Z",
 							"url": "https://github.com/sveltejs/kit/pull/17066#issuecomment-5588044935"
 						},
@@ -35,6 +37,7 @@
 							"id": "IC_ghost",
 							"author": null,
 							"body": "gone",
+							"bodyHTML": "<p>gone</p>",
 							"createdAt": "2026-01-01T00:00:00Z",
 							"url": "https://github.com/x"
 						}
@@ -66,6 +69,7 @@
 											"login": "vercel"
 										},
 										"body": "A fully\\-prerendered app no longer emits any Netlify function\\, so unknown paths…",
+										"bodyHTML": "<p>A fully\\-prerendered app no longer emits any Netlify function\\, so unknown paths…</p>",
 										"createdAt": "2026-09-08T16:08:54Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3959917050",
 										"state": "SUBMITTED",
@@ -77,6 +81,7 @@
 											"login": "vercel"
 										},
 										"body": "This suggestion has been addressed\\.\n",
+										"bodyHTML": "<p>This suggestion has been addressed\\.\n</p>",
 										"createdAt": "2026-09-09T15:15:48Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3970059010",
 										"state": "SUBMITTED",
@@ -102,6 +107,7 @@
 											"login": "teemingc"
 										},
 										"body": "we need to add `@sveltejs/adapter-netlify` to the site types package to get the …",
+										"bodyHTML": "<p>we need to add `@sveltejs/adapter-netlify` to the site types package to get the …</p>",
 										"createdAt": "2026-09-08T16:48:58Z",
 										"url": "https://github.com/sveltejs/kit/pull/17066#discussion_r3960244885",
 										"state": "PENDING",

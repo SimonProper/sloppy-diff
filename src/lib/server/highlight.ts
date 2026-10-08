@@ -43,6 +43,8 @@ const packages = {
 };
 export type Language = keyof typeof packages;
 
+export const isLanguage = (name: string): name is Language => Object.hasOwn(packages, name);
+
 const extensions: Record<string, Language> = {
 	sh: 'bash',
 	bash: 'bash',
@@ -111,6 +113,15 @@ export function tokenRanges(lang: Language, text: string): [number, number, stri
 		ranges.push([tokens[i + 1], tokens[i + 2], types[tokens[i]] ?? '']);
 	}
 	return ranges;
+}
+
+/** A whole block of code as `<pre class="twinkleplop">`, null when the grammar fails on it. */
+export function highlightBlock(lang: Language, text: string): string | null {
+	try {
+		return highlighter(lang)(text);
+	} catch {
+		return null;
+	}
 }
 
 export function detectLanguage(path: string): Language | null {
