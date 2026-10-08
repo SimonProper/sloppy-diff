@@ -30,13 +30,15 @@ async function run(root: string, query: Record<string, string>) {
 	const url = new URL(`http://localhost/?${new URLSearchParams({ repo: root, ...query })}`);
 	const headers = new Headers();
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const data: any = await (load as any)({
+	const landed: any = await (load as any)({
 		url,
 		cookies: { get: () => undefined },
 		setHeaders: (values: Record<string, string>) => {
 			for (const [key, value] of Object.entries(values)) headers.set(key, value);
 		}
 	});
+	// what the page has once the diff has streamed in after it
+	const data = { ...landed, ...(await landed.diff) };
 	return { data, headers };
 }
 
@@ -61,7 +63,7 @@ describe('on the fixture as it is', () => {
 
 	test('a second visit is served from the caches', async () => {
 		await run(r.root, { commit: 'change' });
-		const { data, headers } = await run(r.root, { commit: 'change' });
+		const { data } = await run(r.root, { commit: 'change' });
 		expect(paths(data)).toEqual([
 			'NOTES.txt',
 			'src/cart.ts',
@@ -70,7 +72,8 @@ describe('on the fixture as it is', () => {
 			'src/util.ts'
 		]);
 		// the diff itself isn't recomputed, so its steps don't appear
-		expect(headers.get('server-timing')).not.toMatch(/\bdiff;/);
+		expect(data.timing).toMatch(/total;dur=\d/);
+		expect(data.timing).not.toMatch(/\bdiff;/);
 	});
 
 	test('a single commit is stepped through along the branch it was made on', async () => {

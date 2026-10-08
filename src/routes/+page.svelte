@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import { goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
-	import { slowNavigation } from '$lib/slow.svelte';
+	import { slow } from '$lib/slow.svelte';
 	import { scrollSpy } from '$lib/scroll-spy.svelte';
 	import { remember } from '$lib/prefs';
 	import { typing } from '$lib/keys';
@@ -12,6 +12,7 @@
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
 	import CommitCard from '$lib/components/CommitCard.svelte';
+	import DiffSkeleton from '$lib/components/DiffSkeleton.svelte';
 	import CommitList from '$lib/components/CommitList.svelte';
 	import PrOverview from '$lib/components/pr/PrOverview.svelte';
 	import PrList from '$lib/components/pr/PrList.svelte';
@@ -35,23 +36,49 @@
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import { jumpToThread } from '$lib/pr/jump';
 	import type { PrSummary, PrView, ReviewThread } from '$lib/pr/types';
+	import { noDiff } from './no-diff';
+	import type { PageData } from './$types';
 
 	let { data } = $props();
 
-	const totals = $derived(lineStats(data.files.flatMap((f) => f.hunks)));
+	// the diff streams in after the page has landed, so picking something never waits on
+	// the old page. A skeleton stands in for it while it loads, a quick one keeps the last
+	type Diff = Awaited<PageData['diff']> & Pick<PageData, 'mode' | 'view'>;
+	// svelte-ignore state_referenced_locally
+	let diff = $state.raw<Diff>({ ...noDiff(), mode: data.mode, view: data.view });
+	let ready = $state(false);
+	let pending = $state(true);
+	$effect(() => {
+		const promise = data.diff;
+		const { mode, view } = data;
+		pending = true;
+		// the server turns its own failures into an error, this is the stream breaking off
+		const settled = promise.catch((error: unknown) =>
+			noDiff(error instanceof Error ? error.message : String(error))
+		);
+		settled.then((loaded) => {
+			// a later navigation's diff wins, whichever arrives first
+			if (promise !== data.diff) return;
+			diff = { ...loaded, mode, view };
+			ready = true;
+			pending = false;
+		});
+	});
+
+	const totals = $derived(lineStats(diff.files.flatMap((f) => f.hunks)));
 	// below this many lines everything renders, so the browser's find sees all of it.
 	// Beyond, only lines near the viewport exist
 	const VIRTUALIZE_LINES = 4000;
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps
-	const reading = scrollSpy(() => (data.view === 'files' ? data.files.map((f) => f.id) : []));
+	const reading = scrollSpy(() => (diff.view === 'files' ? diff.files.map((f) => f.id) : []));
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
-	const range = $derived(data.selection?.range ?? null);
-	const branchSel = $derived(data.selection?.branch ?? null);
-	const commit = $derived(data.selection?.commit ?? null);
-	const pr = $derived(data.selection?.pr ?? null);
+	const range = $derived(diff.selection?.range ?? null);
+	const branchSel = $derived(diff.selection?.branch ?? null);
+	const commit = $derived(diff.selection?.commit ?? null);
+	const pr = $derived(diff.selection?.pr ?? null);
 
 	type View = typeof data.view;
 	// a pull request opens on its overview, anything else on its diff: the one with no
@@ -74,15 +101,15 @@
 	}
 	$effect(() => {
 		const next = afterSwitch;
-		if (!next || data.view !== next.to || navigating.to) return;
+		if (!next || diff.view !== next.to || pending) return;
 		afterSwitch = null;
 		tick().then(next.then);
 	});
 
 	/** Goes to a review comment's thread, in the diff where every thread has its lines. */
 	function jump(thread: ReviewThread) {
-		if (data.view === 'files') jumpToThread(thread, data.files);
-		else switchView('files', () => jumpToThread(thread, data.files));
+		if (diff.view === 'files') jumpToThread(thread, diff.files);
+		else switchView('files', () => jumpToThread(thread, diff.files));
 	}
 
 	// the repo's open pull requests for the picker on a pull request, asked of gh after
@@ -114,7 +141,7 @@
 			: (prs ?? [])
 	);
 
-	const lane = $derived(data.lane);
+	const lane = $derived(diff.lane);
 	/** the lane's commits oldest first, what came before it included */
 	const sequence = $derived(lane ? [...lane.earlier].reverse().concat(lane.commits) : []);
 	const at = $derived(commit ? sequence.findIndex((c) => sameSha(c.sha, commit.sha)) : -1);
@@ -156,14 +183,14 @@
 	// shas the page resolved, so the server files them where the page load found them
 	const threads = new Threads(() => ({
 		repo: data.repo,
-		from: data.selection?.range?.from ?? data.selection?.from ?? '',
-		to: data.selection?.range?.to ?? '',
-		scope: data.scope ?? 'worktree',
-		threads: data.threads,
-		pr: data.selection?.pr?.number,
-		prId: data.selection?.pr?.id
+		from: diff.selection?.range?.from ?? diff.selection?.from ?? '',
+		to: diff.selection?.range?.to ?? '',
+		scope: diff.scope ?? 'worktree',
+		threads: diff.threads,
+		pr: diff.selection?.pr?.number,
+		prId: diff.selection?.pr?.id
 	}));
-	const asking = $derived(data.scope !== null && data.selection !== null ? threads : undefined);
+	const asking = $derived(diff.scope !== null && diff.selection !== null ? threads : undefined);
 	/** the question open in the panel docked at the right, beside the diff */
 	const docked = $derived(!!asking?.open && !asking.expanded);
 	let panelWidth = $state<number | null>(storedSize(PANEL_KEY));
@@ -177,7 +204,7 @@
 	// lines picked in a diff that's no longer on screen can't be asked about
 	$effect(() => {
 		const hunk = threads.draft?.span?.hunk;
-		if (hunk && !data.files.some((f) => f.hunks.some((h) => h.id === hunk))) threads.draft = null;
+		if (hunk && !diff.files.some((f) => f.hunks.some((h) => h.id === hunk))) threads.draft = null;
 	});
 
 	// the split between commits and files in the sidebar, kept in this browser only
@@ -185,7 +212,8 @@
 	let commitsPanel = $state<HTMLElement>();
 	let commitsHeight = $state<number | null>(storedSize(SPLIT_KEY));
 
-	const loading = slowNavigation();
+	// navigating, or on the page while its diff streams in
+	const loading = slow(() => !!navigating.to || pending);
 
 	// warm the neighbouring commits so stepping with [ and ] is instant. SvelteKit keeps
 	// one preload at a time, so the next commit is preloaded and the server just warms
@@ -305,6 +333,8 @@
 		{ value: 'range', label: 'Range' },
 		{ value: 'pr', label: 'Pull request' }
 	];
+	/** PR mode without one picked, the list of open ones to pick from */
+	const pickingPr = $derived(data.mode === 'pr' && !data.inputs.pr);
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
 	/** The checked-out branch, or the most recent one that isn't the base. */
@@ -583,9 +613,9 @@
 		{/if}
 
 		<div class="ml-auto flex shrink-0 items-center gap-3">
-			{#if data.files.length > 0}
+			{#if diff.files.length > 0}
 				<div class="flex items-center gap-3 font-mono text-[11px] text-muted tabular-nums">
-					<span>{data.files.length} {data.files.length === 1 ? 'file' : 'files'}</span>
+					<span>{diff.files.length} {diff.files.length === 1 ? 'file' : 'files'}</span>
 					<span>
 						<span class="text-add">+{totals.additions}</span>
 						<span class="text-del">−{totals.deletions}</span>
@@ -620,12 +650,6 @@
 			</button>
 			<ThemeToggle />
 		</div>
-
-		{#if loading.current}
-			<div class="absolute inset-x-0 -bottom-px h-px overflow-hidden">
-				<div class="loading h-full w-1/3 bg-accent"></div>
-			</div>
-		{/if}
 	</header>
 
 	{#snippet toolbar()}
@@ -635,7 +659,7 @@
 		>
 			{@render viewTabs()}
 			<div class="ml-auto flex shrink-0 items-center">
-				{#if data.view === 'overview' && pr}
+				{#if diff.view === 'overview' && pr}
 					<a
 						class="text-[12px] text-muted hover:text-fg"
 						href={pr.url}
@@ -645,7 +669,7 @@
 				{:else}
 					<ChangesToolbar
 						mode={data.changeMode}
-						summary={data.changes}
+						summary={diff.changes}
 						onchange={setChanges}
 						bind:layout={
 							() => shownLayout,
@@ -657,8 +681,8 @@
 					/>
 				{/if}
 			</div>
-			{#if data.view === 'files' && pr?.threads.length}
-				<ReviewNav threads={pr.threads} files={data.files} />
+			{#if diff.view === 'files' && pr?.threads.length}
+				<ReviewNav threads={pr.threads} files={diff.files} />
 			{/if}
 			{#if asking}
 				<!-- a question about the whole change, the composer floats under this -->
@@ -697,7 +721,7 @@
 		{#if tabs.length > 1}
 			<SegmentedControl ghost options={tabs} value={data.view} onchange={switchView} label="View">
 				{#snippet after(option)}
-					{#if option.value === 'guide' && data.guide}
+					{#if option.value === 'guide' && diff.guide}
 						<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
 						></span>
 					{/if}
@@ -710,8 +734,8 @@
 		{#if asking}
 			<AskLens
 				threads={asking}
-				files={data.files}
-				guide={data.view === 'guide' ? data.guide : null}
+				files={diff.files}
+				guide={diff.view === 'guide' ? diff.guide : null}
 				docked
 			/>
 		{/if}
@@ -725,7 +749,7 @@
 				<span class="font-mono">{branchSel.base}</span>.
 			{:else if commit}
 				<span class="font-mono">{commit.sha}</span> changes no files.
-			{:else if data.mode === 'worktree'}
+			{:else if diff.mode === 'worktree'}
 				Nothing uncommitted.
 			{:else}
 				The two revisions are identical.
@@ -744,14 +768,24 @@
 		{/if}
 	{/snippet}
 
-	{#if data.error}
+	{#if pickingPr && (pending || !diff.error)}
+		<!-- shows itself loading while gh lists them -->
+		<PrList
+			prs={pending ? undefined : diff.prs}
+			bind:view={prView}
+			href={(number) => url({ pr: String(number), view: null }, true)}
+		/>
+	{:else if !ready || loading.current}
+		<!-- the next diff streaming in, once it takes long enough to notice -->
+		<DiffSkeleton layout={shownLayout} />
+	{:else if diff.error}
 		<div class="flex flex-col items-center px-4 py-24">
 			<div class="w-full max-w-md rounded-xl border border-line bg-surface p-5">
 				<p class="flex items-center gap-2 text-[13px] font-medium">
 					<span class="size-1.5 rounded-full bg-del"></span>
 					Couldn't read a diff
 				</p>
-				<p class="mt-1.5 font-mono text-[12px] break-words text-muted">{data.error}</p>
+				<p class="mt-1.5 font-mono text-[12px] break-words text-muted">{diff.error}</p>
 				{#if !data.branches.length}
 					<p class="mt-3 text-[12px] text-faint">Pick one of the repositories on this machine:</p>
 				{/if}
@@ -769,16 +803,17 @@
 			{/if}
 			{@render saved()}
 		</div>
-	{:else if data.mode === 'pr' && !pr}
+	{:else if diff.mode === 'pr' && !pr}
+		<!-- a pull request just picked from the list, before the skeleton shows -->
 		<PrList
-			prs={data.prs}
+			prs={diff.prs}
 			bind:view={prView}
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
-	{:else if data.view === 'guide' && data.guide}
+	{:else if diff.view === 'guide' && diff.guide}
 		<GuideView
-			guide={data.guide}
-			files={data.files}
+			guide={diff.guide}
+			files={diff.files}
 			{toolbar}
 			layout={shownLayout}
 			{virtualize}
@@ -788,7 +823,7 @@
 			bind:panelWidth
 			onregenerate={guideHere}
 		/>
-	{:else if data.view === 'guide'}
+	{:else if diff.view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			<div class="mb-8">{@render viewTabs()}</div>
 			{#if pr}
@@ -811,7 +846,7 @@
 			<!-- other ranges' guides are a way elsewhere, a pull request is what's being reviewed -->
 			{#if !pr}{@render saved()}{/if}
 		</div>
-	{:else if data.files.length === 0 && !sidebar}
+	{:else if diff.files.length === 0 && !sidebar}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			{@render nothing()}
 			{@render saved()}
@@ -849,12 +884,12 @@
 			{/if}
 			<!-- the list scrolls inside, its header stays put -->
 			<div class="flex min-h-0 flex-1 flex-col">
-				<FileList files={data.files} current={reading.current} />
+				<FileList files={diff.files} current={reading.current} />
 			</div>
 		{/snippet}
 		{#snippet fileRail()}
 			<!-- each file's status, to jump to it -->
-			{#each data.files as file (file.id)}
+			{#each diff.files as file (file.id)}
 				{@const here = file.id === reading.current}
 				<a
 					href="#{file.id}"
@@ -881,22 +916,22 @@
 		{/snippet}
 		<SidebarLayout
 			layout={shownLayout}
-			aside={data.view === 'overview' ? prSidebar : fileSidebar}
-			rail={data.view === 'overview' ? undefined : fileRail}
-			sizeKey={data.view === 'overview' ? 'pr-sidebar-width' : undefined}
-			defaultWidth={data.view === 'overview' ? 340 : undefined}
+			aside={diff.view === 'overview' ? prSidebar : fileSidebar}
+			rail={diff.view === 'overview' ? undefined : fileRail}
+			sizeKey={diff.view === 'overview' ? 'pr-sidebar-width' : undefined}
+			defaultWidth={diff.view === 'overview' ? 340 : undefined}
 			panel={docked ? askPanel : undefined}
 			bind:panelWidth
 		>
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}
-				{#if data.view === 'overview' && pr}
+				{#if diff.view === 'overview' && pr}
 					<PrOverview {pr} onjump={jump} />
 				{:else}
 					{#if commit}
 						<CommitCard {commit} />
 					{/if}
-					{#each data.files as file (file.id + file.newPath)}
+					{#each diff.files as file (file.id + file.newPath)}
 						<FileDiff
 							{file}
 							layout={shownLayout}
@@ -917,7 +952,7 @@
 
 {#if asking}
 	<!-- the question composer, the peek on markers and the lens, one of each for the page -->
-	<AskLayer threads={asking} files={data.files} guide={data.view === 'guide' ? data.guide : null} />
+	<AskLayer threads={asking} files={diff.files} guide={diff.view === 'guide' ? diff.guide : null} />
 {/if}
 
 {#if dialog}
@@ -936,23 +971,12 @@
 {/if}
 
 <style>
-	.loading {
-		animation: slide 1s ease-in-out infinite;
-	}
 	.spin {
 		animation: spin 0.8s linear infinite;
 	}
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
-		}
-	}
-	@keyframes slide {
-		from {
-			transform: translateX(-100%);
-		}
-		to {
-			transform: translateX(300%);
 		}
 	}
 </style>

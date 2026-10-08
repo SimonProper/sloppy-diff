@@ -38,6 +38,7 @@ import { highlightFiles } from '$lib/server/highlight';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
+import { noDiff } from './no-diff';
 
 // in dev this module runs again whenever it or what it imports (the diff engine) is
 // edited, and kept diffs were built by the code as it was before
@@ -146,7 +147,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	} catch (error) {
 		// a repo that moved or was deleted since it was last opened ends up here too
 		report();
-		return { ...base, ...empty(), error: errorMessage(error) };
+		return { ...base, ...empty(), diff: Promise.resolve(noDiff(errorMessage(error))) };
 	}
 	// `name` labels the step in Server-Timing, `detail` narrows the cache key
 	const cached = <T>(name: string, compute: () => Promise<T>, detail = '') =>
@@ -186,30 +187,8 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		)
 	]);
 
-	// no pull request picked yet: the open ones to pick from, and no diff
-	if (mode === 'pr' && !inputs.pr) {
-		const [lists, [branch, defaultBase], prs] = await Promise.all([
-			meta.catch((): [Branch[], Commit[]] => [[], []]),
-			head,
-			timing.measure('prs', listPullRequests(root))
-		]);
-		const [branches, commits] = lists;
-		report();
-		return {
-			...empty(),
-			...base,
-			repo: root,
-			branch,
-			defaultBase,
-			branches,
-			commits,
-			prs,
-			error: null
-		};
-	}
-
 	// the diff doesn't wait for the lists above, both run at once
-	const work = head.then(async ([current, defaultBase]) => {
+	const work = async ([current, defaultBase]: [string | null, string | null]) => {
 		// a PR's comments and head move without any ref here moving
 		const selection = await (mode === 'worktree' || mode === 'pr'
 			? select(root, mode, inputs, current, defaultBase)
@@ -244,52 +223,53 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		await timing.measure('highlight', highlightFiles(root, from, to, files));
 		if (key) storeDiff(key, { files, changes }, lineStats(files.flatMap((f) => f.hunks)).lines);
 		return { selection, lane, files, changes };
-	});
+	};
 
-	const [lists, result] = await Promise.allSettled([meta, work]);
-	const [branch, defaultBase] = await head;
-	const [branches, commits] =
-		lists.status === 'fulfilled' ? lists.value : [[] as Branch[], [] as Commit[]];
-	const context = { ...base, repo: root, branch, defaultBase, branches, commits };
-
-	if (result.status === 'rejected') {
-		report();
-		return { ...empty(), ...context, error: errorMessage(result.reason) };
-	}
-
-	const { selection, lane, files, changes } = result.value;
-	// questions asked about this diff: the range's, or the working tree's
-	const scope: Scope = selection.range
-		? `${selection.range.from}..${selection.range.to}`
-		: 'worktree';
-	const [guide, threads] = await Promise.all([
-		timing.measure(
-			'guide',
-			guideFor(
-				root,
-				selection.range,
-				files,
-				selection.branch && !selection.branch.first ? selection.branch.name : null
-			)
-		),
-		timing.measure(
-			'threads',
-			loadThreads(root, scope).then((t) => prepareThreads(t, files))
-		)
-	]);
-	report();
-	return {
-		...context,
+	/** The diff and what goes with it, once it's read. */
+	const described = async ({
 		selection,
 		lane,
 		files,
-		changes,
-		guide,
-		scope,
-		threads,
-		prs: null,
-		error: null
+		changes
+	}: Awaited<ReturnType<typeof work>>) => {
+		// questions asked about this diff: the range's, or the working tree's
+		const scope: Scope = selection.range
+			? `${selection.range.from}..${selection.range.to}`
+			: 'worktree';
+		const [guide, threads] = await Promise.all([
+			timing.measure(
+				'guide',
+				guideFor(
+					root,
+					selection.range,
+					files,
+					selection.branch && !selection.branch.first ? selection.branch.name : null
+				)
+			),
+			timing.measure(
+				'threads',
+				loadThreads(root, scope).then((t) => prepareThreads(t, files))
+			)
+		]);
+		return { ...noDiff(), selection, lane, files, changes, guide, scope, threads };
 	};
+
+	// the diff streams in after the page has landed, so picking something moves there at
+	// once and the page shows it loading. Without a pull request picked, the open ones
+	// to pick from instead
+	const diff = (
+		mode === 'pr' && !inputs.pr
+			? timing.measure('prs', listPullRequests(root)).then((prs) => ({ ...noDiff(), prs }))
+			: head.then(work).then(described)
+	)
+		.catch((error) => noDiff(errorMessage(error)))
+		// the header went out before these steps were done, they come along with the diff
+		.then((loaded) => ({ ...loaded, timing: timing.header() }));
+
+	const [branches, commits] = await meta.catch((): [Branch[], Commit[]] => [[], []]);
+	const [branch, defaultBase] = await head;
+	report();
+	return { ...base, repo: root, branch, defaultBase, branches, commits, diff };
 };
 
 async function select(
@@ -416,19 +396,5 @@ async function hasCommits(root: string): Promise<boolean> {
 }
 
 function empty() {
-	return {
-		branch: null,
-		defaultBase: null,
-		branches: [],
-		commits: [],
-		selection: null,
-		lane: null,
-		files: [],
-		changes: null,
-		guide: null,
-		scope: null,
-		threads: [] as Thread[],
-		/** the open pull requests, PR mode without one picked. Null without gh or GitHub */
-		prs: null as PrSummary[] | null
-	};
+	return { branch: null, defaultBase: null, branches: [], commits: [] };
 }

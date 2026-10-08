@@ -1,13 +1,11 @@
-import { navigating } from '$app/state';
-
 /**
- * True once a navigation has been running for `delay` ms, so quick page loads
- * never flash a loading bar and only the slow ones show one.
+ * True once `busy` has been true for `delay` ms, so quick loads never flash a
+ * loading state and only the slow ones show one.
  */
-export function slowNavigation(delay = 250) {
+export function slow(busy: () => boolean, delay = 250) {
 	let slow = $state(false);
 	$effect(() => {
-		if (!navigating.to) {
+		if (!busy()) {
 			slow = false;
 			return;
 		}
