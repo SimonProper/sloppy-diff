@@ -13,7 +13,7 @@
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
 	import CommitCard from '$lib/components/CommitCard.svelte';
 	import CommitList from '$lib/components/CommitList.svelte';
-	import PrCard from '$lib/components/PrCard.svelte';
+	import PrOverview from '$lib/components/pr/PrOverview.svelte';
 	import PrList from '$lib/components/pr/PrList.svelte';
 	import ReviewNav from '$lib/components/pr/ReviewNav.svelte';
 	import FileDiff from '$lib/components/FileDiff.svelte';
@@ -34,7 +34,7 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import { jumpToThread } from '$lib/pr/jump';
-	import type { PrSummary, ReviewThread } from '$lib/pr/types';
+	import type { PrSummary, PrView, ReviewThread } from '$lib/pr/types';
 
 	let { data } = $props();
 
@@ -44,7 +44,7 @@
 	const VIRTUALIZE_LINES = 4000;
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps
-	const reading = scrollSpy(() => (data.view === 'guide' ? [] : data.files.map((f) => f.id)));
+	const reading = scrollSpy(() => (data.view === 'files' ? data.files.map((f) => f.id) : []));
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
@@ -53,24 +53,42 @@
 	const commit = $derived(data.selection?.commit ?? null);
 	const pr = $derived(data.selection?.pr ?? null);
 
-	// a review comment picked in the guide is shown among the changes, where every thread
-	// has its lines: there once they've loaded
-	let jumpAfterSwitch = $state.raw<ReviewThread | null>(null);
-	function jump(thread: ReviewThread) {
-		if (data.view !== 'guide') return jumpToThread(thread, data.files);
-		jumpAfterSwitch = thread;
-		navigate({ view: null });
+	type View = typeof data.view;
+	// a pull request opens on its overview, anything else on its diff: the one with no
+	// `view` in the url
+	const defaultView = $derived<View>(data.mode === 'pr' ? 'overview' : 'files');
+	const tabs = $derived<{ value: View; label: string }[]>([
+		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
+		...(range ? [{ value: 'guide' as const, label: 'Guide' }] : []),
+		{ value: 'files', label: 'Diff' }
+	]);
+
+	// each tab comes back scrolled where it was left, a long diff most of all. Whatever
+	// a switch is for, a thread or a file, is done once the tab has drawn
+	const scrolled = new Map<View, number>();
+	let afterSwitch = $state.raw<{ to: View; then: () => void } | null>(null);
+	function switchView(view: View, then?: () => void) {
+		scrolled.set(data.view, scrollY);
+		afterSwitch = { to: view, then: then ?? (() => scrollTo(0, scrolled.get(view) ?? 0)) };
+		navigate({ view: view === defaultView ? null : view }, false, true);
 	}
 	$effect(() => {
-		const thread = jumpAfterSwitch;
-		if (!thread || data.view === 'guide' || navigating.to) return;
-		jumpAfterSwitch = null;
-		tick().then(() => jumpToThread(thread, data.files));
+		const next = afterSwitch;
+		if (!next || data.view !== next.to || navigating.to) return;
+		afterSwitch = null;
+		tick().then(next.then);
 	});
 
+	/** Goes to a review comment's thread, in the diff where every thread has its lines. */
+	function jump(thread: ReviewThread) {
+		if (data.view === 'files') jumpToThread(thread, data.files);
+		else switchView('files', () => jumpToThread(thread, data.files));
+	}
+
 	// the repo's open pull requests for the picker on a pull request, asked of gh after
-	// the page is up, it takes a moment. Null without gh, a sign in or a GitHub remote
-	let prs = $state<PrSummary[] | null>(null);
+	// the page is up, it takes a moment. Undefined till then, null without gh, a sign in
+	// or a GitHub remote
+	let prs = $state<PrSummary[] | null | undefined>(undefined);
 	$effect(() => {
 		const repo = data.repo;
 		if (!pr) return;
@@ -186,6 +204,8 @@
 	let layout = $state(data.layout);
 	// svelte-ignore state_referenced_locally
 	let prView = $state(data.prView);
+	// the sidebar beside a pull request shows all of them, whatever the picker was left on
+	let sideView = $state<PrView>('all');
 
 	// a split diff beside the question panel needs a wide screen. Narrower, it reads
 	// unified while the panel is open, unless split is picked again meanwhile
@@ -284,10 +304,6 @@
 		{ value: 'branch', label: 'Branch' },
 		{ value: 'range', label: 'Range' },
 		{ value: 'pr', label: 'Pull request' }
-	];
-	const VIEWS: { value: 'files' | 'guide'; label: string }[] = [
-		{ value: 'files', label: 'Diff' },
-		{ value: 'guide', label: 'Guide' }
 	];
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
@@ -576,21 +592,6 @@
 					</span>
 				</div>
 			{/if}
-			{#if range}
-				<SegmentedControl
-					options={VIEWS}
-					value={data.view}
-					onchange={(view) => navigate({ view: view === 'guide' ? 'guide' : null })}
-					label="View"
-				>
-					{#snippet after(option)}
-						{#if option.value === 'guide' && data.guide}
-							<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
-							></span>
-						{/if}
-					{/snippet}
-				</SegmentedControl>
-			{/if}
 			<button
 				type="button"
 				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent hover:bg-accent/14"
@@ -632,21 +633,31 @@
 		<div
 			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas px-4"
 		>
-			<div class="min-w-0 flex-1">
-				<ChangesToolbar
-					mode={data.changeMode}
-					summary={data.changes}
-					onchange={setChanges}
-					bind:layout={
-						() => shownLayout,
-						(next) => {
-							layout = next;
-							splitAnyway = next === 'split';
+			{@render viewTabs()}
+			<div class="ml-auto flex shrink-0 items-center">
+				{#if data.view === 'overview' && pr}
+					<a
+						class="text-[12px] text-muted hover:text-fg"
+						href={pr.url}
+						target="_blank"
+						rel="noopener noreferrer">Open on GitHub ↗</a
+					>
+				{:else}
+					<ChangesToolbar
+						mode={data.changeMode}
+						summary={data.changes}
+						onchange={setChanges}
+						bind:layout={
+							() => shownLayout,
+							(next) => {
+								layout = next;
+								splitAnyway = next === 'split';
+							}
 						}
-					}
-				/>
+					/>
+				{/if}
 			</div>
-			{#if pr?.threads.length}
+			{#if data.view === 'files' && pr?.threads.length}
 				<ReviewNav threads={pr.threads} files={data.files} />
 			{/if}
 			{#if asking}
@@ -679,6 +690,20 @@
 				</button>
 			{/if}
 		</div>
+	{/snippet}
+
+	<!-- tabs are a way around, no box: the settings beside them have one -->
+	{#snippet viewTabs()}
+		{#if tabs.length > 1}
+			<SegmentedControl ghost options={tabs} value={data.view} onchange={switchView} label="View">
+				{#snippet after(option)}
+					{#if option.value === 'guide' && data.guide}
+						<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
+						></span>
+					{/if}
+				{/snippet}
+			</SegmentedControl>
+		{/if}
 	{/snippet}
 
 	{#snippet askPanel()}
@@ -751,14 +776,10 @@
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
 	{:else if data.view === 'guide' && data.guide}
-		{#snippet prIntro()}
-			{#if pr}<PrCard {pr} onjump={jump} />{/if}
-		{/snippet}
 		<GuideView
 			guide={data.guide}
 			files={data.files}
 			{toolbar}
-			intro={pr ? prIntro : undefined}
 			layout={shownLayout}
 			{virtualize}
 			threads={asking}
@@ -769,17 +790,26 @@
 		/>
 	{:else if data.view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
-			<p class="text-[13px] font-medium">No guide for this range yet</p>
-			<p class="mt-1 max-w-sm text-[12px] text-muted">
-				Claude Code can split these changes into sections to review in order. Guides are saved per
-				commit range, a branch keeps its guide through new commits and rebases.
-			</p>
+			<div class="mb-8">{@render viewTabs()}</div>
+			{#if pr}
+				<p class="text-[13px] font-medium">No guide for this pull request yet</p>
+				<p class="mt-1 max-w-sm text-[12px] text-muted">
+					Claude Code can split its changes into sections to review in order.
+				</p>
+			{:else}
+				<p class="text-[13px] font-medium">No guide for this range yet</p>
+				<p class="mt-1 max-w-sm text-[12px] text-muted">
+					Claude Code can split these changes into sections to review in order. Guides are saved per
+					commit range, a branch keeps its guide through new commits and rebases.
+				</p>
+			{/if}
 			<button
 				type="button"
 				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
 				onclick={guideHere}>Generate a guide</button
 			>
-			{@render saved()}
+			<!-- other ranges' guides are a way elsewhere, a pull request is what's being reviewed -->
+			{#if !pr}{@render saved()}{/if}
 		</div>
 	{:else if data.files.length === 0 && !sidebar}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
@@ -787,79 +817,99 @@
 			{@render saved()}
 		</div>
 	{:else}
-		<SidebarLayout layout={shownLayout} panel={docked ? askPanel : undefined} bind:panelWidth>
-			{#snippet aside()}
-				{#if sidebar}
-					<!-- sized to its content until the handle below is dragged -->
-					<div
-						bind:this={commitsPanel}
-						class={[
-							'flex min-h-0 shrink-0 flex-col',
-							// a remembered height still leaves the files room in a smaller window
-							commitsHeight === null ? 'max-h-[40%]' : 'max-h-[calc(100%-6rem)]'
-						]}
-						style:height={commitsHeight === null ? null : `${commitsHeight}px`}
-					>
-						<!-- one list for both modes: a single commit, a span or the whole branch -->
-						<CommitList
-							fill
-							commits={sidebar.commits}
-							first={sidebar.first}
-							last={sidebar.last}
-							name={sidebar.name}
-							canShowAll={sidebar.whole}
-							onselect={pickCommits}
-						/>
-					</div>
-					<ResizeHandle
-						bind:size={commitsHeight}
-						key={SPLIT_KEY}
-						panel={commitsPanel}
-						label="Resize the commit and file lists"
+		{#snippet fileSidebar()}
+			{#if sidebar}
+				<!-- sized to its content until the handle below is dragged -->
+				<div
+					bind:this={commitsPanel}
+					class={[
+						'flex min-h-0 shrink-0 flex-col',
+						// a remembered height still leaves the files room in a smaller window
+						commitsHeight === null ? 'max-h-[40%]' : 'max-h-[calc(100%-6rem)]'
+					]}
+					style:height={commitsHeight === null ? null : `${commitsHeight}px`}
+				>
+					<!-- one list for both modes: a single commit, a span or the whole branch -->
+					<CommitList
+						fill
+						commits={sidebar.commits}
+						first={sidebar.first}
+						last={sidebar.last}
+						name={sidebar.name}
+						canShowAll={sidebar.whole}
+						onselect={pickCommits}
 					/>
-				{/if}
-				<!-- the list scrolls inside, its header stays put -->
-				<div class="flex min-h-0 flex-1 flex-col">
-					<FileList files={data.files} current={reading.current} />
 				</div>
-			{/snippet}
-			{#snippet rail()}
-				<!-- each file's status, to jump to it -->
-				{#each data.files as file (file.id)}
-					{@const here = file.id === reading.current}
-					<a
-						href="#{file.id}"
-						class={[
-							'grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle',
-							here && 'bg-subtle ring-1 ring-muted'
-						]}
-						aria-current={here ? 'location' : undefined}
-						aria-label={displayPath(file)}
-						data-tip={displayPath(file)}><StatusBadge status={file.status} /></a
-					>
-				{/each}
-			{/snippet}
+				<ResizeHandle
+					bind:size={commitsHeight}
+					key={SPLIT_KEY}
+					panel={commitsPanel}
+					label="Resize the commit and file lists"
+				/>
+			{/if}
+			<!-- the list scrolls inside, its header stays put -->
+			<div class="flex min-h-0 flex-1 flex-col">
+				<FileList files={data.files} current={reading.current} />
+			</div>
+		{/snippet}
+		{#snippet fileRail()}
+			<!-- each file's status, to jump to it -->
+			{#each data.files as file (file.id)}
+				{@const here = file.id === reading.current}
+				<a
+					href="#{file.id}"
+					class={[
+						'grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle',
+						here && 'bg-subtle ring-1 ring-muted'
+					]}
+					aria-current={here ? 'location' : undefined}
+					aria-label={displayPath(file)}
+					data-tip={displayPath(file)}><StatusBadge status={file.status} /></a
+				>
+			{/each}
+		{/snippet}
+		<!-- the overview is about the pull request, not its files: the others are beside it,
+		     to move between, in a sidebar of their own a little wider -->
+		{#snippet prSidebar()}
+			<PrList
+				compact
+				{prs}
+				current={pr?.number}
+				bind:view={sideView}
+				href={(number) => url({ pr: String(number), view: null }, true)}
+			/>
+		{/snippet}
+		<SidebarLayout
+			layout={shownLayout}
+			aside={data.view === 'overview' ? prSidebar : fileSidebar}
+			rail={data.view === 'overview' ? undefined : fileRail}
+			sizeKey={data.view === 'overview' ? 'pr-sidebar-width' : undefined}
+			defaultWidth={data.view === 'overview' ? 340 : undefined}
+			panel={docked ? askPanel : undefined}
+			bind:panelWidth
+		>
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}
-				{#if commit}
-					<CommitCard {commit} />
-				{/if}
-				{#if pr}
-					<PrCard {pr} onjump={jump} />
-				{/if}
-				{#each data.files as file (file.id + file.newPath)}
-					<FileDiff
-						{file}
-						layout={shownLayout}
-						{virtualize}
-						threads={asking}
-						review={pr?.threads}
-						remember={data.repo}
-					/>
+				{#if data.view === 'overview' && pr}
+					<PrOverview {pr} onjump={jump} />
 				{:else}
-					<!-- the commit list stays, so an empty commit is one step on the way -->
-					<div class="flex flex-col items-center py-16 text-center">{@render nothing()}</div>
-				{/each}
+					{#if commit}
+						<CommitCard {commit} />
+					{/if}
+					{#each data.files as file (file.id + file.newPath)}
+						<FileDiff
+							{file}
+							layout={shownLayout}
+							{virtualize}
+							threads={asking}
+							review={pr?.threads}
+							remember={data.repo}
+						/>
+					{:else}
+						<!-- the commit list stays, so an empty commit is one step on the way -->
+						<div class="flex flex-col items-center py-16 text-center">{@render nothing()}</div>
+					{/each}
+				{/if}
 			</main>
 		</SidebarLayout>
 	{/if}

@@ -19,8 +19,19 @@ test('maps the GraphQL response to a PullRequest', () => {
 		isDraft: false,
 		baseRefOid: '1962666bb7fa32831b21287c031efc599720cfe7',
 		headRefOid: '4c57bd392961ff1cadc7225396536274c92dc6dc',
-		pendingReviewId: 'PRR_pending'
+		pendingReviewId: 'PRR_pending',
+		mergeable: 'MERGEABLE',
+		behind: null,
+		issues: [{ number: 17000, title: 'Netlify per-route config', url: expect.any(String) }],
+		// one of each outcome, a commit status among the check runs
+		checks: { failing: 1, running: 1, passed: 2, skipped: 1 }
 	});
+	// asked again after approving, benmccann owes a new review. A reviewer that's gone isn't one
+	expect(pr.reviewers.map((r) => [r.name, r.state])).toEqual([
+		['teemingc', 'CHANGES_REQUESTED'],
+		['benmccann', 'REQUESTED'],
+		['maintainers', 'REQUESTED']
+	]);
 	// comments and the reviews that say something or started threads, by latest activity.
 	// A reply-only review is in its thread, vercel's started one and comes in with its reply
 	expect(pr.comments.map((c) => [c.author, c.review, c.threads])).toEqual([

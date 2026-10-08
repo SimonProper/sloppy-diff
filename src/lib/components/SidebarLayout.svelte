@@ -14,7 +14,12 @@
 	interface Props {
 		/** how diffs are shown, split needs room for two sides */
 		layout: Layout;
-		aside: Snippet;
+		/** the sidebar, without one its column is gone */
+		aside?: Snippet;
+		/** where the sidebar's width is remembered, one per kind of sidebar */
+		sizeKey?: string;
+		/** its width until it's dragged */
+		defaultWidth?: number;
 		/**
 		 * What the folded rail shows instead, a column small enough for its width: numbers,
 		 * badges, dividers. Items with `data-tip` get a tooltip beside the rail.
@@ -31,6 +36,8 @@
 	let {
 		layout,
 		aside,
+		sizeKey = 'sidebar-width',
+		defaultWidth = 272,
 		rail: railContent,
 		children,
 		asideClass = '',
@@ -38,9 +45,7 @@
 		panelWidth = $bindable(null)
 	}: Props = $props();
 
-	const KEY = 'sidebar-width';
 	const MIN = 200;
-	const DEFAULT = 272;
 	/** characters of code a diff always has room for, per side when split */
 	const CHARS = 80;
 	// what surrounds the code in FileDiff: line number gutters, the left and right
@@ -61,7 +66,8 @@
 	const right = $derived(panelContent ? panelSize : 0);
 	/** what's left for the sidebar and the diffs */
 	const room = $derived(total - right);
-	let stored = $state<number | null>(storedSize(KEY));
+	// read again for another kind of sidebar, dragging sets it until then
+	let stored = $derived<number | null>(storedSize(sizeKey));
 	let panel = $state<HTMLElement>();
 	let toggleButton = $state<HTMLButtonElement>();
 	let probe: HTMLElement;
@@ -79,7 +85,7 @@
 	// the diff's minimum wins over a wide sidebar, in a narrow window or when switching to
 	// split. Docked, lines wrap anyway, so the diff only keeps three quarters of it
 	const max = $derived(Math.max(MIN, room - (narrow && docked ? diffMin * 0.75 : diffMin)));
-	const width = $derived(Math.min(Math.max(stored ?? DEFAULT, MIN), max));
+	const width = $derived(Math.min(Math.max(stored ?? defaultWidth, MIN), max));
 
 	/** the rail's width */
 	const RAIL = 40;
@@ -89,7 +95,7 @@
 
 	// otherwise it folds into a rail, opening over the diffs at the width it would have had
 	const rail = $derived(narrow ? !docked : folded);
-	const expanded = $derived(Math.min(Math.max(stored ?? DEFAULT, MIN), room - RAIL));
+	const expanded = $derived(Math.min(Math.max(stored ?? defaultWidth, MIN), room - RAIL));
 
 	let opened = $state(false);
 	const open = $derived(rail && opened);
@@ -217,12 +223,19 @@
 <!-- resizing live is cheap, diffs off screen aren't laid out (see LazyBlock) -->
 <div
 	class={['relative grid', (moving || panelMoving) && 'moving-column']}
-	style:grid-template-columns="{rail ? RAIL : width}px minmax(0, 1fr) {right}px"
+	style:grid-template-columns="{aside ? (rail ? RAIL : width) : 0}px minmax(0, 1fr) {right}px"
 	bind:clientWidth={total}
 >
 	<!-- holds the sidebar's column, as a rail the sidebar floats over the diffs from here,
 	     above their sticky headers and below the page's -->
-	<div class={['sticky top-12 h-[calc(100vh-3rem)]', floating && 'z-[18]']}>
+	<div
+		class={[
+			'sticky top-12 h-[calc(100vh-3rem)]',
+			floating && 'z-[18]',
+			// still a grid cell, so the diffs keep theirs
+			!aside && 'invisible overflow-hidden'
+		]}
+	>
 		<!-- as a rail the panel stays laid out at its open width, hidden under the rail's
 		     column, so opening only moves its edge and keeps its scroll and state. Docked in a
 		     narrow window it has a width too, for folding to ease from -->
@@ -303,7 +316,7 @@
 					{/if}
 				</div>
 				<div class={['flex min-h-0 flex-1 flex-col', asideClass, collapsed && 'invisible']}>
-					{@render aside()}
+					{@render aside?.()}
 				</div>
 			</div>
 			{#if collapsed && railContent}
@@ -339,12 +352,12 @@
 		</div>
 	</div>
 
-	{#if !rail}
+	{#if aside && !rail}
 		<!-- over the sidebar's border, the length of the page so it can be grabbed anywhere -->
 		<div class="absolute inset-y-0 w-px" style:left="{width - 1}px">
 			<ResizeHandle
 				bind:size={stored}
-				key={KEY}
+				key={sizeKey}
 				{panel}
 				orientation="vertical"
 				label="Resize the sidebar"

@@ -16,8 +16,19 @@ export interface PullRequest {
 	bodyHtml: string;
 	url: string;
 	author: string;
+	/** the author's picture on GitHub, none for a deleted account */
+	avatar: string;
 	state: 'OPEN' | 'CLOSED' | 'MERGED';
 	isDraft: boolean;
+	/** whether it merges without conflicts, UNKNOWN while GitHub works it out */
+	mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+	/** commits on the base since it split off, null until the base is fetched */
+	behind: number | null;
+	reviewers: Reviewer[];
+	/** the head commit's checks, null without any */
+	checks: Checks | null;
+	/** the issues merging it closes */
+	issues: { number: number; title: string; url: string }[];
 	baseRefName: string;
 	headRefName: string;
 	baseRefOid: string;
@@ -51,6 +62,21 @@ export interface PrComment {
 }
 
 export type ReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
+
+/** A reviewer: their latest verdict, or asked for a review they haven't given since. */
+export interface Reviewer {
+	/** a login, or a team's name */
+	name: string;
+	avatar: string;
+	state: ReviewState | 'REQUESTED';
+}
+
+export interface Checks {
+	failing: number;
+	running: number;
+	passed: number;
+	skipped: number;
+}
 
 /** Comments on lines or a whole file of the diff, and the replies to them. */
 export interface ReviewThread {

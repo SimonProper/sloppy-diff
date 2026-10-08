@@ -10,6 +10,7 @@
 				"url": "https://github.com/sveltejs/kit/pull/17066",
 				"state": "OPEN",
 				"isDraft": false,
+				"mergeable": "MERGEABLE",
 				"author": {
 					"login": "teemingc"
 				},
@@ -20,6 +21,85 @@
 				"baseRepository": {
 					"url": "https://github.com/sveltejs/kit",
 					"sshUrl": "git@github.com:sveltejs/kit.git"
+				},
+				"reviewRequests": {
+					"nodes": [
+						{
+							"requestedReviewer": {
+								"login": "benmccann",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/ben?s=40"
+							}
+						},
+						{
+							"requestedReviewer": {
+								"name": "maintainers",
+								"avatarUrl": "https://avatars.githubusercontent.com/t/1?s=40"
+							}
+						},
+						{
+							"requestedReviewer": null
+						}
+					]
+				},
+				"latestReviews": {
+					"nodes": [
+						{
+							"author": {
+								"login": "teemingc",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/teemingc?s=40"
+							},
+							"state": "CHANGES_REQUESTED"
+						},
+						{
+							"author": {
+								"login": "benmccann",
+								"avatarUrl": "https://avatars.githubusercontent.com/u/ben?s=40"
+							},
+							"state": "APPROVED"
+						}
+					]
+				},
+				"commits": {
+					"nodes": [
+						{
+							"commit": {
+								"statusCheckRollup": {
+									"contexts": {
+										"nodes": [
+											{
+												"status": "COMPLETED",
+												"conclusion": "SUCCESS"
+											},
+											{
+												"status": "COMPLETED",
+												"conclusion": "FAILURE"
+											},
+											{
+												"status": "IN_PROGRESS",
+												"conclusion": null
+											},
+											{
+												"status": "COMPLETED",
+												"conclusion": "SKIPPED"
+											},
+											{
+												"state": "SUCCESS"
+											}
+										]
+									}
+								}
+							}
+						}
+					]
+				},
+				"closingIssuesReferences": {
+					"nodes": [
+						{
+							"number": 17000,
+							"title": "Netlify per-route config",
+							"url": "https://github.com/sveltejs/kit/issues/17000"
+						}
+					]
 				},
 				"comments": {
 					"nodes": [

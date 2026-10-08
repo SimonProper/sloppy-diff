@@ -112,7 +112,14 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 				: inputs.to
 					? 'range'
 					: 'worktree';
-	const view: 'files' | 'guide' = param('view') === 'guide' ? 'guide' : 'files';
+	// a pull request opens on its overview, anything else on its diff
+	const asked = param('view');
+	const view: 'overview' | 'guide' | 'files' =
+		asked === 'guide' || asked === 'files' || (asked === 'overview' && mode === 'pr')
+			? asked
+			: mode === 'pr'
+				? 'overview'
+				: 'files';
 	// how changes within lines are shown, remembered across visits by a cookie
 	const requested = param('changes') || cookies.get('changes') || 'lines';
 	const changeMode = (CHANGE_MODES as string[]).includes(requested)

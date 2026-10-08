@@ -5,8 +5,10 @@
 
 	// one set of variants per element, cva style
 
-	const rootVariants = ({ size }: { size: Size }) => [
-		'relative flex shrink-0 border border-line bg-surface',
+	const rootVariants = ({ size, ghost }: { size: Size; ghost: boolean }) => [
+		'relative flex shrink-0',
+		// navigation has no box, a setting does
+		!ghost && 'border border-line bg-surface',
 		{ sm: 'rounded-md p-px', md: 'rounded-lg p-0.5', lg: 'rounded-lg p-0.5' }[size]
 	];
 
@@ -45,6 +47,8 @@
 		text?: Exclude<Text, 'icon'>;
 		/** names the group for screen readers */
 		label?: string;
+		/** no box around it, for tabs rather than a setting */
+		ghost?: boolean;
 		/** only what `before` draws, the label becomes the tooltip */
 		iconOnly?: boolean;
 		/** clicking leaves the focus where it was, in a text field */
@@ -60,6 +64,7 @@
 		size = 'md',
 		text = 'md',
 		label,
+		ghost = false,
 		iconOnly = false,
 		keepFocus = false,
 		before,
@@ -82,7 +87,7 @@
 	});
 </script>
 
-<div class={rootVariants({ size })} role="group" aria-label={label}>
+<div class={rootVariants({ size, ghost })} role="group" aria-label={label}>
 	<!-- appears where it is, only moving between options slides -->
 	{#if pill}
 		<span class={pillVariants({ size })} style:translate="{pill.x}px" style:width="{pill.width}px"

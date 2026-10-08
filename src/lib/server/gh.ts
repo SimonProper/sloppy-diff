@@ -1,7 +1,15 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Suggestion } from '$lib/ask/types';
-import type { PrComment, PrSummary, PullRequest, ReviewState, ReviewThread } from '$lib/pr/types';
+import type {
+	Checks,
+	PrComment,
+	PrSummary,
+	PullRequest,
+	Reviewer,
+	ReviewState,
+	ReviewThread
+} from '$lib/pr/types';
 import { sameSha } from '$lib/refs';
 import { mergeBase, resolveCommit } from './git';
 import { cleanGithubHtml } from './github-html';
@@ -62,10 +70,34 @@ export function checkPrNumber(value: string | number): number {
 const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      id number title body bodyHTML url state isDraft
-      author { login }
+      id number title body bodyHTML url state isDraft mergeable
+      author { login avatarUrl(size: 40) }
       baseRefName headRefName baseRefOid headRefOid
       baseRepository { url sshUrl }
+      reviewRequests(first: 20) {
+        nodes {
+          requestedReviewer {
+            ... on User { login avatarUrl(size: 40) }
+            ... on Team { name avatarUrl(size: 40) }
+          }
+        }
+      }
+      latestReviews(first: 20) { nodes { author { login avatarUrl(size: 40) } state } }
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  ... on CheckRun { status conclusion }
+                  ... on StatusContext { state }
+                }
+              }
+            }
+          }
+        }
+      }
+      closingIssuesReferences(first: 10) { nodes { number title url } }
       comments(first: 100) { nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url } }
       reviews(states: PENDING, first: 1) { nodes { id } }
       submitted: reviews(states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED], first: 100) {
@@ -105,12 +137,30 @@ export interface RawPullRequest {
 	url: string;
 	state: PullRequest['state'];
 	isDraft: boolean;
-	author: { login: string } | null;
+	mergeable: PullRequest['mergeable'];
+	author: { login: string; avatarUrl: string } | null;
 	baseRefName: string;
 	headRefName: string;
 	baseRefOid: string;
 	headRefOid: string;
 	baseRepository: { url: string; sshUrl: string };
+	// a team has a name instead of a login, a reviewer that's gone neither
+	reviewRequests: {
+		nodes: { requestedReviewer: { login?: string; name?: string; avatarUrl: string } | null }[];
+	};
+	latestReviews: {
+		nodes: { author: { login: string; avatarUrl: string } | null; state: ReviewState }[];
+	};
+	commits: {
+		nodes: {
+			commit: {
+				statusCheckRollup: {
+					contexts: { nodes: { status?: string; conclusion?: string | null; state?: string }[] };
+				} | null;
+			};
+		}[];
+	};
+	closingIssuesReferences: { nodes: PullRequest['issues'] };
 	comments: { nodes: RawComment[] };
 	reviews: { nodes: { id: string }[] };
 	submitted: {
@@ -193,8 +243,15 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		bodyHtml: cleanGithubHtml(raw.bodyHTML),
 		url: raw.url,
 		author: raw.author?.login ?? 'ghost',
+		avatar: raw.author?.avatarUrl ?? '',
 		state: raw.state,
 		isDraft: raw.isDraft,
+		mergeable: raw.mergeable,
+		// filled in once the base is here to count against
+		behind: null,
+		reviewers: toReviewers(raw),
+		checks: toChecks(raw.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? null),
+		issues: raw.closingIssuesReferences.nodes,
 		baseRefName: raw.baseRefName,
 		headRefName: raw.headRefName,
 		baseRefOid: raw.baseRefOid,
@@ -205,6 +262,39 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		threads,
 		pendingReviewId: raw.reviews.nodes[0]?.id ?? null
 	};
+}
+
+/** Who reviewed, with their latest verdict, and who's asked to and hasn't since. */
+function toReviewers(raw: RawPullRequest): Reviewer[] {
+	const requested = raw.reviewRequests.nodes.flatMap(({ requestedReviewer: r }) =>
+		r ? [{ name: r.login ?? r.name ?? '', avatar: r.avatarUrl, state: 'REQUESTED' as const }] : []
+	);
+	const reviewed = raw.latestReviews.nodes
+		// asked again, they owe a new review
+		.filter((r) => r.author && !requested.some((q) => q.name === r.author?.login))
+		.map((r) => ({
+			name: r.author?.login ?? '',
+			avatar: r.author?.avatarUrl ?? '',
+			state: r.state
+		}));
+	return [...reviewed, ...requested];
+}
+
+/** The head commit's checks counted by outcome, null where it has none. */
+export function toChecks(
+	contexts: { status?: string; conclusion?: string | null; state?: string }[] | null
+): Checks | null {
+	if (!contexts?.length) return null;
+	const checks: Checks = { failing: 0, running: 0, passed: 0, skipped: 0 };
+	for (const c of contexts) {
+		// a check run says how it ended once it's done, a commit status has a state
+		const outcome = c.state ?? (c.status === 'COMPLETED' ? c.conclusion : 'PENDING');
+		if (outcome === 'SUCCESS') checks.passed++;
+		else if (outcome === 'SKIPPED' || outcome === 'NEUTRAL') checks.skipped++;
+		else if (outcome === 'PENDING' || outcome === 'EXPECTED') checks.running++;
+		else checks.failing++;
+	}
+	return checks;
 }
 
 async function fetchRaw(root: string, number: number): Promise<RawPullRequest> {
@@ -260,6 +350,8 @@ export async function readPullRequest(
 		resolveCommit(root, pr.headRefOid)
 	]);
 	if (!from) throw new Error(`#${number} shares no history with ${pr.baseRefName}`);
+	// the commits on the base since the PR split off it
+	pr.behind = Number(await git(root, ['rev-list', '--count', `${from}..${pr.baseRefOid}`]));
 	return { pr, from, to };
 }
 
