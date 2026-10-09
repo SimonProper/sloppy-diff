@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { errorText } from '$lib/errors';
 	import type { ReviewThread } from '$lib/pr/types';
-	import AskField from '../ask/AskField.svelte';
 	import Comment from './Comment.svelte';
+	import ThreadReply from './ThreadReply.svelte';
 
 	interface Props {
 		thread: ReviewThread;
@@ -11,24 +10,6 @@
 	}
 
 	let { thread, onreply }: Props = $props();
-
-	let reply = $state('');
-	let sending = $state(false);
-	let failure = $state('');
-
-	async function send(body: string) {
-		if (!onreply) return;
-		sending = true;
-		failure = '';
-		try {
-			await onreply(thread.id, body);
-			reply = '';
-		} catch (e) {
-			failure = errorText(e);
-		} finally {
-			sending = false;
-		}
-	}
 </script>
 
 <ul class="flex flex-col gap-3">
@@ -39,15 +20,6 @@
 
 {#if onreply}
 	<div class="mt-3">
-		<AskField
-			bind:value={reply}
-			placeholder="Reply"
-			hints={['', '↵ to add to your review']}
-			busy={sending}
-			onsend={send}
-		/>
-		{#if failure}
-			<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>
-		{/if}
+		<ThreadReply thread={thread.id} {onreply} />
 	</div>
 {/if}

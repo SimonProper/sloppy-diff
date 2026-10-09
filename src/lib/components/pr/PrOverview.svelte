@@ -8,9 +8,11 @@
 		pr: PullRequest;
 		/** goes to a review comment's thread in the diff */
 		onjump: (thread: ReviewThread) => void;
+		/** adds a reply to a review thread to your pending review */
+		onreply?: (thread: string, body: string) => Promise<unknown>;
 	}
 
-	let { pr, onjump }: Props = $props();
+	let { pr, onjump, onreply }: Props = $props();
 
 	const status = $derived(pr.isDraft && pr.state === 'OPEN' ? 'Draft' : pr.state.toLowerCase());
 
@@ -177,7 +179,7 @@
 						<Comment {comment} threads={comment.threads?.length} />
 						{#if comment.threads?.length}
 							<div class="pl-7">
-								<StartedThreads ids={comment.threads} {threads} {onjump} />
+								<StartedThreads ids={comment.threads} {threads} {onjump} {onreply} />
 							</div>
 						{/if}
 					</li>

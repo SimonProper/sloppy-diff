@@ -942,7 +942,13 @@
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}
 				{#if view === 'overview' && pr}
-					<PrOverview {pr} onjump={jump} />
+					<PrOverview
+						{pr}
+						onjump={jump}
+						onreply={threads.review
+							? (thread, body) => threads.addToReview({ kind: 'reply', thread, body })
+							: undefined}
+					/>
 				{:else}
 					{#if commit}
 						<CommitCard {commit} />
