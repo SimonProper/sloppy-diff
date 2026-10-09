@@ -53,7 +53,7 @@
 <div
 	bind:this={card}
 	popover="auto"
-	class="m-0 max-h-[min(28rem,calc(100vh-1rem))] w-[26rem] overflow-y-auto rounded-xl border border-line bg-surface p-3 text-left font-sans shadow-float"
+	class="m-0 max-h-[min(28rem,calc(100vh-1rem))] w-[min(36rem,calc(100vw-1rem))] overflow-y-auto rounded-xl border border-line bg-surface p-3 text-left font-sans shadow-float"
 	style:top="{placed?.top ?? 0}px"
 	style:left="{placed?.left ?? 0}px"
 	style:visibility={placed ? null : 'hidden'}
