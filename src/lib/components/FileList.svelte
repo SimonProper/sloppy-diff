@@ -20,8 +20,8 @@
 	type View = 'list' | 'tree';
 	const KEY = 'file-list-view';
 
-	// a per-browser preference, the list when nothing is stored
-	let view = $state<View>(readText(KEY) === 'tree' ? 'tree' : 'list');
+	// a per-browser preference, the tree when nothing is stored
+	let view = $state<View>(readText(KEY) === 'list' ? 'list' : 'tree');
 	const tree = $derived(view === 'tree' ? fileTree(files) : []);
 	/** folders folded shut, by path, for this visit */
 	const folded = new SvelteSet<string>();

@@ -114,11 +114,11 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 					? 'range'
 					: 'worktree';
 	// how changes within lines are shown, remembered across visits by a cookie
-	const requested = param('changes') || cookies.get('changes') || 'lines';
+	const requested = param('changes') || cookies.get('changes') || 'tokens';
 	const changeMode = (CHANGE_MODES as string[]).includes(requested)
 		? (requested as ChangeMode)
-		: 'lines';
-	const layout: Layout = cookies.get('layout') === 'split' ? 'split' : 'unified';
+		: 'tokens';
+	const layout: Layout = cookies.get('layout') === 'unified' ? 'unified' : 'split';
 	const prView = (PR_VIEWS as readonly string[]).includes(cookies.get('prs') ?? '')
 		? (cookies.get('prs') as PrView)
 		: 'all';
