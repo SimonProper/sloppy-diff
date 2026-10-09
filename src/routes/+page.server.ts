@@ -113,14 +113,6 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 				: inputs.to
 					? 'range'
 					: 'worktree';
-	// a pull request opens on its overview, anything else on its diff
-	const asked = param('view');
-	const view: 'overview' | 'guide' | 'files' =
-		asked === 'guide' || asked === 'files' || (asked === 'overview' && mode === 'pr')
-			? asked
-			: mode === 'pr'
-				? 'overview'
-				: 'files';
 	// how changes within lines are shown, remembered across visits by a cookie
 	const requested = param('changes') || cookies.get('changes') || 'lines';
 	const changeMode = (CHANGE_MODES as string[]).includes(requested)
@@ -132,7 +124,9 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		: 'all';
 	// saved guides are listed whatever state the current repo is in
 	const guides = await timing.measure('guides', listGuides());
-	const base = { repo, mode, view, inputs, changeMode, layout, prView, guides };
+	// the tab (`view`) is never read here: switching tabs changes nothing loaded, so it
+	// doesn't run this again
+	const base = { repo, mode, inputs, changeMode, layout, prView, guides };
 
 	let root: string;
 	let version: string;

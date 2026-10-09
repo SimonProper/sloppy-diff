@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { goto, preloadData } from '$app/navigation';
+	import { beforeNavigate, goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { slow } from '$lib/slow.svelte';
 	import { scrollSpy } from '$lib/scroll-spy.svelte';
@@ -43,14 +43,34 @@
 
 	// the diff streams in after the page has landed, so picking something never waits on
 	// the old page. A skeleton stands in for it while it loads, a quick one keeps the last
-	type Diff = Awaited<PageData['diff']> & Pick<PageData, 'mode' | 'view'>;
+	type Diff = Awaited<PageData['diff']> & Pick<PageData, 'mode'>;
 	// svelte-ignore state_referenced_locally
-	let diff = $state.raw<Diff>({ ...noDiff(), mode: data.mode, view: data.view });
+	let diff = $state.raw<Diff>({ ...noDiff(), mode: data.mode });
 	let ready = $state(false);
 	let pending = $state(true);
+	// the tab is only in the url, switching it loads nothing: what was loaded is reused
+	type View = 'overview' | 'guide' | 'files';
+	// a pull request opens on its overview, anything else on its diff: the one with no
+	// `view` in the url
+	const defaultView = $derived<View>(data.mode === 'pr' ? 'overview' : 'files');
+	const asked = $derived(page.url.searchParams.get('view'));
+	const urlView = $derived<View>(
+		asked === 'guide' || asked === 'files' || (asked === 'overview' && data.mode === 'pr')
+			? asked
+			: defaultView
+	);
+	// while another diff loads the tab it's on stays, the old diff is still what's shown
+	// svelte-ignore state_referenced_locally
+	let held = $state<View>(urlView);
+	beforeNavigate(() => (held = view));
+	const view = $derived(pending ? held : urlView);
+	let awaited: PageData['diff'] | undefined;
 	$effect(() => {
 		const promise = data.diff;
-		const { mode, view } = data;
+		const { mode } = data;
+		// a tab switch hands over the same diff again
+		if (promise === awaited) return;
+		awaited = promise;
 		pending = true;
 		// the server turns its own failures into an error, this is the stream breaking off
 		const settled = promise.catch((error: unknown) =>
@@ -59,7 +79,7 @@
 		settled.then((loaded) => {
 			// a later navigation's diff wins, whichever arrives first
 			if (promise !== data.diff) return;
-			diff = { ...loaded, mode, view };
+			diff = { ...loaded, mode };
 			ready = true;
 			pending = false;
 		});
@@ -71,7 +91,7 @@
 	const VIRTUALIZE_LINES = 4000;
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps
-	const reading = scrollSpy(() => (diff.view === 'files' ? diff.files.map((f) => f.id) : []));
+	const reading = scrollSpy(() => (view === 'files' ? diff.files.map((f) => f.id) : []));
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
@@ -80,10 +100,6 @@
 	const commit = $derived(diff.selection?.commit ?? null);
 	const pr = $derived(diff.selection?.pr ?? null);
 
-	type View = typeof data.view;
-	// a pull request opens on its overview, anything else on its diff: the one with no
-	// `view` in the url
-	const defaultView = $derived<View>(data.mode === 'pr' ? 'overview' : 'files');
 	const tabs = $derived<{ value: View; label: string }[]>([
 		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
 		...(range ? [{ value: 'guide' as const, label: 'Guide' }] : []),
@@ -94,21 +110,21 @@
 	// a switch is for, a thread or a file, is done once the tab has drawn
 	const scrolled = new Map<View, number>();
 	let afterSwitch = $state.raw<{ to: View; then: () => void } | null>(null);
-	function switchView(view: View, then?: () => void) {
-		scrolled.set(data.view, scrollY);
-		afterSwitch = { to: view, then: then ?? (() => scrollTo(0, scrolled.get(view) ?? 0)) };
-		navigate({ view: view === defaultView ? null : view }, false, true);
+	function switchView(to: View, then?: () => void) {
+		scrolled.set(view, scrollY);
+		afterSwitch = { to, then: then ?? (() => scrollTo(0, scrolled.get(to) ?? 0)) };
+		navigate({ view: to === defaultView ? null : to }, false, true);
 	}
 	$effect(() => {
 		const next = afterSwitch;
-		if (!next || diff.view !== next.to || pending) return;
+		if (!next || view !== next.to || pending) return;
 		afterSwitch = null;
 		tick().then(next.then);
 	});
 
 	/** Goes to a review comment's thread, in the diff where every thread has its lines. */
 	function jump(thread: ReviewThread) {
-		if (diff.view === 'files') jumpToThread(thread, diff.files);
+		if (view === 'files') jumpToThread(thread, diff.files);
 		else switchView('files', () => jumpToThread(thread, diff.files));
 	}
 
@@ -659,7 +675,7 @@
 		>
 			{@render viewTabs()}
 			<div class="ml-auto flex shrink-0 items-center">
-				{#if diff.view === 'overview' && pr}
+				{#if view === 'overview' && pr}
 					<a
 						class="text-[12px] text-muted hover:text-fg"
 						href={pr.url}
@@ -681,7 +697,7 @@
 					/>
 				{/if}
 			</div>
-			{#if diff.view === 'files' && pr?.threads.length}
+			{#if view === 'files' && pr?.threads.length}
 				<ReviewNav threads={pr.threads} files={diff.files} />
 			{/if}
 			{#if asking}
@@ -719,7 +735,7 @@
 	<!-- tabs are a way around, no box: the settings beside them have one -->
 	{#snippet viewTabs()}
 		{#if tabs.length > 1}
-			<SegmentedControl ghost options={tabs} value={data.view} onchange={switchView} label="View">
+			<SegmentedControl ghost options={tabs} value={urlView} onchange={switchView} label="View">
 				{#snippet after(option)}
 					{#if option.value === 'guide' && diff.guide}
 						<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
@@ -735,7 +751,7 @@
 			<AskLens
 				threads={asking}
 				files={diff.files}
-				guide={diff.view === 'guide' ? diff.guide : null}
+				guide={view === 'guide' ? diff.guide : null}
 				docked
 			/>
 		{/if}
@@ -810,7 +826,7 @@
 			bind:view={prView}
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
-	{:else if diff.view === 'guide' && diff.guide}
+	{:else if view === 'guide' && diff.guide}
 		<GuideView
 			guide={diff.guide}
 			files={diff.files}
@@ -823,7 +839,7 @@
 			bind:panelWidth
 			onregenerate={guideHere}
 		/>
-	{:else if diff.view === 'guide'}
+	{:else if view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			<div class="mb-8">{@render viewTabs()}</div>
 			{#if pr}
@@ -916,16 +932,16 @@
 		{/snippet}
 		<SidebarLayout
 			layout={shownLayout}
-			aside={diff.view === 'overview' ? prSidebar : fileSidebar}
-			rail={diff.view === 'overview' ? undefined : fileRail}
-			sizeKey={diff.view === 'overview' ? 'pr-sidebar-width' : undefined}
-			defaultWidth={diff.view === 'overview' ? 340 : undefined}
+			aside={view === 'overview' ? prSidebar : fileSidebar}
+			rail={view === 'overview' ? undefined : fileRail}
+			sizeKey={view === 'overview' ? 'pr-sidebar-width' : undefined}
+			defaultWidth={view === 'overview' ? 340 : undefined}
 			panel={docked ? askPanel : undefined}
 			bind:panelWidth
 		>
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}
-				{#if diff.view === 'overview' && pr}
+				{#if view === 'overview' && pr}
 					<PrOverview {pr} onjump={jump} />
 				{:else}
 					{#if commit}
@@ -952,7 +968,7 @@
 
 {#if asking}
 	<!-- the question composer, the peek on markers and the lens, one of each for the page -->
-	<AskLayer threads={asking} files={diff.files} guide={diff.view === 'guide' ? diff.guide : null} />
+	<AskLayer threads={asking} files={diff.files} guide={view === 'guide' ? diff.guide : null} />
 {/if}
 
 {#if dialog}
