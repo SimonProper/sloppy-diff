@@ -194,7 +194,7 @@
 			{#if message.role === 'user'}
 				<p
 					class={[
-						'rounded-[10px] bg-subtle px-3 py-2 text-[13px] leading-normal whitespace-pre-wrap',
+						'ml-auto w-fit max-w-[85%] rounded-[10px] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
 						i > 0 && 'mt-[26px]'
 					]}
 				>
