@@ -1,21 +1,23 @@
 <script lang="ts">
 	import { errorText } from '$lib/errors';
 	import AskField from '../ask/AskField.svelte';
+	import Avatar from './Avatar.svelte';
 
 	interface Props {
 		/** the thread replied to, its node id */
 		thread: string;
 		/** adds the reply to your pending review */
 		onreply: (thread: string, body: string) => Promise<unknown>;
-		autofocus?: boolean;
-		onescape?: () => void;
+		/** yours: given, the field is a row among the thread's comments, one line until it wraps */
+		avatar?: string;
 	}
 
-	let { thread, onreply, autofocus, onescape }: Props = $props();
+	let { thread, onreply, avatar }: Props = $props();
 
 	let reply = $state('');
 	let sending = $state(false);
 	let failure = $state('');
+	const typed = $derived(reply.trim().length > 0);
 
 	async function send(body: string) {
 		sending = true;
@@ -29,17 +31,85 @@
 			sending = false;
 		}
 	}
+
+	function onkeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' || event.shiftKey) return;
+		event.preventDefault();
+		if (typed && !sending) send(reply.trim());
+	}
+
+	// one line until the text wraps, then up to six, as AskField grows. Runs again as it's typed
+	function grow(textarea: HTMLTextAreaElement) {
+		void reply;
+		textarea.style.height = '';
+		if (textarea.scrollHeight > textarea.clientHeight) {
+			textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+		}
+	}
 </script>
 
-<AskField
-	bind:value={reply}
-	placeholder="Reply"
-	hints={['', '↵ to add to your review']}
-	busy={sending}
-	onsend={send}
-	{autofocus}
-	{onescape}
-/>
-{#if failure}
-	<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>
-{/if}
+<div>
+	{#if avatar === undefined}
+		<AskField
+			bind:value={reply}
+			placeholder="Reply"
+			hints={['', '↵ to add to your review']}
+			busy={sending}
+			onsend={send}
+		/>
+	{:else}
+		<div class="flex items-start gap-2 px-3 py-2">
+			<Avatar src={avatar} class="mt-0.5 size-4" />
+			<textarea
+				bind:value={reply}
+				rows="1"
+				placeholder="Leave a reply…"
+				title="↵ to add to your review"
+				class="h-5 min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-[12px] leading-5 text-fg outline-none placeholder:text-faint"
+				{onkeydown}
+				{@attach grow}></textarea>
+			<button
+				type="button"
+				class={[
+					'grid size-5 shrink-0 place-items-center self-end rounded-full transition-colors',
+					typed ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
+				]}
+				aria-label="Add to your review"
+				title="Add to your review  ↵"
+				disabled={!typed || sending}
+				onclick={() => send(reply.trim())}
+			>
+				{#if sending}
+					<span class="spin size-2.5 rounded-full border-[1.5px] border-surface/40 border-t-surface"
+					></span>
+				{:else}
+					<svg
+						viewBox="0 0 16 16"
+						class="size-2.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d="M8 12.5v-9M4 7l4-4 4 4" /></svg
+					>
+				{/if}
+			</button>
+		</div>
+	{/if}
+	{#if failure}
+		<p class={['text-[12px] text-del', avatar === undefined ? 'px-2.5 pt-1.5' : 'pr-3 pb-2 pl-9']}>
+			{failure}
+		</p>
+	{/if}
+</div>
+
+<style>
+	.spin {
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+</style>

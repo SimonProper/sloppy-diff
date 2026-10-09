@@ -68,6 +68,7 @@ export function checkPrNumber(value: string | number): number {
 // ponytail: the first 100 of each, no paging. A PR with more threads or comments loses the rest.
 // Avatars at twice the size they're shown, for sharp screens
 const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
+  viewer { avatarUrl(size: 40) }
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       id number title body bodyHTML url state isDraft mergeable
@@ -129,6 +130,8 @@ interface RawComment {
 }
 
 export interface RawPullRequest {
+	/** yours, from the query's `viewer` beside the pull request */
+	viewerAvatar?: string;
 	id: string;
 	number: number;
 	title: string;
@@ -260,7 +263,8 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 			activity(a).localeCompare(activity(b))
 		),
 		threads,
-		pendingReviewId: raw.reviews.nodes[0]?.id ?? null
+		pendingReviewId: raw.reviews.nodes[0]?.id ?? null,
+		viewerAvatar: raw.viewerAvatar ?? ''
 	};
 }
 
@@ -311,9 +315,10 @@ async function fetchRaw(root: string, number: number): Promise<RawPullRequest> {
 		'-f',
 		`query=${QUERY}`
 	]);
-	const pr = JSON.parse(out).data?.repository?.pullRequest;
+	const { data } = JSON.parse(out);
+	const pr = data?.repository?.pullRequest;
 	if (!pr) throw new Error(`No pull request #${number}`);
-	return pr;
+	return { ...pr, viewerAvatar: data.viewer?.avatarUrl };
 }
 
 /** A pull request as GitHub has it now, without fetching its commits. */

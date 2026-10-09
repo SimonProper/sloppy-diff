@@ -40,6 +40,8 @@ export interface PullRequest {
 	threads: ReviewThread[];
 	/** your pending review, where drafted comments go, null until there is one */
 	pendingReviewId: string | null;
+	/** your picture on GitHub, beside where you reply */
+	viewerAvatar: string;
 }
 
 export interface PrComment {

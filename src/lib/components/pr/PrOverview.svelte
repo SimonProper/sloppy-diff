@@ -179,7 +179,13 @@
 						<Comment {comment} threads={comment.threads?.length} />
 						{#if comment.threads?.length}
 							<div class="pl-7">
-								<StartedThreads ids={comment.threads} {threads} {onjump} {onreply} />
+								<StartedThreads
+									ids={comment.threads}
+									{threads}
+									{onjump}
+									{onreply}
+									avatar={pr.viewerAvatar}
+								/>
 							</div>
 						{/if}
 					</li>
