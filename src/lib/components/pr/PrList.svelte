@@ -221,7 +221,10 @@
 							compact ? 'rounded-md px-2 py-1.5 hover:bg-subtle' : 'rounded-lg px-3 py-2',
 							((marking && i === active) || (!filtering && pr.number === current)) && 'bg-subtle'
 						]}
-						onpointermove={() => (active = i)}
+						onpointermove={() => {
+							// hovering outside the filter would move where the arrows start from
+							if (marking) active = i;
+						}}
 					>
 						<span class="min-w-0 flex-1">
 							<span class="flex items-center gap-1.5">
