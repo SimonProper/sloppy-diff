@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { PrComment, PullRequest, ReviewThread } from '$lib/pr/types';
+	import type { Check, CheckOutcome, PrComment, PullRequest, ReviewThread } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
 	import Comment from './Comment.svelte';
 	import StartedThreads from './StartedThreads.svelte';
@@ -54,6 +54,31 @@
 			)
 	);
 	const said = (c: PrComment) => c.html || c.threads?.length;
+
+	const settledOutcome = (r: Check) => r.outcome === 'passed' || r.outcome === 'skipped';
+	const unsettled = $derived(pr.checks?.runs.filter((r) => !settledOutcome(r)) ?? []);
+	const settled = $derived(pr.checks?.runs.filter(settledOutcome) ?? []);
+	// the checks that need nothing from you, in a few words
+	const done = $derived(
+		[
+			pr.checks?.passed && `${pr.checks.passed} passed`,
+			pr.checks?.skipped && `${pr.checks.skipped} skipped`
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
+
+	// a check's icon and its colour
+	const OUTCOME: Record<CheckOutcome, [string, string]> = {
+		failing: ['M5 5l6 6M11 5l-6 6', 'text-del'],
+		running: ['M8 2.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11M8 5.5V8l1.5 1.5', 'text-mod'],
+		passed: ['M3.5 8.5l3 3 6-6.5', 'text-add'],
+		skipped: ['M4.5 8h7', 'text-faint']
+	};
+	const took = (seconds: number) => {
+		const s = Math.round(seconds);
+		return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+	};
 </script>
 
 <!-- what the pull request is, a card like the guide's summary, and where it stands in a
@@ -117,7 +142,7 @@
 				{/if}
 
 				{#if pr.checks}
-					{@const { failing, running, passed, skipped } = pr.checks}
+					{@const { failing, running } = pr.checks}
 					<a
 						class="flex items-center gap-1.5 hover:text-fg"
 						href="{pr.url}/checks"
@@ -130,9 +155,7 @@
 						)}
 						{#if failing}<span class="text-del">{failing} failing</span>{/if}
 						{#if running}<span class="text-mod">{running} running</span>{/if}
-						{[passed && `${passed} passed`, skipped && `${skipped} skipped`]
-							.filter(Boolean)
-							.join(' · ')}
+						{done}
 					</a>
 				{/if}
 
@@ -161,6 +184,46 @@
 			</div>
 		{/if}
 	</section>
+
+	<!-- each check on the head commit, a row that opens where it ran. Failing and running ones
+	     in sight, the passed and skipped folded under one row -->
+	{#if pr.checks}
+		<section class="max-w-3xl">
+			<h2 class="px-1 text-[12px] font-medium text-muted">
+				Checks <span class="ml-1 font-normal text-faint tabular-nums">{pr.checks.runs.length}</span>
+			</h2>
+			<div
+				class="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
+			>
+				{#each unsettled as run, i (i)}
+					{@render check(run)}
+				{/each}
+				{#if settled.length}
+					<details class="group">
+						<summary
+							class="flex cursor-pointer list-none items-center gap-2 px-3.5 py-2 text-[12px] text-muted hover:bg-subtle [&::-webkit-details-marker]:hidden"
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5 shrink-0 text-faint transition-transform group-open:rotate-90"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="m6 4 4 4-4 4" /></svg
+							>
+							{done}
+						</summary>
+						<div class="divide-y divide-line border-t border-line">
+							{#each settled as run, i (i)}
+								{@render check(run)}
+							{/each}
+						</div>
+					</details>
+				{/if}
+			</div>
+		</section>
+	{/if}
 
 	<!-- read top to bottom, all of it: entries are cards on the page, threads a step lighter
 	     inside them. A verdict without words is a line between the cards -->
@@ -194,6 +257,25 @@
 		</section>
 	{/if}
 </div>
+
+{#snippet check(run: Check)}
+	<svelte:element
+		this={run.url ? 'a' : 'div'}
+		href={run.url || undefined}
+		target={run.url ? '_blank' : undefined}
+		rel={run.url ? 'noopener noreferrer' : undefined}
+		class={['flex items-center gap-2 px-3.5 py-2 text-[12px]', run.url && 'hover:bg-subtle']}
+	>
+		{@render icon(OUTCOME[run.outcome][0], OUTCOME[run.outcome][1])}
+		<span class="min-w-0 truncate">
+			{#if run.workflow}<span class="text-faint">{run.workflow} /</span>{/if}
+			{run.name}
+		</span>
+		<span class="ml-auto shrink-0 text-[11px] text-faint tabular-nums">
+			{run.seconds === null ? run.outcome : took(run.seconds)}
+		</span>
+	</svelte:element>
+{/snippet}
 
 {#snippet icon(d: string, colour: string)}
 	<svg

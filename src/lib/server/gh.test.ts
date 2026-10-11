@@ -26,6 +26,18 @@ test('maps the GraphQL response to a PullRequest', () => {
 		// one of each outcome, a commit status among the check runs
 		checks: { failing: 1, running: 1, passed: 2, skipped: 1 }
 	});
+	// failing first, otherwise as GitHub lists them. A commit status names itself by its context
+	expect(pr.checks?.runs.map((r) => [r.workflow, r.name, r.outcome, r.seconds])).toEqual([
+		['CI', 'test (ubuntu)', 'failing', 270],
+		['CI', 'test (windows)', 'running', null],
+		['CI', 'lint', 'passed', 72],
+		['', 'Vercel', 'passed', null],
+		['', 'changeset', 'skipped', null]
+	]);
+	expect(pr.checks?.runs.map((r) => r.url).slice(3)).toEqual([
+		'https://vercel.com/sveltejs/kit/abc',
+		''
+	]);
 	// asked again after approving, benmccann owes a new review. A reviewer that's gone isn't one
 	expect(pr.reviewers.map((r) => [r.name, r.state])).toEqual([
 		['teemingc', 'CHANGES_REQUESTED'],

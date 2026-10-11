@@ -67,23 +67,65 @@
 									"contexts": {
 										"nodes": [
 											{
+												"name": "lint",
 												"status": "COMPLETED",
-												"conclusion": "SUCCESS"
+												"conclusion": "SUCCESS",
+												"detailsUrl": "https://github.com/sveltejs/kit/actions/runs/1/job/1",
+												"startedAt": "2026-09-01T10:00:00Z",
+												"completedAt": "2026-09-01T10:01:12Z",
+												"checkSuite": {
+													"workflowRun": {
+														"workflow": {
+															"name": "CI"
+														}
+													}
+												}
 											},
 											{
+												"name": "test (ubuntu)",
 												"status": "COMPLETED",
-												"conclusion": "FAILURE"
+												"conclusion": "FAILURE",
+												"detailsUrl": "https://github.com/sveltejs/kit/actions/runs/1/job/2",
+												"startedAt": "2026-09-01T10:00:00Z",
+												"completedAt": "2026-09-01T10:04:30Z",
+												"checkSuite": {
+													"workflowRun": {
+														"workflow": {
+															"name": "CI"
+														}
+													}
+												}
 											},
 											{
+												"name": "test (windows)",
 												"status": "IN_PROGRESS",
-												"conclusion": null
+												"conclusion": null,
+												"detailsUrl": "https://github.com/sveltejs/kit/actions/runs/1/job/3",
+												"startedAt": "2026-09-01T10:00:00Z",
+												"completedAt": null,
+												"checkSuite": {
+													"workflowRun": {
+														"workflow": {
+															"name": "CI"
+														}
+													}
+												}
 											},
 											{
+												"name": "changeset",
 												"status": "COMPLETED",
-												"conclusion": "SKIPPED"
+												"conclusion": "SKIPPED",
+												"detailsUrl": null,
+												"startedAt": null,
+												"completedAt": null,
+												"checkSuite": {
+													"workflowRun": null
+												}
 											},
 											{
-												"state": "SUCCESS"
+												"context": "Vercel",
+												"state": "SUCCESS",
+												"targetUrl": "https://vercel.com/sveltejs/kit/abc"
 											}
 										]
 									}

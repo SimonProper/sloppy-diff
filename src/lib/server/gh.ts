@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Suggestion } from '$lib/ask/types';
 import type {
+	CheckOutcome,
 	Checks,
 	PrComment,
 	PrSummary,
@@ -90,8 +91,11 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
             statusCheckRollup {
               contexts(first: 100) {
                 nodes {
-                  ... on CheckRun { status conclusion }
-                  ... on StatusContext { state }
+                  ... on CheckRun {
+                    name status conclusion detailsUrl startedAt completedAt
+                    checkSuite { workflowRun { workflow { name } } }
+                  }
+                  ... on StatusContext { context state targetUrl }
                 }
               }
             }
@@ -158,7 +162,7 @@ export interface RawPullRequest {
 		nodes: {
 			commit: {
 				statusCheckRollup: {
-					contexts: { nodes: { status?: string; conclusion?: string | null; state?: string }[] };
+					contexts: { nodes: RawCheck[] };
 				} | null;
 			};
 		}[];
@@ -284,20 +288,50 @@ function toReviewers(raw: RawPullRequest): Reviewer[] {
 	return [...reviewed, ...requested];
 }
 
-/** The head commit's checks counted by outcome, null where it has none. */
-export function toChecks(
-	contexts: { status?: string; conclusion?: string | null; state?: string }[] | null
-): Checks | null {
+/** A check run or a commit status, whichever fields its kind has. */
+type RawCheck = {
+	name?: string;
+	status?: string;
+	conclusion?: string | null;
+	detailsUrl?: string | null;
+	startedAt?: string | null;
+	completedAt?: string | null;
+	checkSuite?: { workflowRun: { workflow: { name: string } } | null } | null;
+	context?: string;
+	state?: string;
+	targetUrl?: string | null;
+};
+
+const ORDER: CheckOutcome[] = ['failing', 'running', 'passed', 'skipped'];
+
+/** The head commit's checks, counted by outcome and listed failing first, null where it has none. */
+export function toChecks(contexts: RawCheck[] | null): Checks | null {
 	if (!contexts?.length) return null;
-	const checks: Checks = { failing: 0, running: 0, passed: 0, skipped: 0 };
+	const checks: Checks = { failing: 0, running: 0, passed: 0, skipped: 0, runs: [] };
 	for (const c of contexts) {
 		// a check run says how it ended once it's done, a commit status has a state
-		const outcome = c.state ?? (c.status === 'COMPLETED' ? c.conclusion : 'PENDING');
-		if (outcome === 'SUCCESS') checks.passed++;
-		else if (outcome === 'SKIPPED' || outcome === 'NEUTRAL') checks.skipped++;
-		else if (outcome === 'PENDING' || outcome === 'EXPECTED') checks.running++;
-		else checks.failing++;
+		const state = c.state ?? (c.status === 'COMPLETED' ? c.conclusion : 'PENDING');
+		const outcome: CheckOutcome =
+			state === 'SUCCESS'
+				? 'passed'
+				: state === 'SKIPPED' || state === 'NEUTRAL'
+					? 'skipped'
+					: state === 'PENDING' || state === 'EXPECTED'
+						? 'running'
+						: 'failing';
+		checks[outcome]++;
+		checks.runs.push({
+			name: c.name ?? c.context ?? '',
+			workflow: c.checkSuite?.workflowRun?.workflow.name ?? '',
+			outcome,
+			url: c.detailsUrl ?? c.targetUrl ?? '',
+			seconds:
+				c.startedAt && c.completedAt
+					? (Date.parse(c.completedAt) - Date.parse(c.startedAt)) / 1000
+					: null
+		});
 	}
+	checks.runs.sort((a, b) => ORDER.indexOf(a.outcome) - ORDER.indexOf(b.outcome));
 	return checks;
 }
 

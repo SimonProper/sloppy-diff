@@ -78,6 +78,22 @@ export interface Checks {
 	running: number;
 	passed: number;
 	skipped: number;
+	/** each of them, failing first */
+	runs: Check[];
+}
+
+export type CheckOutcome = 'failing' | 'running' | 'passed' | 'skipped';
+
+/** A check run, or a commit status, on the head commit. */
+export interface Check {
+	name: string;
+	/** the Actions workflow it ran in, empty for a commit status or another app's check */
+	workflow: string;
+	outcome: CheckOutcome;
+	/** where it ran, empty when it doesn't say */
+	url: string;
+	/** how long it took, null until it's done or for a commit status */
+	seconds: number | null;
 }
 
 /** Comments on lines or a whole file of the diff, and the replies to them. */
