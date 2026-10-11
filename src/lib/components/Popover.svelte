@@ -52,10 +52,11 @@
 		'aria-controls': contentId
 	});
 
-	// measured rather than CSS anchor positioning, which not every browser has
+	// measured rather than CSS anchor positioning, which not every browser has;
+	// unplaced it's see-through rather than hidden, so children can still take focus
 	let placed = $state<{ top: number; left: number } | null>(null);
 	const style = $derived(
-		placed ? `top: ${placed.top}px; left: ${placed.left}px` : 'visibility: hidden'
+		placed ? `top: ${placed.top}px; left: ${placed.left}px` : 'opacity: 0; pointer-events: none'
 	);
 
 	// the state can change from outside (a pick closes it), keep the element in step
