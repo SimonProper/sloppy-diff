@@ -65,28 +65,3 @@
 		</main>
 	</SidebarLayout>
 </div>
-
-<style>
-	/* one sheen sweeping the whole screen: the gradient is pinned to the viewport,
-	   so every bone it passes lights up in step */
-	.bone {
-		background:
-			linear-gradient(100deg, transparent 40%, var(--subtle) 50%, transparent 60%) fixed 0 0 / 200vw
-				100% no-repeat,
-			var(--line);
-		animation: sheen 1.6s ease-in-out infinite;
-	}
-	@keyframes sheen {
-		from {
-			background-position-x: 100vw, 0;
-		}
-		to {
-			background-position-x: -100vw, 0;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.bone {
-			animation: none;
-		}
-	}
-</style>
