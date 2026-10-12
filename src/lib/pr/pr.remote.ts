@@ -1,6 +1,6 @@
 import { command, query } from '$app/server';
 import type { Suggestion } from '$lib/ask/types';
-import { addToDraft, listPullRequests } from '$lib/server/gh';
+import { addPrComment, addToDraft, deleteComment, listPullRequests } from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
 import { forgetPrs } from '$lib/server/cache';
 import { badRequestOnError } from '$lib/server/requests';
@@ -28,5 +28,25 @@ export const addDraft = command(
 			const added = await addToDraft(await repoRoot(repo), pr, commit, suggestion);
 			forgetPrs();
 			return added;
+		})
+);
+
+/** Deletes a comment GitHub says you may delete. */
+export const removeComment = command(
+	'unchecked',
+	({ repo, id, kind }: { repo: string; id: string; kind: 'issue' | 'thread' }) =>
+		badRequestOnError(async () => {
+			await deleteComment(await repoRoot(repo), id, kind);
+			forgetPrs();
+		})
+);
+
+/** Comments on the pull request `pr` (its node id), posted at once. */
+export const addComment = command(
+	'unchecked',
+	({ repo, pr, body }: { repo: string; pr: string; body: string }) =>
+		badRequestOnError(async () => {
+			await addPrComment(await repoRoot(repo), pr, body);
+			forgetPrs();
 		})
 );

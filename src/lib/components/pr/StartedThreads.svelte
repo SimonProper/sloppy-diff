@@ -4,7 +4,8 @@
 	import { timeAgo } from '$lib/refs';
 	import type { PrComment, ReviewThread } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
-	import ThreadReply from './ThreadReply.svelte';
+	import DeleteComment from './DeleteComment.svelte';
+	import CommentField from './CommentField.svelte';
 
 	interface Props {
 		/** the threads a review started, by id */
@@ -66,7 +67,7 @@
 				{/if}
 				{#each last as comment (comment.id)}{@render said(comment)}{/each}
 				{#if onreply}
-					<ThreadReply thread={thread.id} {onreply} {avatar} />
+					<CommentField onsend={(body) => onreply(thread.id, body)} {avatar} />
 				{/if}
 			</div>
 		</li>
@@ -83,11 +84,12 @@
 </ul>
 
 {#snippet said(comment: PrComment)}
-	<div class="px-3 py-2.5">
+	<div class="group/comment px-3 py-2.5">
 		<span class="flex items-center gap-2 text-[11px] text-faint">
 			<Avatar src={comment.avatar} />
 			<span class="text-[11.5px] font-medium text-fg">{comment.author}</span>
 			{timeAgo(comment.createdAt)} ago
+			{#if comment.deletable}<DeleteComment {comment} />{/if}
 		</span>
 		<span class="mt-0.5 line-clamp-3 pl-6 text-[12px] leading-relaxed text-fg"
 			>{glance(comment.html)}</span

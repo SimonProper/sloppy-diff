@@ -4,15 +4,23 @@
 	import Avatar from './Avatar.svelte';
 
 	interface Props {
-		/** the thread replied to, its node id */
-		thread: string;
-		/** adds the reply to your pending review */
-		onreply: (thread: string, body: string) => Promise<unknown>;
+		/** a reply to a thread or a comment on the pull request, emptied once it's sent */
+		onsend: (body: string) => Promise<unknown>;
 		/** yours: given, the field is a row among the thread's comments, one line until it wraps */
 		avatar?: string;
+		placeholder?: string;
+		/** what sending does, for its button */
+		action?: string;
+		hint?: string;
 	}
 
-	let { thread, onreply, avatar }: Props = $props();
+	let {
+		onsend,
+		avatar,
+		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
+		action = 'Add to your review',
+		hint = '↵ to add to your review'
+	}: Props = $props();
 
 	let reply = $state('');
 	let sending = $state(false);
@@ -23,7 +31,7 @@
 		sending = true;
 		failure = '';
 		try {
-			await onreply(thread, body);
+			await onsend(body);
 			reply = '';
 		} catch (e) {
 			failure = errorText(e);
@@ -50,21 +58,15 @@
 
 <div>
 	{#if avatar === undefined}
-		<AskField
-			bind:value={reply}
-			placeholder="Reply"
-			hints={['', '↵ to add to your review']}
-			busy={sending}
-			onsend={send}
-		/>
+		<AskField bind:value={reply} {placeholder} hints={['', hint]} busy={sending} onsend={send} />
 	{:else}
 		<div class="flex items-start gap-2 px-3 py-2">
 			<Avatar src={avatar} class="mt-0.5 size-4" />
 			<textarea
 				bind:value={reply}
 				rows="1"
-				placeholder="Leave a reply…"
-				title="↵ to add to your review"
+				{placeholder}
+				title={hint}
 				class="h-5 min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-[12px] leading-5 text-fg outline-none placeholder:text-faint"
 				{onkeydown}
 				{@attach grow}></textarea>
@@ -74,8 +76,8 @@
 					'grid size-5 shrink-0 place-items-center self-end rounded-full transition-colors',
 					typed ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
 				]}
-				aria-label="Add to your review"
-				title="Add to your review  ↵"
+				aria-label={action}
+				title="{action}  ↵"
 				disabled={!typed || sending}
 				onclick={() => send(reply.trim())}
 			>

@@ -13,6 +13,7 @@
 	import { timeAgo } from '$lib/refs';
 	import type { PrComment } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
+	import DeleteComment from './DeleteComment.svelte';
 
 	interface Props {
 		comment: PrComment;
@@ -26,33 +27,36 @@
 </script>
 
 <!-- the body sits under the name, the avatar alone in its column marks where one starts -->
-<p class="flex items-center gap-1.5 text-[11.5px] text-faint">
-	<Avatar src={comment.avatar} class="mr-0.5 size-5" />
-	<span class="text-[12px] font-medium text-fg">{comment.author}</span>
-	{#if comment.pending}
-		<span
-			class="rounded-[4px] border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
-			title="In your pending review, not posted yet">Pending</span
+<div class="group/comment">
+	<p class="flex items-center gap-1.5 text-[11.5px] text-faint">
+		<Avatar src={comment.avatar} class="mr-0.5 size-5" />
+		<span class="text-[12px] font-medium text-fg">{comment.author}</span>
+		{#if comment.pending}
+			<span
+				class="rounded-[4px] border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
+				title="In your pending review, not posted yet">Pending</span
+			>
+		{/if}
+		{#if verdict}
+			<span class={['rounded-[4px] border px-1 text-[10px] font-medium', verdict[1]]}
+				>{verdict[0]}</span
+			>
+		{/if}
+		{#if threads}
+			<span>·</span>
+			<span class="tabular-nums">{threads} {threads === 1 ? 'thread' : 'threads'}</span>
+			<span>·</span>
+		{/if}
+		<a
+			class="hover:underline"
+			href={comment.url}
+			target="_blank"
+			rel="noopener noreferrer"
+			title={new Date(comment.createdAt).toLocaleString()}>{timeAgo(comment.createdAt)} ago</a
 		>
+		{#if comment.deletable}<DeleteComment {comment} />{/if}
+	</p>
+	{#if comment.html}
+		<div class="prose mt-0.5 pl-7 text-[12.5px] leading-relaxed">{@html comment.html}</div>
 	{/if}
-	{#if verdict}
-		<span class={['rounded-[4px] border px-1 text-[10px] font-medium', verdict[1]]}
-			>{verdict[0]}</span
-		>
-	{/if}
-	{#if threads}
-		<span>·</span>
-		<span class="tabular-nums">{threads} {threads === 1 ? 'thread' : 'threads'}</span>
-		<span>·</span>
-	{/if}
-	<a
-		class="hover:underline"
-		href={comment.url}
-		target="_blank"
-		rel="noopener noreferrer"
-		title={new Date(comment.createdAt).toLocaleString()}>{timeAgo(comment.createdAt)} ago</a
-	>
-</p>
-{#if comment.html}
-	<div class="prose mt-0.5 pl-7 text-[12.5px] leading-relaxed">{@html comment.html}</div>
-{/if}
+</div>

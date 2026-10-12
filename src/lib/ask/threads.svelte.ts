@@ -1,7 +1,7 @@
 import { isHttpError } from '@sveltejs/kit';
-import { invalidateAll } from '$app/navigation';
 import { errorText } from '$lib/errors';
 import { addDraft } from '$lib/pr/pr.remote';
+import { refresh } from '$lib/pr/refresh';
 import { readJson, writeJson } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
 import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
@@ -119,8 +119,7 @@ export class Threads {
 		const review = this.review;
 		if (!review) throw new Error('Comments go on a pull request');
 		const result = await addDraft({ ...review, suggestion });
-		// it's on GitHub now, a reload that fails isn't a comment that failed
-		await invalidateAll().catch(() => {});
+		await refresh();
 		return result;
 	}
 

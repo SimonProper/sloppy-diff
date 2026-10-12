@@ -1,7 +1,11 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { addComment } from '$lib/pr/pr.remote';
+	import { refresh } from '$lib/pr/refresh';
 	import type { Check, CheckOutcome, PrComment, PullRequest, ReviewThread } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
 	import Comment from './Comment.svelte';
+	import CommentField from './CommentField.svelte';
 	import StartedThreads from './StartedThreads.svelte';
 
 	interface Props {
@@ -13,6 +17,11 @@
 	}
 
 	let { pr, onjump, onreply }: Props = $props();
+
+	async function post(body: string) {
+		await addComment({ repo: page.data.repo, pr: pr.id, body });
+		await refresh();
+	}
 
 	const status = $derived(pr.isDraft && pr.state === 'OPEN' ? 'Draft' : pr.state.toLowerCase());
 
@@ -226,36 +235,43 @@
 	{/if}
 
 	<!-- read top to bottom, all of it: entries are cards on the page, threads a step lighter
-	     inside them. A verdict without words is a line between the cards -->
-	{#if pr.comments.length}
-		<section class="max-w-3xl">
-			<h2 class="px-1 text-[12px] font-medium text-muted">
-				Activity <span class="ml-1 font-normal text-faint tabular-nums">{total}</span>
-			</h2>
-			<ul class="mt-3 flex flex-col gap-3">
-				{#each pr.comments as comment (comment.id)}
-					<li
-						class={said(comment)
-							? 'rounded-lg border border-line bg-surface px-3.5 py-3'
-							: 'px-[15px]'}
-					>
-						<Comment {comment} threads={comment.threads?.length} />
-						{#if comment.threads?.length}
-							<div class="pl-7">
-								<StartedThreads
-									ids={comment.threads}
-									{threads}
-									{onjump}
-									{onreply}
-									avatar={pr.viewerAvatar}
-								/>
-							</div>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-		</section>
-	{/if}
+	     inside them. A verdict without words is a line between the cards. Yours goes last -->
+	<section class="max-w-3xl">
+		<h2 class="px-1 text-[12px] font-medium text-muted">
+			Activity <span class="ml-1 font-normal text-faint tabular-nums">{total}</span>
+		</h2>
+		<ul class="mt-3 flex flex-col gap-3">
+			{#each pr.comments as comment (comment.id)}
+				<li
+					class={said(comment)
+						? 'rounded-lg border border-line bg-surface px-3.5 py-3'
+						: 'px-[15px]'}
+				>
+					<Comment {comment} threads={comment.threads?.length} />
+					{#if comment.threads?.length}
+						<div class="pl-7">
+							<StartedThreads
+								ids={comment.threads}
+								{threads}
+								{onjump}
+								{onreply}
+								avatar={pr.viewerAvatar}
+							/>
+						</div>
+					{/if}
+				</li>
+			{/each}
+			<li class="overflow-hidden rounded-lg border border-line bg-surface">
+				<CommentField
+					onsend={post}
+					avatar={pr.viewerAvatar}
+					placeholder="Leave a comment…"
+					action="Comment"
+					hint="↵ to comment"
+				/>
+			</li>
+		</ul>
+	</section>
 </div>
 
 {#snippet check(run: Check)}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ReviewThread } from '$lib/pr/types';
 	import Comment from './Comment.svelte';
-	import ThreadReply from './ThreadReply.svelte';
+	import CommentField from './CommentField.svelte';
 
 	interface Props {
 		thread: ReviewThread;
@@ -20,6 +20,6 @@
 
 {#if onreply}
 	<div class="mt-3">
-		<ThreadReply thread={thread.id} {onreply} />
+		<CommentField onsend={(body) => onreply(thread.id, body)} />
 	</div>
 {/if}

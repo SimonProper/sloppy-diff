@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { prContext } from './ask';
 import {
+	addPrComment,
 	checkPrNumber,
 	checkSuggestion,
+	deleteComment,
 	draftStep,
 	threadInput,
 	toPrSummary,
@@ -82,6 +84,26 @@ test('only takes a positive whole number', () => {
 	for (const bad of ['0', '-1', '1.5', '01', '', '1;rm', '--help', '99999999999']) {
 		expect(() => checkPrNumber(bad)).toThrow();
 	}
+});
+
+test('a comment GitHub lets you delete says how, a review never does', async () => {
+	const raw = structuredClone(response.data.repository.pullRequest);
+	Object.assign(raw.comments.nodes[0], { viewerCanDelete: true });
+	Object.assign(raw.reviewThreads.nodes[0].comments.nodes[0], { viewerCanDelete: true });
+	const pr = toPullRequest(raw as never);
+	expect(pr.comments.find((c) => c.id === raw.comments.nodes[0].id)?.deletable).toBe('issue');
+	expect(pr.threads[0].comments[0].deletable).toBe('thread');
+	expect(pr.threads[0].comments[1]?.deletable).toBeUndefined();
+	expect(pr.comments.filter((c) => c.review).some((c) => c.deletable)).toBe(false);
+	// turned down before gh is asked
+	await expect(deleteComment('.', 'IC_1;rm', 'issue')).rejects.toThrow();
+	await expect(deleteComment('.', 'IC_1', 'review' as never)).rejects.toThrow();
+});
+
+test("a comment on the PR that GitHub can't take is turned down before gh is asked", async () => {
+	await expect(addPrComment('.', 'PR_1;rm', 'hi')).rejects.toThrow();
+	await expect(addPrComment('.', 'PR_1', '  ')).rejects.toThrow();
+	await expect(addPrComment('.', 'PR_1', 'x'.repeat(65_537))).rejects.toThrow();
 });
 
 test("Claude gets the PR's description and unresolved threads by id", () => {

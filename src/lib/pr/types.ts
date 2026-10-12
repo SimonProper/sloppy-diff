@@ -61,6 +61,8 @@ export interface PrComment {
 	review?: ReviewState;
 	/** the threads a review started, by id, their replies in them whichever review they came in */
 	threads?: string[];
+	/** how it's deleted, where GitHub lets you: on the conversation, or in a review thread */
+	deletable?: 'issue' | 'thread';
 }
 
 export type ReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';

@@ -66,13 +66,22 @@
 	beforeNavigate(() => (held = view));
 	const view = $derived(pending ? held : urlView);
 	let awaited: PageData['diff'] | undefined;
+	let awaitedAt = '';
 	$effect(() => {
 		const promise = data.diff;
 		const { mode, fresh } = data;
+		const at = page.url.href;
 		// a tab switch hands over the same diff again
-		if (promise === awaited) return;
+		if (promise === awaited) {
+			awaitedAt = at;
+			return;
+		}
+		// the same page loaded again, after a comment was added or deleted: what's shown
+		// stays until the new read is in, nothing shows itself loading
+		const again = ready && at === awaitedAt;
 		awaited = promise;
-		pending = true;
+		awaitedAt = at;
+		if (!again) pending = true;
 		// the server turns its own failures into an error, this is the stream breaking off
 		const settled = promise.catch((error: unknown) =>
 			noDiff(error instanceof Error ? error.message : String(error))
@@ -80,22 +89,26 @@
 		settled.then((loaded) => {
 			// a later navigation's diff wins, whichever arrives first
 			if (promise !== data.diff) return;
-			diff = { ...loaded, mode };
+			diff = again ? same(loaded) : { ...loaded, mode };
 			ready = true;
 			pending = false;
 			// a pull request comes as it was read last, then as GitHub has it now
 			fresh.then((next) => {
-				if (!next || promise !== data.diff) return;
-				const [was, now] = [diff.selection?.range, next.selection?.range];
-				// the same commits, only GitHub's side moved: the files stay as they are, so
-				// nothing that reads them redoes its work
-				diff =
-					was && now && was.from === now.from && was.to === now.to
-						? ({ ...diff, selection: next.selection } as Diff)
-						: { ...next, timing: loaded.timing, mode };
+				if (next && promise === data.diff) diff = { ...same(next), timing: loaded.timing };
 			});
 		});
 	});
+
+	/**
+	 * A diff read again over the one shown. Between the same commits only GitHub's side
+	 * moved: the files stay as they are, so nothing that reads them redoes its work
+	 */
+	function same(next: Awaited<PageData['diff']>): Diff {
+		const [was, now] = [diff.selection?.range, next.selection?.range];
+		return was && now && was.from === now.from && was.to === now.to
+			? { ...next, files: diff.files, mode: diff.mode }
+			: { ...next, mode: diff.mode };
+	}
 
 	const totals = $derived(lineStats(diff.files.flatMap((f) => f.hunks)));
 	// below this many lines everything renders, so the browser's find sees all of it.
