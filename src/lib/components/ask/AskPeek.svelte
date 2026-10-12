@@ -10,7 +10,7 @@
 
 	// the lens shows everything, and the docked panel the thread it's open on
 	const peek = $derived(
-		threads.expanded || threads.peek?.id === threads.open ? null : threads.peek
+		threads.expanded || (threads.panel && threads.peek?.id === threads.open) ? null : threads.peek
 	);
 	const thread = $derived(threads.get(peek?.id ?? null));
 	const live = $derived(thread ? threads.live[thread.id] : undefined);

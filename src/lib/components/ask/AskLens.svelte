@@ -6,6 +6,8 @@
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { DiffFile } from '$lib/diff/types';
 	import type { Guide } from '$lib/guide/types';
+	import { errorText } from '$lib/errors';
+	import AskField from './AskField.svelte';
 	import Conversation from './Conversation.svelte';
 	import HunkExcerpt from './HunkExcerpt.svelte';
 	import QuestionList from './QuestionList.svelte';
@@ -28,13 +30,9 @@
 	const section = $derived(lines ? sectionLabel(guide, lines.hunk) : undefined);
 	const at = $derived(thread ? order.findIndex((t) => t.id === thread.id) : -1);
 	const part = $derived(lines && guide?.sections.find((s) => s.hunks.includes(lines.hunk)));
-	// docked: the section's title, and under it where the lines are and which question this is
+	// docked: the section's title, and under it where the lines are
 	const heading = $derived(part ? part.title : thread?.anchor.path || 'Whole change');
-	const detail = $derived(
-		[section, thread?.anchor.label, order.length > 1 && `${at + 1} of ${order.length}`]
-			.filter(Boolean)
-			.join(' · ')
-	);
+	const detail = $derived([section, thread?.anchor.label].filter(Boolean).join(' · '));
 	const title = $derived.by(() => {
 		if (!thread) return '';
 		return part ? `${section} ${part.title}` : thread.anchor.path || 'Whole change';
@@ -62,30 +60,27 @@
 	/** Opens the next or previous question, in the order of the questions list. */
 	function step(by: 1 | -1) {
 		const next = order[at + by];
-		if (!next) return;
-		threads.openLens(next.id);
-		// docked, the diff is the excerpt: it goes to the next question's lines
-		if (!threads.expanded) revealAnchor(next.anchor);
+		if (next) threads.openLens(next.id);
 	}
 
-	// ⇧J and ⇧K step through the questions from the diff too, where j and k are the guide's
-	function onwindowkeydown(event: KeyboardEvent) {
-		if (!docked || !thread || threads.expanded) return;
-		if (!event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
-		if ((event.target as HTMLElement).closest('input, textarea, [contenteditable], dialog')) return;
-		if (event.key !== 'J' && event.key !== 'K') return;
-		event.preventDefault();
-		step(event.key === 'J' ? 1 : -1);
+	let starting = $state(false);
+	let failure = $state('');
+
+	/** A new chat about the whole change, from under the list. */
+	async function startChat(text: string, background: boolean) {
+		starting = true;
+		failure = '';
+		try {
+			const id = await threads.ask(text, undefined, { change: true });
+			if (!background) threads.openLens(id);
+		} catch (e) {
+			failure = errorText(e);
+		} finally {
+			starting = false;
+		}
 	}
 
 	function onkeydown(event: KeyboardEvent) {
-		if (!thread) return;
-		if (event.key === '.' && (event.metaKey || event.ctrlKey)) {
-			event.preventDefault();
-			threads.cancel(thread.id);
-			return;
-		}
-		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		const field = (event.target as HTMLElement).closest('input, textarea, [contenteditable]');
 		// docked, esc leaves a box being typed in first, then the panel. The lens has its own
 		if (event.key === 'Escape' && !threads.expanded) {
@@ -94,8 +89,14 @@
 			else threads.close();
 			return;
 		}
-		if (field) return;
-		if (event.key === 'j' || event.key === 'k') {
+		if (!thread) return;
+		if (event.key === '.' && (event.metaKey || event.ctrlKey)) {
+			event.preventDefault();
+			threads.cancel(thread.id);
+			return;
+		}
+		if (event.metaKey || event.ctrlKey || event.altKey || field) return;
+		if (threads.expanded && (event.key === 'j' || event.key === 'k')) {
 			step(event.key === 'j' ? 1 : -1);
 		} else if (event.key === 'r') {
 			document.querySelector<HTMLTextAreaElement>('[data-followup] textarea')?.focus();
@@ -110,100 +111,99 @@
 	}
 </script>
 
-<svelte:window onkeydown={onwindowkeydown} />
+{#snippet closeButton()}
+	<button
+		type="button"
+		class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+		title="Close  esc"
+		aria-label="Close the agent panel"
+		onclick={() => threads.close()}
+	>
+		<svg
+			viewBox="0 0 16 16"
+			class="size-3.5"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.5"
+			stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
+		>
+	</button>
+{/snippet}
 
-{#if docked && thread && !threads.expanded}
+{#if docked && !threads.expanded}
 	<!-- a column beside the diff, which stands in for the excerpt and stays usable around it -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<aside data-ask-dock class="dock" aria-label="Question to Claude" {onkeydown}>
-		{#key thread.id}
-			<Conversation
-				{threads}
-				{thread}
-				title={heading}
-				{detail}
-				onreveal={thread.outdated || !thread.anchor.path ? undefined : showInDiff}
-				onjump={jumpTo}
-			>
-				{#snippet leading()}
-					{#if order.length > 1}
-						<span class="-ml-1.5 flex shrink-0 items-center text-muted">
-							<button
-								type="button"
-								class="grid size-7 place-items-center rounded-md hover:bg-subtle hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
-								title="Previous question  ⇧K"
-								aria-label="Previous question"
-								disabled={at <= 0}
-								onclick={() => step(-1)}
+	<aside data-ask-dock class="dock" aria-label="Agent" {onkeydown}>
+		{#if thread}
+			{#key thread.id}
+				<Conversation
+					{threads}
+					{thread}
+					title={heading}
+					{detail}
+					onreveal={thread.outdated || !thread.anchor.path ? undefined : showInDiff}
+					onjump={jumpTo}
+				>
+					{#snippet leading()}
+						<button
+							type="button"
+							class="-ml-1.5 grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+							title="All chats"
+							aria-label="Back to all chats"
+							onclick={() => threads.back()}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg
 							>
-								<svg
-									viewBox="0 0 16 16"
-									class="size-3.5"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.75"
-									stroke-linecap="round"
-									stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg
-								>
-							</button>
-							<button
-								type="button"
-								class="grid size-7 place-items-center rounded-md hover:bg-subtle hover:text-fg disabled:opacity-40 disabled:hover:bg-transparent"
-								title="Next question  ⇧J"
-								aria-label="Next question"
-								disabled={at >= order.length - 1}
-								onclick={() => step(1)}
+						</button>
+					{/snippet}
+					{#snippet actions()}
+						<button
+							type="button"
+							class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+							title="Every chat, with the lines beside it  e"
+							aria-label="Open the chats view"
+							onclick={() => (threads.expanded = true)}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path d="M9.5 3H13v3.5M6.5 13H3V9.5M13 3 9 7M3 13l4-4" /></svg
 							>
-								<svg
-									viewBox="0 0 16 16"
-									class="size-3.5"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.75"
-									stroke-linecap="round"
-									stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg
-								>
-							</button>
-						</span>
+						</button>
+						{@render closeButton()}
+					{/snippet}
+				</Conversation>
+			{/key}
+		{:else}
+			<QuestionList {threads} {grouped} actions={closeButton}>
+				<!-- a new chat about the whole change -->
+				<div class="shrink-0 px-3.5 pt-1 pb-3.5">
+					<AskField
+						bind:value={threads.newChat}
+						placeholder="Ask about the whole change"
+						hints={['', '⌘↵ in background']}
+						busy={starting}
+						autofocus
+						onsend={startChat}
+					/>
+					{#if failure}
+						<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>
 					{/if}
-				{/snippet}
-				{#snippet actions()}
-					<button
-						type="button"
-						class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
-						title="Every question, with the lines beside it  e"
-						aria-label="Open the questions view"
-						onclick={() => (threads.expanded = true)}
-					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="M9.5 3H13v3.5M6.5 13H3V9.5M13 3 9 7M3 13l4-4" /></svg
-						>
-					</button>
-					<button
-						type="button"
-						class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
-						title="Close  esc"
-						aria-label="Close the question"
-						onclick={() => threads.close()}
-					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
-						>
-					</button>
-				{/snippet}
-			</Conversation>
-		{/key}
+				</div>
+			</QuestionList>
+		{/if}
 	</aside>
 {:else if !docked && thread && threads.expanded}
 	<dialog

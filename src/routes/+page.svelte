@@ -16,6 +16,7 @@
 	import CommitList from '$lib/components/CommitList.svelte';
 	import PrOverview from '$lib/components/pr/PrOverview.svelte';
 	import PrList from '$lib/components/pr/PrList.svelte';
+	import PrSkeleton from '$lib/components/pr/PrSkeleton.svelte';
 	import ReviewNav from '$lib/components/pr/ReviewNav.svelte';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import FileList from '$lib/components/FileList.svelte';
@@ -67,7 +68,7 @@
 	let awaited: PageData['diff'] | undefined;
 	$effect(() => {
 		const promise = data.diff;
-		const { mode } = data;
+		const { mode, fresh } = data;
 		// a tab switch hands over the same diff again
 		if (promise === awaited) return;
 		awaited = promise;
@@ -82,6 +83,17 @@
 			diff = { ...loaded, mode };
 			ready = true;
 			pending = false;
+			// a pull request comes as it was read last, then as GitHub has it now
+			fresh.then((next) => {
+				if (!next || promise !== data.diff) return;
+				const [was, now] = [diff.selection?.range, next.selection?.range];
+				// the same commits, only GitHub's side moved: the files stay as they are, so
+				// nothing that reads them redoes its work
+				diff =
+					was && now && was.from === now.from && was.to === now.to
+						? ({ ...diff, selection: next.selection } as Diff)
+						: { ...next, timing: loaded.timing, mode };
+			});
 		});
 	});
 
@@ -132,9 +144,11 @@
 	// the page is up, it takes a moment. Undefined till then, null without gh, a sign in
 	// or a GitHub remote
 	let prs = $state<PrSummary[] | null | undefined>(undefined);
+	// asked again on another pull request, not when the one on screen is read again
+	const prNumber = $derived(pr?.number);
 	$effect(() => {
 		const repo = data.repo;
-		if (!pr) return;
+		if (!prNumber) return;
 		getPullRequests(repo).then(
 			(list) => repo === data.repo && (prs = list),
 			() => (prs = null)
@@ -207,8 +221,8 @@
 		prId: diff.selection?.pr?.id
 	}));
 	const asking = $derived(diff.scope !== null && diff.selection !== null ? threads : undefined);
-	/** the question open in the panel docked at the right, beside the diff */
-	const docked = $derived(!!asking?.open && !asking.expanded);
+	/** the agent panel docked at the right, beside the diff */
+	const docked = $derived(!!asking?.panel && !asking.expanded);
 	let panelWidth = $state<number | null>(storedSize(PANEL_KEY));
 	const dock = $derived(docked ? (panelWidth ?? PANEL_DEFAULT) : 0);
 
@@ -230,6 +244,11 @@
 
 	// navigating, or on the page while its diff streams in
 	const loading = slow(() => !!navigating.to || pending);
+	// the pull request being opened, while it loads too
+	const headed = $derived(Number((navigating.to?.url ?? page.url).searchParams.get('pr')) || null);
+	// from one pull request's overview to another the list beside it stays, only the pull
+	// request shows itself loading
+	const keepPrList = $derived(view === 'overview' && !!pr && headed !== null);
 
 	// warm the neighbouring commits so stepping with [ and ] is instant. SvelteKit keeps
 	// one preload at a time, so the next commit is preloaded and the server just warms
@@ -701,31 +720,26 @@
 				<ReviewNav threads={pr.threads} files={diff.files} />
 			{/if}
 			{#if asking}
-				<!-- a question about the whole change, the composer floats under this -->
+				<!-- the agent panel: every chat about this diff, and a new one about the whole change -->
 				<button
 					type="button"
-					id="ask-change"
-					class="ml-3 h-7 shrink-0 rounded-lg px-2.5 text-[12px] text-muted hover:bg-subtle hover:text-fg"
-					title="Ask Claude about the whole change"
-					onclick={() => threads.selectWhole(undefined, undefined, 'ask-change')}
-					>Ask about the change</button
-				>
-			{/if}
-			{#if asking && threads.list.length}
-				<!-- every question about this diff, in the lens -->
-				<button
-					type="button"
-					class="ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-muted hover:border-muted hover:text-fg"
-					title="Open the questions to Claude  q"
-					onclick={() => threads.openLens()}
+					class={[
+						'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-muted hover:border-muted hover:text-fg',
+						threads.panel && 'border-muted text-fg'
+					]}
+					title="{threads.panel ? 'Close' : 'Open'} the agent panel  q"
+					aria-pressed={threads.panel}
+					onclick={() => (threads.panel ? threads.close() : threads.show())}
 				>
 					{#if threads.running}
 						<span class="spin size-3 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
 						></span>
 						{threads.running} answering
 					{:else}
-						Questions
-						<span class="text-faint tabular-nums">{threads.list.length}</span>
+						Agent
+						{#if threads.list.length}
+							<span class="text-faint tabular-nums">{threads.list.length}</span>
+						{/if}
 					{/if}
 				</button>
 			{/if}
@@ -791,7 +805,7 @@
 			bind:view={prView}
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
-	{:else if !ready || loading.current}
+	{:else if !ready || (loading.current && !keepPrList)}
 		<!-- the next diff streaming in, once it takes long enough to notice -->
 		<DiffSkeleton layout={shownLayout} />
 	{:else if diff.error}
@@ -925,7 +939,7 @@
 			<PrList
 				compact
 				{prs}
-				current={pr?.number}
+				current={headed ?? pr?.number}
 				bind:view={sideView}
 				href={(number) => url({ pr: String(number), view: null }, true)}
 			/>
@@ -942,13 +956,17 @@
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
 				{@render toolbar()}
 				{#if view === 'overview' && pr}
-					<PrOverview
-						{pr}
-						onjump={jump}
-						onreply={threads.review
-							? (thread, body) => threads.addToReview({ kind: 'reply', thread, body })
-							: undefined}
-					/>
+					{#if loading.current}
+						<PrSkeleton />
+					{:else}
+						<PrOverview
+							{pr}
+							onjump={jump}
+							onreply={threads.review
+								? (thread, body) => threads.addToReview({ kind: 'reply', thread, body })
+								: undefined}
+						/>
+					{/if}
 				{:else}
 					{#if commit}
 						<CommitCard {commit} />

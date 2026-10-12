@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Group } from '$lib/ask/groups';
 	import { shortLines } from '$lib/ask/groups';
 	import type { Threads } from '$lib/ask/threads.svelte';
@@ -8,9 +9,13 @@
 		threads: Threads;
 		/** the questions in reading order, see groupThreads */
 		grouped: Group[];
+		/** buttons at the end of the header, in place of the j k hint */
+		actions?: Snippet;
+		/** under the list, the docked panel's new chat */
+		children?: Snippet;
 	}
 
-	let { threads, grouped }: Props = $props();
+	let { threads, grouped, actions, children }: Props = $props();
 
 	const firstLine = (t: Thread) =>
 		t.messages.find((m) => m.role === 'user')?.text.split('\n')[0] ?? '';
@@ -20,13 +25,15 @@
 	<header
 		class="flex h-11 shrink-0 items-center justify-between gap-2.5 border-b border-line px-3 text-[12px] font-medium"
 	>
-		<span
-			>Questions <span class="font-normal text-faint tabular-nums">{threads.list.length}</span
-			></span
+		<span>Chats <span class="font-normal text-faint tabular-nums">{threads.list.length}</span></span
 		>
-		<span class="flex items-center gap-1 font-normal text-faint">
-			<kbd class="font-mono text-[10.5px]">j</kbd><kbd class="font-mono text-[10.5px]">k</kbd>
-		</span>
+		{#if actions}
+			<span class="flex items-center gap-1">{@render actions()}</span>
+		{:else}
+			<span class="flex items-center gap-1 font-normal text-faint">
+				<kbd class="font-mono text-[10.5px]">j</kbd><kbd class="font-mono text-[10.5px]">k</kbd>
+			</span>
+		{/if}
 	</header>
 	<div class="min-h-0 flex-1 overflow-y-auto p-2">
 		{#each grouped as group (group.key)}
@@ -70,10 +77,12 @@
 			{/each}
 		{:else}
 			<p class="px-2 py-6 text-center text-[12px] text-faint">
-				Drag over line numbers, or select code, then press <kbd class="font-mono">a</kbd>.
+				Ask about the whole change below, or drag over line numbers or select code, then press
+				<kbd class="font-mono">a</kbd>.
 			</p>
 		{/each}
 	</div>
+	{@render children?.()}
 </section>
 
 <style>

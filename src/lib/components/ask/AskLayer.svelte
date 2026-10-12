@@ -55,29 +55,30 @@
 			} else {
 				threads.cursor = startCursor();
 			}
-		} else if (event.key === 'q' && threads.open) {
-			threads.close();
-		} else if (event.key === 'q' && threads.list.length) {
-			threads.openLens();
+		} else if (event.key === 'q') {
+			if (threads.panel) threads.close();
+			else threads.show();
 		} else if (event.key === 'Escape' && threads.composing) {
 			threads.composing = false;
 		} else if (event.key === 'Escape' && threads.draft) {
 			threads.draft = null;
-		} else if (event.key === 'Escape' && threads.open) {
+		} else if (event.key === 'Escape' && threads.panel) {
 			threads.close();
 		} else return;
 		event.preventDefault();
 	}
 
-	// ?ask=<id> while the lens is open, so a reload or a link opens it again
+	// ?ask=<id> while the panel is open on a chat, ?ask on its list, so a reload or a link
+	// opens it again
 	let restored = false;
 	$effect(() => {
-		const open = threads.open;
+		const open = threads.panel ? (threads.open ?? '') : null;
 		untrack(() => {
 			if (!restored) {
 				restored = true;
 				const asked = page.url.searchParams.get('ask');
-				if (asked && threads.get(asked)) threads.openLens(asked);
+				if (asked) threads.openLens(asked);
+				else if (asked === '') threads.show();
 				// the first run can be the page's first mount, before the router has started,
 				// where replaceState throws and leaves SvelteKit to mount every later page
 				// beside this one. A stale ?ask= stays until the lens next opens or closes
@@ -91,9 +92,9 @@
 		});
 	});
 
-	// a question that's gone, deleted or from another diff, closes the lens
+	// a chat that's gone, deleted or from another diff, goes back to the list
 	$effect(() => {
-		if (threads.open && !threads.get(threads.open)) threads.close();
+		if (threads.open && !threads.get(threads.open)) threads.back();
 	});
 </script>
 

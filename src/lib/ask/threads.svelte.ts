@@ -70,11 +70,14 @@ export class Threads {
 	/** threads whose answer was running when the page loaded, and has gone since */
 	lost = $state<Record<string, boolean>>({});
 
-	/** the question open in the lens */
+	/** the agent panel is open, on the chat in `open` or else on the list of chats */
+	panel = $state(false);
+	/** the chat open in the panel or the lens */
 	open = $state<string | null>(null);
+	/** a new chat about the whole change, being typed under the list */
+	newChat = $state('');
 	/** the lens over the whole page, instead of docked beside the diff */
 	expanded = $state(false);
-	#lastOpen: string | null = null;
 	/** a marker being hovered, and where to show its peek */
 	peek = $state<{ id: string; x: number; y: number } | null>(null);
 
@@ -153,11 +156,8 @@ export class Threads {
 		this.#compose({ span, section });
 	}
 
-	/**
-	 * A new question about a whole file, or without `path` about the whole change, its
-	 * composer under the button `at`.
-	 */
-	selectWhole(path: string | undefined, section: string | undefined, at: string) {
+	/** A new question about a whole file, its composer under the button `at`. */
+	selectWhole(path: string, section: string | undefined, at: string) {
 		this.#compose({ path, section, at });
 	}
 
@@ -168,25 +168,40 @@ export class Threads {
 		this.cursor = null;
 	}
 
-	/** Opens the lens on a question, else the last one open, else the newest. */
-	openLens(id?: string) {
-		const target = this.get(id ?? null) ?? this.get(this.#lastOpen) ?? this.list.at(-1);
-		if (!target) return;
-		this.open = target.id;
-		this.#lastOpen = target.id;
+	/** Opens the panel on a chat. */
+	openLens(id: string) {
+		if (!this.get(id)) return;
+		this.open = id;
+		this.panel = true;
 		this.peek = null;
 	}
 
-	close() {
+	/** Opens the panel on what it showed last, a chat or the list. */
+	show() {
+		if (!this.get(this.open)) this.open = null;
+		this.panel = true;
+	}
+
+	/** From a chat back to the list. */
+	back() {
 		this.open = null;
 		this.expanded = false;
 	}
 
+	close() {
+		this.panel = false;
+		this.expanded = false;
+	}
+
 	/**
-	 * Asks in a new thread about the draft's lines, or as a follow-up in
-	 * `thread`. Returns the thread's id.
+	 * Asks in a new thread about the draft's lines, or with `change` about the whole change,
+	 * or as a follow-up in `thread`. Returns the thread's id.
 	 */
-	async ask(text: string, thread?: string, options: { retry?: boolean } = {}): Promise<string> {
+	async ask(
+		text: string,
+		thread?: string,
+		options: { retry?: boolean; change?: boolean } = {}
+	): Promise<string> {
 		const { repo, from, to, pr } = this.#config();
 		const draft = this.draft;
 		const { scope, thread: saved } = await askClaude({
@@ -197,12 +212,15 @@ export class Threads {
 			text,
 			...(thread
 				? { thread, retry: options.retry === true }
-				: { span: draft?.span, path: draft?.path, section: draft?.section })
+				: options.change
+					? {}
+					: { span: draft?.span, path: draft?.path, section: draft?.section })
 		});
 
 		this.#upsert(saved);
 		delete this.lost[saved.id];
 		if (thread) delete this.replies[thread];
+		else if (options.change) this.newChat = '';
 		else {
 			this.draft = null;
 			this.composing = false;
@@ -257,8 +275,7 @@ export class Threads {
 		await removeThread({ repo, scope, thread: id });
 		this.list = this.list.filter((t) => t.id !== id);
 		delete this.replies[id];
-		if (this.open === id) this.open = null;
-		if (this.#lastOpen === id) this.#lastOpen = null;
+		if (this.open === id) this.back();
 	}
 
 	/** Shows an answer that failed the way the server saved it. */
