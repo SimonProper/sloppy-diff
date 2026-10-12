@@ -226,10 +226,13 @@
 							if (marking) active = i;
 						}}
 					>
+						<!-- a column wide enough for four digits, so the titles line up -->
+						<span class="-mr-1.5 w-[5ch] shrink-0 text-right text-[12.5px] text-faint tabular-nums"
+							>#{pr.number}</span
+						>
 						<span class="min-w-0 flex-1">
 							<span class="flex items-center gap-1.5">
 								<span class="truncate text-[12.5px] font-medium">{pr.title}</span>
-								<span class="shrink-0 text-[12px] text-faint">#{pr.number}</span>
 								{#if pr.isDraft}
 									<span
 										class="shrink-0 rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
