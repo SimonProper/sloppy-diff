@@ -992,6 +992,9 @@
 							threads={asking}
 							review={pr?.threads}
 							remember={data.repo}
+							source={diff.selection
+								? { repo: data.repo, rev: diff.selection.range?.to ?? '' }
+								: undefined}
 						/>
 					{:else}
 						<!-- the commit list stays, so an empty commit is one step on the way -->

@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { branchBase, formerTips, nearestBranch, resolveCommit } from './git';
+import { branchBase, formerTips, nearestBranch, readFileAt, resolveCommit } from './git';
 
 interface Repo {
 	root: string;
@@ -269,4 +269,11 @@ describe('nearestBranch', () => {
 	test('ties go to the preferred branch', async () => {
 		expect(await nearestBranch(r.root, 'f1', 'main', ['stacked'])).toBe('stacked');
 	});
+});
+
+test("readFileAt won't read outside the repo", async () => {
+	const root = realpathSync(tmpdir());
+	await expect(readFileAt(root, '', '../etc/passwd')).rejects.toThrow('Invalid path');
+	await expect(readFileAt(root, '', '/etc/passwd')).rejects.toThrow('Invalid path');
+	await expect(readFileAt(root, '--output=x', 'a')).rejects.toThrow('Invalid revision');
 });

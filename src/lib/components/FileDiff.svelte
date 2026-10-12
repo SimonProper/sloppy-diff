@@ -10,6 +10,9 @@
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
 	import { storedOpen, storeOpen } from '$lib/diff/folds';
 	import { lineStats, tinted } from '$lib/diff/hunks';
+	import { gapsOf, type Gaps } from '$lib/diff/whole';
+	import { getWholeFile } from '$lib/diff/diff.remote';
+	import { errorText } from '$lib/errors';
 	import { placeThreads, type ReviewMark } from '$lib/pr/marks';
 	import { chunk } from '$lib/chunk';
 	import type { ReviewThread } from '$lib/pr/types';
@@ -46,6 +49,8 @@
 		remember?: string;
 		/** a pull request's review threads, shown on their lines in this file */
 		review?: ReviewThread[];
+		/** where the whole file is read from, the diff's new side; it can't be shown whole when absent */
+		source?: { repo: string; rev: string };
 	}
 
 	let {
@@ -62,7 +67,8 @@
 		threads,
 		section,
 		remember,
-		review = []
+		review = [],
+		source
 	}: Props = $props();
 
 	// lockfiles and formatting-only files start collapsed, unless the reader opened them
@@ -99,18 +105,33 @@
 	 * Sets the hunk's scroll width, which otherwise only counts the blocks that
 	 * happen to be rendered and jumps as others come and go.
 	 */
-	const widths = $derived(
-		new Map(
-			file.hunks.map((h) => [
-				h.id,
-				Math.max(0, ...h.lines.map((l) => l.text.replace(/\t/g, '        ').length))
-			])
-		)
-	);
+	const widest = (lines: DiffLine[]) =>
+		lines.reduce((w, l) => Math.max(w, l.text.replace(/\t/g, '        ').length), 0);
+	const widths = $derived(new Map(file.hunks.map((h) => [h.id, widest(h.lines)])));
 
 	const path = $derived(splitPath(displayPath(file)));
 	const hunks = $derived(only ? file.hunks.filter((h) => only.includes(h.id)) : file.hunks);
 	const counts = $derived(lineStats(hunks));
+
+	// the whole file: the lines between hunks filled in from the new side, read the
+	// first time it's asked for and again for a file that's been read anew. Only for
+	// the full diff, a guide's step shows some of the hunks and the rest aren't context
+	const canShowWhole = $derived(
+		!!source && !only && !file.binary && file.hunks.length > 0 && file.status !== 'added'
+	);
+	let showWhole = $state(false);
+	let whole = $state.raw<{ file: DiffFile; gaps: Gaps | null; error?: string } | null>(null);
+	const wholeHere = $derived(showWhole && canShowWhole && whole?.file === file ? whole : null);
+	const gaps = $derived(wholeHere?.gaps ?? null);
+
+	$effect(() => {
+		if (!showWhole || !canShowWhole || !source || whole?.file === file) return;
+		const read = file;
+		getWholeFile({ repo: source.repo, rev: source.rev, path: read.newPath }).then(
+			(w) => (whole = { file: read, gaps: gapsOf(read.hunks, w) }),
+			(e) => (whole = { file: read, gaps: null, error: errorText(e) })
+		);
+	});
 
 	// asking Claude: lines are picked by dragging over their numbers, or by selecting
 	// text and taking up the offer that shows up under it. Rows carry their hunk and
@@ -388,6 +409,38 @@
 					>{headerThreads.length}
 				</button>
 			{/if}
+			{#if canShowWhole && open}
+				{@const reading = showWhole && !wholeHere}
+				<button
+					type="button"
+					class={[
+						'grid size-6 place-items-center rounded-md hover:bg-subtle hover:text-fg',
+						showWhole ? 'bg-subtle text-fg' : 'text-muted',
+						reading && 'animate-pulse'
+					]}
+					aria-pressed={showWhole}
+					aria-busy={reading}
+					aria-label="Show the whole file"
+					title={showWhole ? 'Show only the changed lines' : 'Show the whole file'}
+					onclick={() => (showWhole = !showWhole)}
+				>
+					<!-- arrows apart to unfold the unchanged lines, together to fold them away -->
+					<svg
+						viewBox="0 0 16 16"
+						class="size-3.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path
+							d={showWhole
+								? 'M3 8h10M8 1.5v4M5.5 3 8 5.5 10.5 3M8 14.5v-4M5.5 13 8 10.5 10.5 13'
+								: 'M3 8h10M8 5.5v-4M5.5 4 8 1.5 10.5 4M8 10.5v4M5.5 12 8 14.5 10.5 12'}
+						/></svg
+					>
+				</button>
+			{/if}
 			{#if file.language}
 				<span class="text-[11px] text-faint">{file.language}</span>
 			{/if}
@@ -412,12 +465,19 @@
 		{:else if hunks.length === 0}
 			<p class="px-4 py-6 text-center text-xs text-muted">No content changes</p>
 		{:else}
+			{#if wholeHere && !gaps}
+				<p class="border-b border-line px-4 py-2 text-xs text-muted">
+					{wholeHere.error ?? 'The file changed since the diff was read, reload to see it whole'}
+				</p>
+			{/if}
 			{#each hunks as hunk, h (hunk.id)}
+				{@const lead = gaps?.before[h] ?? []}
+				{@render gap(lead)}
 				{#each notes.filter((n) => n.hunk === hunk.id) as note, n (n)}
 					<div
 						class={[
 							'flex gap-2.5 border-l-2 border-accent bg-accent/6 px-4 py-2.5 text-[12.5px] leading-relaxed',
-							h > 0 && 'border-t border-t-line'
+							(h > 0 || lead.length > 0) && 'border-t border-t-line'
 						]}
 					>
 						<svg
@@ -432,23 +492,29 @@
 						<p class="whitespace-pre-wrap">{note.text}</p>
 					</div>
 				{/each}
-				<div
-					class={[
-						'flex h-7 items-center bg-subtle font-mono text-[11.5px] text-muted',
-						h > 0 && 'border-t border-line'
-					]}
-					data-hunk-top={hunk.id}
-				>
-					<span
+				{#if gaps}
+					<!-- the whole file reads on unbroken, its numbers already say where a hunk
+					     starts; left only for jumping to the hunk -->
+					<div data-hunk-top={hunk.id}></div>
+				{:else}
+					<div
 						class={[
-							'whitespace-pre text-accent/80',
-							layout === 'split' ? 'pl-[4.25rem]' : 'pl-[7.25rem]'
-						]}>@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span
+							'flex h-7 items-center bg-subtle font-mono text-[11.5px] text-muted',
+							h > 0 && 'border-t border-line'
+						]}
+						data-hunk-top={hunk.id}
 					>
-					{#if hunk.section}
-						<span class="truncate pr-6 pl-3 whitespace-pre">{hunk.section.trim()}</span>
-					{/if}
-				</div>
+						<span
+							class={[
+								'whitespace-pre text-accent/80',
+								layout === 'split' ? 'pl-[4.25rem]' : 'pl-[7.25rem]'
+							]}>@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span
+						>
+						{#if hunk.section}
+							<span class="truncate pr-6 pl-3 whitespace-pre">{hunk.section.trim()}</span>
+						{/if}
+					</div>
+				{/if}
 				{#if layout === 'split'}
 					<!-- long lines wrap so both sides of a row stay aligned -->
 					<div class="twinkleplop font-mono text-[12.5px] leading-5">
@@ -510,6 +576,7 @@
 					</div>
 				{/if}
 			{/each}
+			{@render gap(gaps?.after ?? [])}
 		{/if}
 		{#if unplaced.length && !only}
 			<UnplacedThreads threads={unplaced} {onreply} />
@@ -605,6 +672,59 @@
 			class="ml-2 font-sans text-[10px] text-faint select-none"
 			title="No newline at end of file">no newline</span
 		>{/if}
+{/snippet}
+
+<!-- unchanged lines the diff leaves out, shown with the whole file. Not in any hunk,
+     so there's nothing to pick or ask about in them -->
+{#snippet gap(lines: DiffLine[])}
+	{#if lines.length}
+		<div
+			class={[
+				'twinkleplop font-mono text-[12.5px] leading-5',
+				layout === 'unified' && 'overflow-x-auto'
+			]}
+		>
+			<div
+				class={[layout === 'unified' && 'w-max min-w-full']}
+				style:min-width={layout === 'unified'
+					? `max(100%, calc(${widest(lines)}ch + 9.625rem))`
+					: undefined}
+			>
+				{#each chunk(lines, BLOCK) as rows, b (b)}
+					<LazyBlock estimate={rows.length * ROW} lazy={virtualize}>
+						{#each rows as line (line.new)}
+							{#if layout === 'split'}
+								<div class="grid grid-cols-2">
+									{@render gapCell(line, 'old')}
+									{@render gapCell(line, 'new')}
+								</div>
+							{:else}
+								<div class="flex">
+									<span
+										class="sticky left-0 flex w-24 shrink-0 border-r border-line bg-surface text-right text-[11px] text-faint tabular-nums select-none"
+									>
+										<span class="w-12 pr-2">{line.old}</span>
+										<span class="w-12 pr-2">{line.new}</span>
+									</span>
+									<span class="pr-8 pl-3 whitespace-pre">{@render code(line)}</span>
+								</div>
+							{/if}
+						{/each}
+					</LazyBlock>
+				{/each}
+			</div>
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet gapCell(line: DiffLine, side: Side)}
+	<div class={['flex min-w-0', side === 'old' && 'split-old']}>
+		<span
+			class="w-12 shrink-0 border-r border-line bg-surface pr-2 text-right text-[11px] text-faint tabular-nums select-none"
+			>{line[side]}</span
+		>
+		<span class="min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap">{@render code(line)}</span>
+	</div>
 {/snippet}
 
 {#snippet cell(hunk: Hunk, line: DiffLine | null, side: Side)}

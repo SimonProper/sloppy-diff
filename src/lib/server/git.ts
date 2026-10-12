@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
 import { chunk } from '$lib/chunk';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
@@ -81,6 +81,8 @@ async function untracked(root: string): Promise<string> {
 
 /** A file's content at `rev`, or in the working tree when `rev` is empty; null when it isn't there. */
 export async function readFileAt(root: string, rev: string, path: string): Promise<string | null> {
+	if (isAbsolute(path) || path.split('/').includes('..')) throw new Error(`Invalid path: ${path}`);
+	if (rev) checkRev(rev);
 	if (!rev) return readFile(join(root, path), 'utf8').catch(() => null);
 	return git(root, ['cat-file', 'blob', `${rev}:${path}`]).catch(() => null);
 }

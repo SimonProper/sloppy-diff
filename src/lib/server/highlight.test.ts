@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseDiff } from '$lib/diff/parse';
-import { highlightFile, openBlock } from './highlight';
+import { highlightFile, highlightText, openBlock } from './highlight';
 
 const source = [
 	'<script lang="ts">',
@@ -36,5 +36,14 @@ describe('highlightFile', () => {
 		for (const line of file.hunks[0].lines) {
 			expect(line.html).toContain('<span class="tok keyword">let</span>');
 		}
+	});
+});
+
+describe('highlightText', () => {
+	it('gives one row per line, carrying a comment across lines and escaping without a grammar', () => {
+		const rows = highlightText('a.ts', ['/* a', 'b */', 'let c = 1;']);
+		expect(rows).toHaveLength(3);
+		expect(rows[1]).toContain('comment');
+		expect(highlightText('notes.txt', ['<b>'])).toEqual(['&lt;b&gt;']);
 	});
 });

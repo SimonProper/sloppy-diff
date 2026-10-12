@@ -252,3 +252,10 @@ function plain(line: DiffLine): string {
 	}
 	return out + md.utils.escapeHtml(line.text.slice(pos));
 }
+
+/** Each line of a whole file as markup, highlighted in one go so no line is read out of context. */
+export function highlightText(path: string, lines: string[]): string[] {
+	const rows = lines.map((text): DiffLine => ({ kind: 'ctx', text, old: null, new: null }));
+	const lang = detectLanguage(path);
+	return (lang && highlightLines(rows, lang)) || rows.map(plain);
+}
