@@ -94,3 +94,32 @@ export function clearDiffs() {
 export function storeDiff(key: string, value: unknown, weight: number) {
 	diffs.set(key, value, weight);
 }
+
+/** Bumped by every write to GitHub from here, a pull request read before it is behind. */
+let prWrites = 0;
+
+/**
+ * A pull request as it was read last, served while GitHub is asked again: its comments,
+ * checks and head move without any ref here moving. `fresh` is that new read, null when
+ * nothing was kept and `now` is the read itself. A failed read keeps what was there.
+ */
+export function revalidatePr<T>(
+	key: string,
+	compute: () => Promise<T>
+): { now: Promise<T>; fresh: Promise<T> | null } {
+	const hit = memo.get(key);
+	const writes = String(prWrites);
+	const value = compute();
+	value.then(
+		() => memo.set(key, { version: writes, value }),
+		() => {}
+	);
+	return hit?.version === writes
+		? { now: hit.value as Promise<T>, fresh: value }
+		: { now: value, fresh: null };
+}
+
+/** After a comment was added or deleted, every kept pull request is behind GitHub. */
+export function forgetPrs() {
+	prWrites++;
+}

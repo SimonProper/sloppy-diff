@@ -2,6 +2,7 @@ import { command, query } from '$app/server';
 import type { Suggestion } from '$lib/ask/types';
 import { addToDraft, listPullRequests } from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
+import { forgetPrs } from '$lib/server/cache';
 import { badRequestOnError } from '$lib/server/requests';
 
 /** The repo's open pull requests, null without gh or GitHub. */
@@ -22,5 +23,10 @@ export const addDraft = command(
 		pr: string;
 		commit: string;
 		suggestion: Suggestion;
-	}) => badRequestOnError(async () => addToDraft(await repoRoot(repo), pr, commit, suggestion))
+	}) =>
+		badRequestOnError(async () => {
+			const added = await addToDraft(await repoRoot(repo), pr, commit, suggestion);
+			forgetPrs();
+			return added;
+		})
 );

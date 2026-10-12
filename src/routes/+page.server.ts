@@ -30,7 +30,14 @@ import {
 	type BranchInfo
 } from '$lib/server/git';
 import { dev } from '$app/environment';
-import { cachedDiff, clearDiffs, remember, repoVersion, storeDiff } from '$lib/server/cache';
+import {
+	cachedDiff,
+	clearDiffs,
+	remember,
+	revalidatePr,
+	repoVersion,
+	storeDiff
+} from '$lib/server/cache';
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { checkPrNumber, listPullRequests, readPullRequest } from '$lib/server/gh';
@@ -141,7 +148,12 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	} catch (error) {
 		// a repo that moved or was deleted since it was last opened ends up here too
 		report();
-		return { ...base, ...empty(), diff: Promise.resolve(noDiff(errorMessage(error))) };
+		return {
+			...base,
+			...empty(),
+			diff: Promise.resolve(noDiff(errorMessage(error))),
+			fresh: Promise.resolve(null)
+		};
 	}
 	// `name` labels the step in Server-Timing, `detail` narrows the cache key
 	const cached = <T>(name: string, compute: () => Promise<T>, detail = '') =>
@@ -182,15 +194,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	]);
 
 	// the diff doesn't wait for the lists above, both run at once
-	const work = async ([current, defaultBase]: [string | null, string | null]) => {
-		// a PR's comments and head move without any ref here moving
-		const selection = await (mode === 'worktree' || mode === 'pr'
-			? select(root, mode, inputs, current, defaultBase)
-			: cached(
-					'select',
-					() => select(root, mode, inputs, current, defaultBase),
-					`${JSON.stringify(inputs)}\0${current}\0${defaultBase}`
-				));
+	const work = async (selection: Selection, defaultBase: string | null) => {
 		// shared by every commit on the branch, so stepping through it doesn't redo it
 		const on = selection.on;
 		const lane = on
@@ -247,6 +251,31 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		]);
 		return { ...noDiff(), selection, lane, files, changes, guide, scope, threads };
 	};
+	const read = (selection: Promise<Selection>) =>
+		head.then(async ([, defaultBase]) => described(await work(await selection, defaultBase)));
+
+	// a PR's comments and head move without any ref here moving, it's asked of GitHub
+	// every time. The one read last is served meanwhile, the page swaps the new one in
+	const pr =
+		mode === 'pr' && inputs.pr
+			? head.then(([current, defaultBase]) =>
+					revalidatePr(`${root}\0pr\0${inputs.pr}`, () =>
+						select(root, mode, inputs, current, defaultBase)
+					)
+				)
+			: null;
+	const selection = () =>
+		pr
+			? pr.then(({ now }) => timing.measure('pr', now))
+			: head.then(([current, defaultBase]) =>
+					mode === 'worktree'
+						? select(root, mode, inputs, current, defaultBase)
+						: cached(
+								'select',
+								() => select(root, mode, inputs, current, defaultBase),
+								`${JSON.stringify(inputs)}\0${current}\0${defaultBase}`
+							)
+				);
 
 	// the diff streams in after the page has landed, so picking something moves there at
 	// once and the page shows it loading. Without a pull request picked, the open ones
@@ -254,16 +283,24 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	const diff = (
 		mode === 'pr' && !inputs.pr
 			? timing.measure('prs', listPullRequests(root)).then((prs) => ({ ...noDiff(), prs }))
-			: head.then(work).then(described)
+			: read(selection())
 	)
 		.catch((error) => noDiff(errorMessage(error)))
 		// the header went out before these steps were done, they come along with the diff
 		.then((loaded) => ({ ...loaded, timing: timing.header() }));
+	// the PR as GitHub has it now, null when it's what was served or it couldn't be read
+	const fresh = (pr ?? Promise.resolve({ now: null, fresh: null }))
+		.then(async ({ now, fresh }) => {
+			const next = await fresh;
+			if (!next || JSON.stringify(next) === JSON.stringify(await now)) return null;
+			return read(Promise.resolve(next));
+		})
+		.catch(() => null);
 
 	const [branches, commits] = await meta.catch((): [Branch[], Commit[]] => [[], []]);
 	const [branch, defaultBase] = await head;
 	report();
-	return { ...base, repo: root, branch, defaultBase, branches, commits, diff };
+	return { ...base, repo: root, branch, defaultBase, branches, commits, diff, fresh };
 };
 
 async function select(

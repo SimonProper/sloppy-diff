@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { cachedDiff, clearDiffs, remember, storeDiff } from './cache';
+import { cachedDiff, clearDiffs, forgetPrs, remember, revalidatePr, storeDiff } from './cache';
 
 describe('diff cache', () => {
 	beforeEach(clearDiffs);
@@ -41,5 +41,34 @@ describe('remember', () => {
 		expect(await remember('k', 'v2', compute)).toBe(2);
 		await expect(remember('f', 'v', () => Promise.reject(new Error('x')))).rejects.toThrow();
 		expect(await remember('f', 'v', compute)).toBe(3);
+	});
+});
+
+describe('revalidatePr', () => {
+	it('serves the last read while reading again, not past a write', async () => {
+		let calls = 0;
+		const read = () => revalidatePr('pr-test', async () => ++calls);
+
+		const first = read();
+		expect(first.fresh).toBeNull();
+		expect(await first.now).toBe(1);
+
+		const second = read();
+		expect(await second.now).toBe(1);
+		expect(await second.fresh).toBe(2);
+		expect(await read().now).toBe(2);
+
+		forgetPrs();
+		const after = read();
+		expect(after.fresh).toBeNull();
+		expect(await after.now).toBe(4);
+	});
+
+	it('keeps the last read when reading again fails', async () => {
+		await revalidatePr('pr-fail', async () => 'kept').now;
+		await revalidatePr('pr-fail', () => Promise.reject(new Error('offline'))).fresh?.catch(
+			() => {}
+		);
+		expect(await revalidatePr('pr-fail', async () => 'next').now).toBe('kept');
 	});
 });
