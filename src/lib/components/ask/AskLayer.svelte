@@ -23,7 +23,7 @@
 	/** The guide section a hunk is read in, sent along as context for the question. */
 	const sectionOf = (hunk: string) => guide?.sections.find((s) => s.hunks.includes(hunk))?.id;
 
-	// a, q, and picking lines from the keyboard, also while the panel is docked. The
+	// a, c, q, and picking lines from the keyboard, also while the panel is docked. The
 	// panel and the lens handle their own keys
 	function onkeydown(event: KeyboardEvent) {
 		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -47,7 +47,9 @@
 			return;
 		}
 
-		if (event.key === 'a') {
+		if (event.key === 'a' || (event.key === 'c' && threads.review)) {
+			// on a pull request, a asks Claude and c comments
+			if (threads.review) threads.setIntent(event.key === 'c' ? 'comment' : 'ask');
 			const selected = selectedSpan(document.querySelector('main') ?? undefined);
 			if (selected) {
 				threads.select(selected.span, sectionOf(selected.span.hunk));
@@ -109,7 +111,7 @@
 		<span><kbd>↑</kbd><kbd>↓</kbd> line</span>
 		<span><kbd>⇧</kbd><kbd>↑</kbd><kbd>↓</kbd> more lines</span>
 		{#if threads.cursor.side}<span><kbd>←</kbd><kbd>→</kbd> other side</span>{/if}
-		<span><kbd>↵</kbd> ask</span>
+		<span><kbd>↵</kbd> {threads.review && threads.intent === 'comment' ? 'comment' : 'ask'}</span>
 		<span><kbd>esc</kbd> cancel</span>
 	</div>
 {/if}

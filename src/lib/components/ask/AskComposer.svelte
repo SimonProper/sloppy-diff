@@ -169,7 +169,11 @@
 						{ value: 'comment', label: 'Comment' }
 					]}
 					value={threads.intent}
-					onchange={(intent) => threads.setIntent(intent)}
+					onchange={(intent) => {
+						threads.setIntent(intent);
+						// back to the text, also when it had lost the focus before the switch
+						box?.querySelector('textarea')?.focus();
+					}}
 					text="sm"
 					label="Send to"
 					keepFocus

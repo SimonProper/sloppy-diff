@@ -291,16 +291,25 @@
 		const selected = threads && selectedSpan(root);
 		if (!selected) return;
 		const box = root.getBoundingClientRect();
+		const width = threads.review ? 200 : 116;
+		// in the page, a popover over the card: under the last line it isn't cut off by the
+		// card's edge. Kept clear of the markers down the card's right edge
 		offer = {
 			span: selected.span,
-			top: selected.rect.bottom - box.top + 4,
-			// kept clear of the markers down the card's right edge
-			left: Math.max(8, Math.min(selected.rect.right - box.left - 40, box.width - 24 - 116))
+			top: selected.rect.bottom + 4 + window.scrollY,
+			left:
+				Math.max(box.left + 8, Math.min(selected.rect.right - 40, box.right - 24 - width)) +
+				window.scrollX
 		};
 	}
 
-	function acceptOffer() {
+	/** on a pull request the lines can be commented on too */
+	const offers = $derived<('ask' | 'comment')[]>(threads?.review ? ['ask', 'comment'] : ['ask']);
+
+	/** with `intent`, what the composer sends switches to it first */
+	function acceptOffer(intent?: 'ask' | 'comment') {
 		if (!offer || !threads) return;
+		if (intent) threads.setIntent(intent);
 		threads.select(offer.span, section);
 		offer = null;
 		window.getSelection()?.removeAllRanges();
@@ -593,17 +602,31 @@
 	{/if}
 
 	{#if offer}
-		<button
-			type="button"
-			class="absolute z-[5] flex h-[26px] items-center gap-1.5 rounded-lg border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
+		<!-- on a pull request, to comment as well -->
+		<div
+			popover="manual"
+			{@attach (el) => {
+				el.showPopover();
+				return () => el.hidePopover();
+			}}
+			class="absolute flex gap-1"
 			style:top="{offer.top}px"
 			style:left="{offer.left}px"
-			onpointerdown={(e) => e.preventDefault()}
-			onclick={acceptOffer}
 		>
-			Ask Claude
-			<kbd class="font-mono text-[10.5px] font-normal text-faint">a</kbd>
-		</button>
+			{#each offers as intent (intent)}
+				<button
+					type="button"
+					class="flex h-[26px] items-center gap-1.5 rounded-lg border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
+					onpointerdown={(e) => e.preventDefault()}
+					onclick={() => acceptOffer(threads?.review ? intent : undefined)}
+				>
+					{intent === 'ask' ? 'Ask Claude' : 'Comment'}
+					<kbd class="font-mono text-[10.5px] font-normal text-faint"
+						>{intent === 'ask' ? 'a' : 'c'}</kbd
+					>
+				</button>
+			{/each}
+		</div>
 	{/if}
 </section>
 

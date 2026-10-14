@@ -32,6 +32,7 @@ Open the printed URL and pick a repository. The repo picker scans your home fold
 | `j` `k`  | a guide            | step to the next or previous section            |
 | `s`      | the folded sidebar | open or close it                                |
 | `a`      | a diff             | ask about lines, picked with the arrow keys     |
+| `c`      | a pull request     | comment on lines, picked with the arrow keys    |
 | `q`      | a diff             | open or close the agent panel                   |
 | `↵` `⌘↵` | the question box   | ask and open the lens, or ask in the background |
 | `j` `k`  | the lens           | step to the next or previous question           |
