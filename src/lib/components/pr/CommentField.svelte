@@ -23,7 +23,7 @@
 		avatar,
 		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
 		action = 'Add to your review',
-		hint = '↵ to add to your review'
+		hint = '⌘↵ to add to your review'
 	}: Props = $props();
 
 	const key = $derived(`sloppy-diff:reply:${keep}`);
@@ -47,7 +47,7 @@
 	}
 
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key !== 'Enter' || event.shiftKey) return;
+		if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
 		event.preventDefault();
 		if (typed && !sending) send(reply.trim());
 	}
@@ -83,7 +83,7 @@
 					typed ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
 				]}
 				aria-label={action}
-				title="{action}  ↵"
+				title="{action}  ⌘↵"
 				disabled={!typed || sending}
 				onclick={() => send(reply.trim())}
 			>

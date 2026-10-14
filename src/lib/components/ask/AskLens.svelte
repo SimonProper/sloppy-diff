@@ -67,12 +67,12 @@
 	let failure = $state('');
 
 	/** A new chat about the whole change, from under the list. */
-	async function startChat(text: string, background: boolean) {
+	async function startChat(text: string) {
 		starting = true;
 		failure = '';
 		try {
 			const id = await threads.ask(text, undefined, { change: true });
-			if (!background) threads.openLens(id);
+			threads.openLens(id);
 		} catch (e) {
 			failure = errorText(e);
 		} finally {
@@ -193,7 +193,7 @@
 					<AskField
 						bind:value={threads.newChat}
 						placeholder="Ask about the whole change"
-						hints={['', '⌘↵ in background']}
+						hints={['', '⌘↵ to ask']}
 						busy={starting}
 						autofocus
 						onsend={startChat}

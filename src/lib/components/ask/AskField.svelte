@@ -10,8 +10,8 @@
 		context?: string;
 		/** a question is being sent */
 		busy?: boolean;
-		/** `background` asks without opening the lens (⌘↵) */
-		onsend: (text: string, background: boolean) => void;
+		/** ⌘↵, or the send button. ↵ alone is a new line */
+		onsend: (text: string) => void;
 		/** what send does, for its label */
 		action?: string;
 		/** Tab, to switch what send does */
@@ -56,9 +56,9 @@
 	});
 
 	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && !event.shiftKey) {
+		if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
 			event.preventDefault();
-			if (typed && !busy) onsend(value.trim(), event.metaKey || event.ctrlKey);
+			if (typed && !busy) onsend(value.trim());
 		} else if (event.key === 'Tab' && !event.shiftKey && ontab) {
 			event.preventDefault();
 			ontab();
@@ -108,9 +108,9 @@
 				typed || onstop ? 'bg-ink text-surface' : 'pointer-events-none bg-subtle text-muted'
 			]}
 			aria-label={onstop ? 'Stop' : action}
-			title={onstop ? 'Stop  ⌘.' : `${action}  ↵`}
+			title={onstop ? 'Stop  ⌘.' : `${action}  ⌘↵`}
 			disabled={onstop ? false : !typed || busy}
-			onclick={() => (onstop ? onstop() : onsend(value.trim(), false))}
+			onclick={() => (onstop ? onstop() : onsend(value.trim()))}
 		>
 			{#if onstop}
 				<svg viewBox="0 0 16 16" class="size-2.5" fill="currentColor"

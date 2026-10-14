@@ -322,7 +322,7 @@
 		<AskField
 			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
 			placeholder="Follow up"
-			hints={['', '↵ to send']}
+			hints={['', '⌘↵ to send']}
 			busy={sending || !!live}
 			onsend={(text) => send(text)}
 			onstop={live ? () => threads.cancel(thread.id) : undefined}

@@ -268,7 +268,7 @@
 					avatar={pr.viewerAvatar}
 					placeholder="Leave a comment…"
 					action="Comment"
-					hint="↵ to comment"
+					hint="⌘↵ to comment"
 				/>
 			</li>
 		</ul>

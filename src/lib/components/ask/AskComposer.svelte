@@ -123,13 +123,13 @@
 		}
 	}
 
-	async function send(text: string, background: boolean) {
+	async function send(text: string) {
 		if (commenting) return comment(text);
 		sending = true;
 		failure = '';
 		try {
 			const id = await threads.ask(text);
-			if (!background) threads.openLens(id);
+			threads.openLens(id);
 		} catch (e) {
 			failure = errorText(e);
 		} finally {
@@ -161,7 +161,7 @@
 		style:width="{place.width}px"
 	>
 		{#if choosing}
-			<!-- what ↵ does, Tab switches it. Clicking leaves the focus in the text -->
+			<!-- what ⌘↵ does, Tab switches it. Clicking leaves the focus in the text -->
 			<div class="flex px-2 pt-2">
 				<SegmentedControl
 					options={[
@@ -194,9 +194,9 @@
 			hints={choosing
 				? [
 						commenting ? 'tab to ask Claude' : 'tab to comment',
-						commenting ? '↵ adds it to your review' : '⌘↵ in background'
+						commenting ? '⌘↵ adds it to your review' : '⌘↵ to ask'
 					]
-				: ['esc', '⌘↵ in background']}
+				: ['esc', '⌘↵ to ask']}
 			busy={sending}
 			action={commenting ? 'Comment' : 'Ask'}
 			onsend={send}
