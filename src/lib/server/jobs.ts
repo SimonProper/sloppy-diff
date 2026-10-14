@@ -8,6 +8,8 @@ export interface Job<E> {
 	listeners: Set<(event: E) => void>;
 	finished: boolean;
 	child?: ChildProcess;
+	/** aborted when the job finishes or is cancelled, for work that has no child to kill */
+	stop: AbortController;
 }
 
 type Final = { type: 'done' } | { type: 'error'; message: string };
@@ -34,6 +36,7 @@ export function jobQueue<E extends { type: string }>(name: string) {
 		job.events.push(event);
 		if (event.type === 'done' || event.type === 'error') {
 			job.finished = true;
+			job.stop.abort();
 			setTimeout(() => {
 				if (jobs.get(job.key) === job) jobs.delete(job.key);
 			}, KEEP_FINISHED_MS).unref();
@@ -50,7 +53,13 @@ export function jobQueue<E extends { type: string }>(name: string) {
 			const running = jobs.get(key);
 			if (running && !running.finished) return running;
 
-			const job: Job<E> = { key, events: [], listeners: new Set(), finished: false };
+			const job: Job<E> = {
+				key,
+				events: [],
+				listeners: new Set(),
+				finished: false,
+				stop: new AbortController()
+			};
 			jobs.set(key, job);
 			run(job).catch((error) => {
 				job.child?.kill();

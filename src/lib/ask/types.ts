@@ -32,7 +32,8 @@ export const linesOf = (anchor: Anchor): LineSpan | null =>
 /** Something Claude did on the way to an answer. */
 export type Step =
 	| { type: 'thinking'; text: string }
-	| { type: 'tool'; text: string }
+	/** `detail`: what a step found, for the reader to unfold, e.g. the language server's answers */
+	| { type: 'tool'; text: string; detail?: string }
 	/** what Claude said before carrying on, e.g. before looking at a file */
 	| { type: 'text'; text: string };
 
@@ -71,6 +72,8 @@ export interface Thread {
 	sessionTokens?: number;
 	/** set when loaded: the lines it's about aren't in the diff anymore */
 	outdated?: boolean;
+	/** asks for the blast radius of its lines, found by the language's compiler first */
+	blast?: true;
 }
 
 /** Which diff a thread belongs to: a commit range, or the uncommitted changes. */
@@ -80,7 +83,7 @@ export type Scope = 'worktree' | `${string}..${string}`;
 export type AskEvent =
 	| { type: 'status'; text: string }
 	| { type: 'thinking'; text: string }
-	| { type: 'tool'; text: string }
+	| { type: 'tool'; text: string; detail?: string }
 	| { type: 'text'; text: string }
 	| { type: 'thinking_tokens'; tokens: number }
 	| { type: 'done'; thread: Thread }

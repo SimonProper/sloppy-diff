@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Live } from '$lib/ask/threads.svelte';
 	import type { Step } from '$lib/ask/types';
+	import ToolText from '../ToolText.svelte';
 
 	interface Props {
 		steps: Step[];
@@ -24,20 +25,25 @@
 
 	const elapsed = $derived(live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0);
 
-	const reads = $derived(steps.filter((s) => s.type === 'tool' && s.text.startsWith('Reading')));
+	// Claude's own, a blast radius's analysis steps carry what they found and aren't counted
+	const reads = $derived(
+		steps.filter((s) => s.type === 'tool' && !s.detail && s.text.startsWith('Reading'))
+	);
 	const searches = $derived(
-		steps.filter((s) => s.type === 'tool' && !s.text.startsWith('Reading'))
+		steps.filter((s) => s.type === 'tool' && !s.detail && !s.text.startsWith('Reading'))
 	);
 	const thought = $derived(thinkingTokens > 0 || steps.some((s) => s.type === 'thinking'));
 	const last = $derived(steps.at(-1));
 
-	/** "Thought for 6s · read 3 files · 2 searches" */
+	/** "Thought for 6s · read 3 files · 2 searches · static analysis" */
 	const summary = $derived(
 		[
 			thought &&
 				(thinkingMs ? `Thought for ${Math.max(1, Math.round(thinkingMs / 1000))}s` : 'Thought'),
 			reads.length && `read ${reads.length} ${reads.length === 1 ? 'file' : 'files'}`,
-			searches.length && `${searches.length} ${searches.length === 1 ? 'search' : 'searches'}`
+			searches.length && `${searches.length} ${searches.length === 1 ? 'search' : 'searches'}`,
+			// a blast radius's, its steps carry what they found
+			steps.some((s) => s.type === 'tool' && s.detail) && 'static analysis'
 		]
 			.filter(Boolean)
 			.join(' · ')
@@ -79,7 +85,7 @@
 					stroke-linejoin="round"><path d="m6 4 4 4-4 4" /></svg
 				>
 			{/if}
-			<span class="truncate">{current}</span>
+			<ToolText text={current} />
 			{#if working}
 				<span class="text-faint tabular-nums">· {elapsed}s</span>
 			{/if}
@@ -100,6 +106,22 @@
 						>
 							{step.text}
 						</li>
+					{:else if step.type === 'tool' && step.detail && !latest}
+						<!-- what it found, e.g. the language server's answers, unfolded on a click -->
+						<li class="font-mono text-[11.5px] text-muted">
+							<details class="group">
+								<summary
+									class="flex cursor-pointer list-none items-center gap-[7px] hover:text-fg [&::-webkit-details-marker]:hidden"
+								>
+									<span class="w-3 text-center text-faint transition-transform group-open:rotate-90"
+										>▸</span
+									>
+									<ToolText text={step.text} />
+								</summary>
+								<pre
+									class="mt-1 ml-5 max-h-72 overflow-auto rounded-md bg-subtle px-2 py-1.5 text-[11px] leading-normal whitespace-pre-wrap">{step.detail}</pre>
+							</details>
+						</li>
 					{:else if step.type === 'tool'}
 						<li class="flex items-center gap-[7px] font-mono text-[11.5px] text-muted">
 							{#if latest}
@@ -109,7 +131,7 @@
 							{:else}
 								<span class="w-3 text-center text-faint">{icon(step.text)}</span>
 							{/if}
-							<span class="truncate">{step.text}</span>
+							<ToolText text={step.text} />
 						</li>
 					{:else}
 						<li class="text-[12.5px] leading-normal text-muted">{step.text}</li>

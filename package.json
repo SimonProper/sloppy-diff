@@ -53,6 +53,9 @@
 		"@twinkleplop/typescript": "^0.1.4",
 		"@twinkleplop/yaml": "^0.1.4",
 		"markdown-it": "^15.0.2",
-		"sanitize-html": "^2.18.0"
+		"sanitize-html": "^2.18.0",
+		"svelte-language-server": "^0.18.4",
+		"typescript-language-server": "^6.0.2",
+		"typescript-svelte-plugin": "^0.3.52"
 	}
 }

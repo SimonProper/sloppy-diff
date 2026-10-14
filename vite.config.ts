@@ -16,6 +16,11 @@ export default defineConfig({
 			experimental: { remoteFunctions: true }
 		})
 	],
+	server: {
+		// the guides and the blast radius's checkouts are data, not this app's code. A checkout's
+		// tsconfig.json changing would reload the page
+		watch: { ignored: ['**/.guides/**'] }
+	},
 	test: {
 		include: ['src/**/*.test.ts'],
 		environment: 'node',

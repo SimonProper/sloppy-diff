@@ -43,7 +43,7 @@ export function applyAskEvent(answer: Answer, event: AskEvent): Answer {
 			break;
 		case 'tool':
 			aside();
-			answer.steps.push({ type: 'tool', text: event.text });
+			answer.steps.push({ type: 'tool', text: event.text, detail: event.detail });
 			answer.status = event.text;
 			break;
 		case 'text':

@@ -8,6 +8,7 @@ A local diff viewer for reviewing changes, AI-written or not, with guided review
 - **Guides**: Claude Code reads the commits and splits the change into sections to review in order, every hunk in exactly one section. Steps can be marked reviewed, which folds them away. Guides are saved per commit range.
 - **Sidebar**: when the diff needs the room, the sidebar folds into a rail of file badges or guide steps, and opens over the diff or docks beside it. Files you open or close stay that way across reloads.
 - **Ask Claude**: the agent panel beside the diff lists every chat about it, and starts a new one about the whole change. To ask about lines, drag over line numbers, select code, or press `a` and pick them with the arrow keys, in any view. `⌘↵` asks and opens the answer in the panel, with what Claude thought and read along the way folded above it, and back goes to the list. `↵` is a new line. A thin marker down the right edge of the lines shows the question is there, `q` opens or closes the panel, and follow-ups carry on the same session. The lens shows every chat beside the lines it's about. Questions are saved per commit range, and for uncommitted changes until the lines they're about change.
+- **Blast radius**: the Blast radius button beside picked lines finds what else the change affects. The language's own compiler, through its language server, lists where the declarations the lines are in are used and who calls their callers, and git lists the files that usually change along with theirs. Claude then reads each use and says which the change affects, which this change didn't update, the ways in that reach it, and the tests that cover it. TypeScript, JavaScript and Svelte work out of the box; C and C++ need [clangd](https://clangd.llvm.org) and the `compile_commands.json` a build writes (CMake: `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`), at the top of the repo or in a folder one down. Uses are found at the change's head commit, in a worktree kept next to the guides and moved from commit to commit. It borrows the repo's installed packages, and clangd keeps its index there, so later runs only index what changed.
 
 Everything runs on your machine: the server shells out to `git` and, for guides and questions, to `claude`.
 
@@ -52,6 +53,7 @@ Set these in the environment, or in a `.env` file:
 | `REPO_SCAN_DEPTH` | `6`                   | how many folders deep the scan goes                             |
 | `GUIDES_DIR`      | `.guides` in here     | where guides and questions are saved, one folder per repository |
 | `CLAUDE_BIN`      | `claude`              | the Claude Code executable                                      |
+| `CLANGD_BIN`      | `clangd`              | the clangd executable, for the blast radius of C and C++        |
 | `GUIDE_MODEL`     | Claude Code's default | model used to write guides                                      |
 | `ASK_MODEL`       | Claude Code's default | model used to answer questions about lines                      |
 

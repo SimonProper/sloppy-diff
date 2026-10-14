@@ -14,6 +14,7 @@ import { findHunk, lineStats } from '$lib/diff/hunks';
 import { parseDiff } from '$lib/diff/parse';
 import type { DiffFile } from '$lib/diff/types';
 import type { PrComment, PullRequest, ReviewState } from '$lib/pr/types';
+import { blastRadius, holdCheckout, type Hold } from './blast';
 import { describeTool, runClaude, type ClaudeMessage } from './claude';
 import { checkPrNumber, loadPullRequest } from './gh';
 import { commitLog, readDiff, repoRoot, resolveCommit, resolveStart } from './git';
@@ -89,7 +90,12 @@ export interface Question {
 	section?: string;
 	/** ask the thread's last question again, after it failed or was stopped */
 	retry?: boolean;
+	/** a new thread about the blast radius of its lines, `text` left out */
+	blast?: boolean;
 }
+
+/** what a blast radius thread asks, as it shows in the thread */
+export const BLAST_QUESTION = 'What is the blast radius of these lines?';
 
 /**
  * Saves the question to its thread, new or existing, and starts Claude on the
@@ -97,7 +103,9 @@ export interface Question {
  */
 export async function ask(source: Source, question: Question): Promise<Thread> {
 	const { root, scope } = source;
-	let text = question.text.trim();
+	const blast = question.blast === true && !question.thread;
+	if (blast && !question.span) throw new Error('Select lines to find the blast radius of');
+	let text = blast ? BLAST_QUESTION : question.text.trim();
 	if (!text && !question.retry) throw new Error('Ask a question first');
 
 	let thread: Thread | undefined;
@@ -126,7 +134,8 @@ export async function ask(source: Source, question: Question): Promise<Thread> {
 			id: newThreadId(),
 			anchor: question.span ? anchorFor(files, question.span) : wholeAnchor(files, question.path),
 			messages: [],
-			createdAt: new Date().toISOString()
+			createdAt: new Date().toISOString(),
+			...(blast && { blast: true as const })
 		};
 	}
 
@@ -161,10 +170,45 @@ async function answer(
 	// for each answer, a follow-up sees the diff as it is now, and gone once the answer is in
 	const diffPath = join(cwd, `${thread.id}.diff`);
 
+	// a blast radius thread's steps before Claude: what the language server was asked
+	const found: Step[] = [];
+	const report = {
+		status: (text: string) => jobs.emit(job, { type: 'status', text }),
+		step: (text: string, detail?: string) => {
+			found.push({ type: 'tool', text, detail });
+			jobs.emit(job, { type: 'tool', text, detail });
+		}
+	};
+	// a blast radius thread's checkout, where the uses were found, held for Claude to read
+	// them at the same commit until the answer is in
+	let hold: Hold | undefined;
+	const dirs: string[] = [];
+
 	/** A full prompt for a new session, with the earlier questions and answers when there are any. */
-	const fresh = () => firstPrompt(source, before, question, files, section, diffPath);
+	let uses: Promise<string | undefined> | undefined;
+	const fresh = async () => {
+		// looked up once, a retry without the thinking flag asks with the same uses
+		uses ??=
+			hold && before.messages.length === 0
+				? blastRadius(source, hold.dir, thread.anchor, files, report, job.stop.signal)
+				: Promise.resolve(undefined);
+		const text = await uses;
+		return firstPrompt(
+			source,
+			before,
+			question,
+			files,
+			section,
+			diffPath,
+			hold && text !== undefined ? { text, dir: hold.dir } : undefined
+		);
+	};
 
 	try {
+		if (thread.blast) {
+			hold = await holdCheckout(root, source.to, report, job.stop.signal);
+			dirs.push(hold.dir);
+		}
 		jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
 		await mkdir(cwd, { recursive: true });
 		await writeFile(diffPath, await readDiff(root, source.from, source.to));
@@ -176,7 +220,9 @@ async function answer(
 		// without the summarised thinking flag answers without it
 		for (let tries = 0; tries < 3 && !job.finished; tries++) {
 			const prompt = resume ? question : await fresh();
-			outcome = await attempt(job, { root, cwd, prompt, resume, thinking });
+			// stopped while the language server looked
+			if (job.finished) break;
+			outcome = await attempt(job, { root, cwd, prompt, resume, thinking, dirs });
 			if (outcome.kind === 'result' || job.finished) break;
 			if (thinking && /unknown option.*thinking-display/i.test(outcome.stderr)) thinking = false;
 			else if (resume && !outcome.answered) resume = undefined;
@@ -205,7 +251,7 @@ async function answer(
 			role: 'assistant',
 			text: String(result.result ?? outcome.text).trim(),
 			createdAt: new Date().toISOString(),
-			steps: outcome.steps,
+			steps: [...found, ...outcome.steps],
 			thinkingTokens: result.usage?.output_tokens_details?.thinking_tokens,
 			thinkingMs: outcome.thinkingMs || undefined,
 			// to a millionth of a dollar, the subtraction leaves float noise behind
@@ -222,12 +268,20 @@ async function answer(
 		if (done) jobs.emit(job, { type: 'done', thread: renderThread(done, files) });
 		else jobs.emit(job, { type: 'error', message: 'The thread was deleted while Claude answered' });
 	} catch (error) {
+		// stopped while it waited for the checkout: saved as the page shows it
+		const last = job.finished ? job.events.at(-1) : undefined;
 		await finish(source, thread.id, {
-			error: error instanceof Error ? error.message : String(error),
+			error:
+				last?.type === 'error'
+					? last.message
+					: error instanceof Error
+						? error.message
+						: String(error),
 			startedAt: started
 		}).catch(() => {});
 		throw error;
 	} finally {
+		hold?.release();
 		await rm(diffPath, { force: true });
 	}
 }
@@ -287,7 +341,15 @@ type Outcome =
 /** One run of claude, streaming its thinking and answer to the page. */
 async function attempt(
 	job: Job<AskEvent>,
-	options: { root: string; cwd: string; prompt: string; resume?: string; thinking: boolean }
+	options: {
+		root: string;
+		cwd: string;
+		prompt: string;
+		resume?: string;
+		thinking: boolean;
+		/** more folders to read, besides the repo */
+		dirs: string[];
+	}
 ): Promise<Outcome> {
 	const args = [
 		'-p',
@@ -297,6 +359,7 @@ async function attempt(
 		'--include-partial-messages',
 		'--add-dir',
 		options.root,
+		...options.dirs.filter((d) => d !== options.root).flatMap((d) => ['--add-dir', d]),
 		'--tools',
 		TOOLS,
 		'--allowedTools',
@@ -415,7 +478,12 @@ async function firstPrompt(
 	files: DiffFile[],
 	section: string | undefined,
 	/** the whole change's diff, while Claude answers */
-	diffPath: string
+	diffPath: string,
+	/**
+	 * for a blast radius: the uses the language server found and the files that change along,
+	 * and the checkout it read
+	 */
+	uses?: { text: string; dir: string }
 ): Promise<string> {
 	const { root, from, to } = source;
 	const { anchor } = thread;
@@ -490,12 +558,36 @@ async function firstPrompt(
 			? `The diff of the whole change is in ${diffPath}, to search and read in parts when the question reaches beyond this file.`
 			: `The diff of the whole change is in ${diffPath}, search it and read the parts the question needs.`
 	);
+	if (uses) {
+		parts.push(
+			`To answer, the language's compiler was asked where the declarations the selected lines are in are used, through its language server, and git which files usually change together with this one:\n${uses.text}`
+		);
+		parts.push(suggesting(source.pr !== undefined));
+		parts.push(blastInstructions(uses.dir));
+		return parts.join('\n\n');
+	}
 	parts.push(`<question>\n${question}\n</question>`);
 	parts.push(suggesting(source.pr !== undefined));
 	parts.push(
 		`Answer the question${lines ? ' about the selected lines' : ''}. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
 	);
 	return parts.join('\n\n');
+}
+
+/** What a blast radius answer covers, in the order a reviewer needs it. */
+/** `dir`: the repo as the change leaves it, where the uses were found */
+function blastInstructions(dir: string): string {
+	return `The reviewer wants the blast radius of the selected lines: what else the change affects, so they can see its impact without tracing it themselves. Read the uses listed above where they need it, and search the repository as the change leaves it, in ${dir}, for anything the static analysis couldn't find, like uses through strings, config or other languages.
+
+Start with the straight answer, on its own: in one or two sentences, how the contract of what the lines declare changed (signature, return values, errors thrown, side effects, timing), or that only its internals changed and nothing outside it is affected. Then a line with only \`---\`, then, leaving out what's empty:
+
+- **Affected**: each use the change breaks or changes the behaviour of, as \`path:line\` and why, the ones this change didn't update first. They're what the reviewer has to check.
+- **Fine**: the uses that aren't affected, together in a line or two.
+- **Reaches**: the ways in that lead to it, like routes, commands, exported API or jobs, from the callers' callers.
+- **Tests**: the tests that exercise it, and whether any test the changed behaviour.
+- **Changes along**: files that usually change together with this one and aren't in this change, when that looks like something was missed.
+
+Be concise, in markdown. Don't modify anything.`;
 }
 
 /**

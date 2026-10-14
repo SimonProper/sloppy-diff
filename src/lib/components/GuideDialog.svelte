@@ -16,6 +16,7 @@
 	import RefPicker from './RefPicker.svelte';
 	import SavedGuides from './SavedGuides.svelte';
 	import SegmentedControl from './SegmentedControl.svelte';
+	import ToolText from './ToolText.svelte';
 
 	interface Props {
 		repo: string;
@@ -260,7 +261,7 @@
 								i === tools.length - 1 ? 'text-fg' : 'text-muted'
 							]}
 						>
-							{tool}
+							<ToolText text={tool} />
 						</li>
 					{/each}
 				</ul>

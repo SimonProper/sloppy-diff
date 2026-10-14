@@ -7,7 +7,8 @@ import type { Branch, Commit, CommitInfo } from '$lib/refs';
 
 const exec = promisify(execFile);
 
-async function git(cwd: string, args: string[]): Promise<string> {
+/** Runs git in `cwd`, its output when it exits cleanly. */
+export async function git(cwd: string, args: string[]): Promise<string> {
 	const { stdout } = await exec('git', ['-C', cwd, ...args], { maxBuffer: 256 * 1024 * 1024 });
 	return stdout;
 }

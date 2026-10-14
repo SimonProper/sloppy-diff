@@ -103,6 +103,7 @@ vi.mock('$env/dynamic/private', () => ({
 const { ask, cancelAsk, cut, getAskJob, sourceFor } = await import('./ask');
 const { deleteThread, loadThreads, prepareThreads } = await import('./threads');
 const { readDiff, resolveCommit } = await import('./git');
+const { holdCheckout } = await import('./blast');
 
 const fixture = createFixture();
 afterAll(() => {
@@ -384,6 +385,94 @@ describe('asking about a whole file or the whole change', () => {
 	test('a file that is not in the diff is refused', async () => {
 		const source = await sourceFor(fixture.root, from, to);
 		await expect(ask(source, { text: 'Hm?', path: 'nope.ts' })).rejects.toThrow(/not in the diff/);
+	});
+});
+
+describe('the blast radius of lines', () => {
+	test('the TypeScript language server finds the uses at the change, for Claude to judge', async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to);
+		// a line in subtotal's body, which describe calls
+		const at = cart.hunks
+			.flatMap((h) => h.lines.map((l, i) => ({ h, l, i })).filter(({ l }) => l.kind === 'add'))
+			.find(({ l }) => l.text.includes('item.quantity'))!;
+		const thread = await ask(source, {
+			text: '',
+			blast: true,
+			span: { hunk: at.h.id, start: at.i, end: at.i }
+		});
+		expect(thread.blast).toBe(true);
+		expect(thread.messages[0].text).toBe('What is the blast radius of these lines?');
+		expect((await finished(thread)).type).toBe('done');
+
+		const { prompt, args } = run(0);
+		expect(prompt).toContain('### `subtotal`, function at src/cart.ts:');
+		expect(prompt).toMatch(
+			/src\/cart\.ts:\d+ `.*subtotal\(items\).*` \(changed in this diff\) in `describe`/
+		);
+		expect(prompt).toContain(`at commit ${to}, checked out in`);
+		expect(prompt).toContain('**Affected**');
+		expect(prompt).not.toContain('<question>');
+		// Claude reads the uses where the server found them, at the change's head
+		const dirs = args.flatMap((a, i) => (args[i - 1] === '--add-dir' ? [a] : []));
+		expect(dirs).toEqual([fixture.root, expect.stringMatching(/\/analysis$/)]);
+		const [saved] = await loadThreads(fixture.root, source.scope);
+		// the way there, for the reader to check: each stage, and what it found
+		const steps = saved.messages[1].steps ?? [];
+		expect(steps.map((s) => s.text)).toEqual(
+			expect.arrayContaining([
+				expect.stringMatching(new RegExp(`^Checked out ${to.slice(0, 7)} · `)),
+				expect.stringMatching(/^Started the TypeScript language server · ready in/),
+				expect.stringMatching(/^Lines? [\d–]+ (is|are) in subtotal$/),
+				expect.stringMatching(/^Found \d+ uses? of subtotal · /)
+			])
+		);
+		const found = steps.find((s) => s.text.startsWith('Found'));
+		expect(found).toMatchObject({ type: 'tool', detail: expect.stringContaining('`describe`') });
+
+		await deleteThread(fixture.root, source.scope, thread.id);
+	}, 60_000);
+
+	test('stopped while the language server looks, its checkout is let go', async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to);
+		const thread = await ask(source, {
+			text: '',
+			blast: true,
+			span: { hunk: hunk.id, start: added, end: added }
+		});
+		const job = getAskJob(fixture.root, source.scope, thread.id)!;
+		await vi.waitFor(
+			() =>
+				expect(
+					job.events.some((e: AskEvent) => e.type === 'status' && e.text.startsWith('Starting the'))
+				).toBe(true),
+			{ timeout: 30_000 }
+		);
+		cancelAsk(fixture.root, source.scope, thread.id);
+		expect(await finished(thread)).toEqual({ type: 'error', message: 'Cancelled' });
+		await vi.waitFor(async () => {
+			const [saved] = await loadThreads(fixture.root, source.scope);
+			expect(saved.messages.map((m) => m.error)).toEqual([undefined, 'Cancelled']);
+		});
+		// a blast radius at another commit gets the checkout, and Claude never ran
+		const other = await holdCheckout(
+			fixture.root,
+			from,
+			{ status() {}, step() {} },
+			new AbortController().signal
+		);
+		other.release();
+		expect(existsSync(runs)).toBe(false);
+
+		await deleteThread(fixture.root, source.scope, thread.id);
+	}, 60_000);
+
+	test('a blast radius needs lines', async () => {
+		const source = await sourceFor(fixture.root, from, to);
+		await expect(ask(source, { text: '', blast: true, path: 'src/cart.ts' })).rejects.toThrow(
+			/Select lines/
+		);
 	});
 });
 

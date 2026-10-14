@@ -228,12 +228,13 @@ export class Threads {
 
 	/**
 	 * Asks in a new thread about the draft's lines, or with `change` about the whole change,
-	 * or as a follow-up in `thread`. Returns the thread's id.
+	 * or as a follow-up in `thread`. With `blast`, the new thread asks for the blast radius of
+	 * the draft's lines instead of `text`. Returns the thread's id.
 	 */
 	async ask(
 		text: string,
 		thread?: string,
-		options: { retry?: boolean; change?: boolean } = {}
+		options: { retry?: boolean; change?: boolean; blast?: boolean } = {}
 	): Promise<string> {
 		const { repo, from, to, pr } = this.#config();
 		const draft = this.draft;
@@ -247,7 +248,12 @@ export class Threads {
 				? { thread, retry: options.retry === true }
 				: options.change
 					? {}
-					: { span: draft?.span, path: draft?.path, section: draft?.section })
+					: {
+							span: draft?.span,
+							path: draft?.path,
+							section: draft?.section,
+							blast: options.blast === true
+						})
 		});
 
 		this.#upsert(saved);

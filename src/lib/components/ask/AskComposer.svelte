@@ -123,12 +123,13 @@
 		}
 	}
 
-	async function send(text: string) {
+	/** with `blast`, asks for the blast radius of the lines instead of `text` */
+	async function send(text: string, blast = false) {
 		if (commenting) return comment(text);
 		sending = true;
 		failure = '';
 		try {
-			const id = await threads.ask(text);
+			const id = await threads.ask(text, undefined, { blast });
 			threads.openLens(id);
 		} catch (e) {
 			failure = errorText(e);
@@ -137,6 +138,19 @@
 		}
 	}
 </script>
+
+{#snippet blastButton()}
+	<!-- for the lines alone, a typed question is asked with Ask -->
+	{#if draft?.span && !commenting && !draft.text.trim()}
+		<button
+			type="button"
+			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
+			title="What else this change affects: where the compiler finds it used, judged by Claude"
+			disabled={sending}
+			onclick={() => send('', true)}>Blast radius</button
+		>
+	{/if}
+{/snippet}
 
 <svelte:document
 	onpointerdown={(event) => {
@@ -198,6 +212,7 @@
 					]
 				: ['esc', '⌘↵ to ask']}
 			busy={sending}
+			trailing={blastButton}
 			action={commenting ? 'Comment' : 'Ask'}
 			onsend={send}
 			ontab={choosing ? () => threads.setIntent(commenting ? 'ask' : 'comment') : undefined}
