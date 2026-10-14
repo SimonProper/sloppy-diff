@@ -11,6 +11,8 @@
 		align?: 'start' | 'end';
 		/** gap to the trigger in pixels */
 		offset?: number;
+		/** below the trigger, or beside it on the left, for a menu within a menu */
+		side?: 'bottom' | 'left';
 	}
 
 	/**
@@ -32,6 +34,7 @@
 		children,
 		align = 'start',
 		offset = 8,
+		side = 'bottom',
 		...rest
 	}: Props = $props();
 
@@ -93,6 +96,14 @@
 		const box = content?.getBoundingClientRect();
 		if (!button || !box) return;
 		const margin = 8;
+		if (side === 'left') {
+			const top = Math.min(button.top, innerHeight - box.height - margin);
+			placed = {
+				top: Math.max(margin, top),
+				left: Math.max(margin, button.left - offset - box.width)
+			};
+			return;
+		}
 		let top = button.bottom + offset;
 		if (top + box.height > innerHeight - margin && button.top - offset - box.height > margin) {
 			top = button.top - offset - box.height;

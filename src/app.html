@@ -5,25 +5,42 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
 		<script>
-			// the theme picked in ThemeToggle, or the OS colour scheme, before first paint, see layout.css
+			// light or dark, picked in ThemeToggle or the OS's, before first paint, and the theme
+			// drawing it, see theme.svelte.ts: one of $lib/themes by the class of its name, beside
+			// .dark for a dark one. The colours tweaked for it go on <html> inline, above the
+			// theme's own. sloppy-diff:theme has it applied again
 			(() => {
 				const query = matchMedia('(prefers-color-scheme: dark)');
-				const picked = () => {
+				const read = (key) => {
 					try {
-						return localStorage.getItem('sloppy-diff:theme');
+						return localStorage.getItem(key);
 					} catch {
 						return null;
 					}
 				};
+				let added = [];
 				const apply = () => {
-					const theme = picked();
-					document.documentElement.classList.toggle(
-						'dark',
-						theme ? theme === 'dark' : query.matches
-					);
+					let custom = [];
+					try {
+						custom = JSON.parse(read('sloppy-diff:themes')) ?? [];
+					} catch {}
+					const mode = read('sloppy-diff:theme');
+					const side = (mode ? mode === 'dark' : query.matches) ? 'dark' : 'light';
+					// picks are kept by side, so a picked theme is dark or not by where it's kept,
+					// and a custom one draws as the one it was copied from
+					const theme = read('sloppy-diff:theme-' + side) ?? side;
+					const from = custom.find((t) => t.id === theme)?.from ?? theme;
+					const root = document.documentElement;
+					root.classList.remove(...added);
+					added = [side === 'dark' && 'dark', from !== side && from].filter(Boolean);
+					root.classList.add(...added);
+					root.style.cssText = read('sloppy-diff:theme-css:' + theme) ?? '';
 				};
 				apply();
 				query.addEventListener('change', apply);
+				addEventListener('sloppy-diff:theme', apply);
+				// another tab picked or tweaked a theme
+				addEventListener('storage', apply);
 			})();
 		</script>
 		%sveltekit.head%

@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
-/* a .dark class on <html>, set from the OS preference in app.html, drives both
-   the UI tokens and the twinkleplop theme, which switches on the same class */
+/* a .dark class on <html>, set in app.html from the theme picked or the OS preference,
+   drives both the UI tokens and the twinkleplop theme, which switches on the same class.
+   The other themes, $lib/themes, add a class of their own, beside it for a dark one */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
