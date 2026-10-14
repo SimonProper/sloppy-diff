@@ -18,7 +18,6 @@ import type { RenderOptions, TokenizeResult } from '@twinkleplop/core';
 import type { DiffFile, DiffLine } from '$lib/diff/types';
 import { chunk } from '$lib/chunk';
 import { readFileAt } from '$lib/server/git';
-import { markdown as md } from '$lib/server/markdown';
 
 type Highlighter = (input: string, render?: RenderOptions) => string;
 type Tokenizer = (input: string) => TokenizeResult;
@@ -123,6 +122,10 @@ export function highlightBlock(lang: Language, text: string): string | null {
 		return null;
 	}
 }
+
+/** The language a code fence names, `ts` or `typescript` alike. */
+export const fenceLanguage = (name: string): Language | null =>
+	isLanguage(name) ? name : detectLanguage(`code.${name}`);
 
 export function detectLanguage(path: string): Language | null {
 	const name = path.split('/').pop() ?? '';
@@ -241,16 +244,19 @@ export function highlightFile(file: DiffFile, sources?: Sources): DiffFile {
 	return file;
 }
 
+const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ESCAPES[c]);
+
 /** Escaped text for files without a grammar, changed pieces still marked. */
 function plain(line: DiffLine): string {
 	let out = '';
 	let pos = 0;
 	for (const [start, end] of line.spans ?? []) {
-		out += md.utils.escapeHtml(line.text.slice(pos, start));
-		out += `<span class="novel">${md.utils.escapeHtml(line.text.slice(start, end))}</span>`;
+		out += escapeHtml(line.text.slice(pos, start));
+		out += `<span class="novel">${escapeHtml(line.text.slice(start, end))}</span>`;
 		pos = end;
 	}
-	return out + md.utils.escapeHtml(line.text.slice(pos));
+	return out + escapeHtml(line.text.slice(pos));
 }
 
 /** Each line of a whole file as markup, highlighted in one go so no line is read out of context. */

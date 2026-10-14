@@ -1,5 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
-import { detectLanguage, highlightBlock, isLanguage, type Language } from './highlight';
+import { fenceLanguage, highlightBlock, isLanguage, type Language } from './highlight';
 
 // images and videos only from GitHub's own hosts: its image proxy, attachments, avatars. One from
 // anywhere else would load as soon as the page opens, telling that host who's looking
@@ -28,8 +28,7 @@ const SCOPES: Record<string, Language> = {
 	'html-basic': 'html',
 	'js-jsx': 'tsx'
 };
-const languageOf = (scope: string): Language | null =>
-	SCOPES[scope] ?? (isLanguage(scope) ? scope : detectLanguage(`x.${scope}`));
+const languageOf = (scope: string): Language | null => SCOPES[scope] ?? fenceLanguage(scope);
 
 const ALERTS = ['note', 'tip', 'important', 'warning', 'caution'].map((k) => `markdown-alert-${k}`);
 

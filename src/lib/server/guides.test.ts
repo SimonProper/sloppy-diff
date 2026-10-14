@@ -187,4 +187,11 @@ describe('rendered markdown', () => {
 			'<a href="https://svelte.dev" target="_blank" rel="noopener noreferrer">docs</a>'
 		);
 	});
+
+	test('fenced code is highlighted when its language has a grammar, escaped either way', () => {
+		const html = render('```ts\nconst a = "<b>";\n```\n\n```nope\n<b>\n```');
+		expect(html).toContain('<pre class="twinkleplop"');
+		expect(html).toContain('<code class="language-nope">&lt;b&gt;');
+		expect(html).not.toContain('<b>');
+	});
 });
