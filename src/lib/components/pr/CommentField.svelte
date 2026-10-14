@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { errorText } from '$lib/errors';
+	import { readText, writeText } from '$lib/storage';
 	import AskField from '../ask/AskField.svelte';
 	import Avatar from './Avatar.svelte';
 
 	interface Props {
 		/** a reply to a thread or a comment on the pull request, emptied once it's sent */
 		onsend: (body: string) => Promise<unknown>;
+		/** where what's typed is kept until it's sent, through a failed send or a reload */
+		keep: string;
 		/** yours: given, the field is a row among the thread's comments, one line until it wraps */
 		avatar?: string;
 		placeholder?: string;
@@ -16,13 +19,16 @@
 
 	let {
 		onsend,
+		keep,
 		avatar,
 		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
 		action = 'Add to your review',
 		hint = '↵ to add to your review'
 	}: Props = $props();
 
-	let reply = $state('');
+	const key = $derived(`sloppy-diff:reply:${keep}`);
+	let reply = $derived(readText(key) ?? '');
+	$effect(() => writeText(key, reply.trim() ? reply : null));
 	let sending = $state(false);
 	let failure = $state('');
 	const typed = $derived(reply.trim().length > 0);

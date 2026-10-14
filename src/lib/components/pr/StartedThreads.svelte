@@ -67,7 +67,7 @@
 				{/if}
 				{#each last as comment (comment.id)}{@render said(comment)}{/each}
 				{#if onreply}
-					<CommentField onsend={(body) => onreply(thread.id, body)} {avatar} />
+					<CommentField onsend={(body) => onreply(thread.id, body)} keep={thread.id} {avatar} />
 				{/if}
 			</div>
 		</li>

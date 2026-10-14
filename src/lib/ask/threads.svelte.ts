@@ -2,7 +2,7 @@ import { isHttpError } from '@sveltejs/kit';
 import { errorText } from '$lib/errors';
 import { addDraft } from '$lib/pr/pr.remote';
 import { refresh } from '$lib/pr/refresh';
-import { readJson, writeJson } from '$lib/storage';
+import { readJson, writeJson, writeText } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
 import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
 import type { LineSpan, Scope, Side, Suggestion, Thread } from './types';
@@ -32,6 +32,13 @@ export interface Cursor {
 	head: number;
 	anchor: number;
 	side?: Side;
+}
+
+/** What was typed and not sent yet, kept per diff. */
+interface Typed {
+	draft?: Draft;
+	replies?: Record<string, string>;
+	newChat?: string;
 }
 
 /** How a question reads at a glance, on its marker and in the list. */
@@ -95,8 +102,35 @@ export class Threads {
 
 	running = $derived(Object.keys(this.live).length);
 
+	// what's typed and not sent yet outlives a failed send, a crash or a reload, per diff
+	#typedKey = $derived.by(() => {
+		const { repo, scope } = this.#config();
+		return `sloppy-diff:ask-typed:${repo}:${scope}`;
+	});
+
 	constructor(config: () => Config) {
 		this.#config = config;
+		let restored = '';
+		$effect(() => {
+			const key = this.#typedKey;
+			if (key !== restored) {
+				// another diff, or the page loaded: what was being typed on it comes back, open
+				restored = key;
+				const typed = readJson<Typed>(key, {});
+				this.draft = typed.draft ?? null;
+				this.composing = !!typed.draft;
+				this.replies = typed.replies ?? {};
+				this.newChat = typed.newChat ?? '';
+			}
+			const replies = Object.entries(this.replies).filter(([, text]) => text.trim());
+			const typed: Typed = {
+				draft: this.draft?.text.trim() ? this.draft : undefined,
+				replies: replies.length ? Object.fromEntries(replies) : undefined,
+				newChat: this.newChat.trim() || undefined
+			};
+			if (typed.draft || typed.replies || typed.newChat) writeJson(key, typed);
+			else writeText(key, null);
+		});
 	}
 
 	/** Threads anchored to lines in any of these hunks. */

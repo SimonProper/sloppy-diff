@@ -20,6 +20,6 @@
 
 {#if onreply}
 	<div class="mt-3">
-		<CommentField onsend={(body) => onreply(thread.id, body)} />
+		<CommentField onsend={(body) => onreply(thread.id, body)} keep={thread.id} />
 	</div>
 {/if}

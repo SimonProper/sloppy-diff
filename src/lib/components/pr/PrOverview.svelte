@@ -264,6 +264,7 @@
 			<li class="overflow-hidden rounded-lg border border-line bg-surface">
 				<CommentField
 					onsend={post}
+					keep={pr.id}
 					avatar={pr.viewerAvatar}
 					placeholder="Leave a comment…"
 					action="Comment"
