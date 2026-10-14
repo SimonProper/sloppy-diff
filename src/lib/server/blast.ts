@@ -799,18 +799,23 @@ async function launchFor(server: Server, root: string, dir: string): Promise<Lau
 		};
 	}
 
-	const found = await compileCommands(root);
+	// a worktree of the repo builds rarely, the main checkout's build stands in for it
+	let built = root;
+	let found = await compileCommands(root);
+	const main = await mainCheckout(root);
+	if (!found && main) {
+		built = main;
+		found = await compileCommands(main);
+	}
 	if (!found) {
 		return {
-			missing:
-				"clangd needs the compile_commands.json a build writes, and there's none at the top of the repo or in a folder one down (CMake writes one with -DCMAKE_EXPORT_COMPILE_COMMANDS=ON)."
+			missing: `clangd needs the compile_commands.json a build writes, and there's none at the top of the repo or in a folder one down${main ? `, here or in the main checkout ${main}` : ''} (CMake writes one with -DCMAKE_EXPORT_COMPILE_COMMANDS=ON).`
 		};
 	}
 	// a folder of its own for the copy, clangd keeps its index next to it
 	const folder = join(repoDir(root), 'clangd', dir === root ? 'root' : 'analysis');
 	await mkdir(folder, { recursive: true });
-	const build = dirname(await realpath(found));
-	const text = moveCompileCommands(await readFile(found, 'utf8'), root, dir, build);
+	const text = moveCompileCommands(await readFile(found, 'utf8'), built, dir);
 	const target = join(folder, 'compile_commands.json');
 	if ((await readFile(target, 'utf8').catch(() => '')) !== text) await writeFile(target, text);
 	return {
@@ -818,6 +823,17 @@ async function launchFor(server: Server, root: string, dir: string): Promise<Lau
 		args: ['--background-index', '--log=error', `--compile-commands-dir=${folder}`],
 		notes: [`compile_commands.json: ${found}, moved to the checkout in ${target}`]
 	};
+}
+
+/** The main checkout a linked worktree of it was added from, null for the main one itself. */
+async function mainCheckout(root: string): Promise<string | null> {
+	const common = await git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']).then(
+		(t) => t.trim(),
+		() => ''
+	);
+	if (basename(common) !== '.git') return null;
+	const main = dirname(common);
+	return main === root ? null : main;
 }
 
 /** The compile_commands.json a build wrote: at the top of the repo, or in a folder one down. */
@@ -839,17 +855,15 @@ const capitalize = (text: string) => text[0].toUpperCase() + text.slice(1);
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * compile_commands.json for a checkout of the repo at `dir`: its sources there, the
- * build folder left where it was built, since generated headers live only there.
+ * compile_commands.json, written for the repo at `root`, for a checkout of it at `dir`: its
+ * sources there, the build folder left where it was built, since generated headers live only
+ * there. The build folder is where the commands run, not where the file is, a build may
+ * copy it next to the sources.
  */
-export function moveCompileCommands(
-	text: string,
-	root: string,
-	dir: string,
-	build: string
-): string {
+export function moveCompileCommands(text: string, root: string, dir: string): string {
 	if (root === dir) return text;
-	const inside = relative(root, build);
+	const entries = JSON.parse(text) as Record<string, unknown>[];
+	const inside = relative(root, commonDir(entries.map((e) => String(e.directory ?? ''))));
 	// ponytail: relative paths resolve against the unmoved build folder, so a build that
 	// writes them (not CMake) reads the working tree's sources
 	const end = `(?=[/\\s"']|$)`;
@@ -859,7 +873,6 @@ export function moveCompileCommands(
 	// for /src/repo, moves too
 	const move = (value: unknown) =>
 		typeof value === 'string' ? value.replace(pattern, () => dir) : value;
-	const entries = JSON.parse(text) as Record<string, unknown>[];
 	return JSON.stringify(
 		entries.map((entry) => ({
 			...entry,
@@ -872,4 +885,16 @@ export function moveCompileCommands(
 		null,
 		1
 	);
+}
+
+/** The folder all of `paths` are in. */
+function commonDir(paths: string[]): string {
+	const [first = [], ...rest] = paths.map((p) => p.split('/'));
+	let n = first.length;
+	for (const parts of rest) {
+		let i = 0;
+		while (i < n && parts[i] === first[i]) i++;
+		n = i;
+	}
+	return first.slice(0, n).join('/') || '/';
 }

@@ -100,9 +100,7 @@ describe('compile commands for the analysis checkout', () => {
 	};
 
 	test('sources move to the checkout, the build folder and other repos stay', () => {
-		const [moved] = JSON.parse(
-			moveCompileCommands(JSON.stringify([entry]), root, dir, '/src/repo/build')
-		);
+		const [moved] = JSON.parse(moveCompileCommands(JSON.stringify([entry]), root, dir));
 		expect(moved).toEqual({
 			directory: '/src/repo/build',
 			command:
@@ -118,14 +116,29 @@ describe('compile commands for the analysis checkout', () => {
 			arguments: ['c++', '-I/src/repo/include', '/src/repo/a.cc'],
 			file: '/src/repo/a.cc'
 		};
-		const [moved] = JSON.parse(moveCompileCommands(JSON.stringify([args]), root, dir, '/out'));
+		const [moved] = JSON.parse(moveCompileCommands(JSON.stringify([args]), root, dir));
 		expect(moved.arguments).toEqual(['c++', `-I${dir}/include`, `${dir}/a.cc`]);
 		expect(moved.directory).toBe('/out');
 	});
 
+	test('the build folder is where the commands run, not where the file was copied to', () => {
+		// next to the sources of a project in the repo, built in its build folder
+		const commands = ['a', 'b'].map((name) => ({
+			directory: `/src/repo/core/build/${name}`,
+			command: `c++ -I/src/repo/core/build/gen -c /src/repo/core/${name}.cc`,
+			file: `/src/repo/core/${name}.cc`
+		}));
+		const moved = JSON.parse(moveCompileCommands(JSON.stringify(commands), root, dir));
+		expect(moved[0]).toEqual({
+			directory: '/src/repo/core/build/a',
+			command: `c++ -I/src/repo/core/build/gen -c ${dir}/core/a.cc`,
+			file: `${dir}/core/a.cc`
+		});
+	});
+
 	test('the working tree itself is left as it is', () => {
 		const text = JSON.stringify([entry]);
-		expect(moveCompileCommands(text, root, root, '/src/repo/build')).toBe(text);
+		expect(moveCompileCommands(text, root, root)).toBe(text);
 	});
 });
 
