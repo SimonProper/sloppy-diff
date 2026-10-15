@@ -111,7 +111,7 @@
 				>
 					<button
 						type="button"
-						class="flex h-7 w-full items-center gap-1.5 rounded-lg bg-canvas pr-2 text-left text-[12.5px] text-muted hover:bg-subtle hover:text-fg"
+						class="flex h-7 w-full items-center gap-1.5 rounded-lg bg-sidebar pr-2 text-left text-[12.5px] text-muted hover:bg-subtle hover:text-fg"
 						style:padding-left="{8 + depth * 12}px"
 						title={node.path}
 						aria-expanded={open}

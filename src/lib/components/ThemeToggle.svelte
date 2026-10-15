@@ -63,7 +63,7 @@
 		<button
 			{...props}
 			class={[
-				'grid size-8 place-items-center rounded-lg border bg-surface text-muted hover:border-muted hover:text-fg',
+				'grid size-8 place-items-center rounded-lg border bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
 				open ? 'border-muted' : 'border-line'
 			]}
 			title="Theme"

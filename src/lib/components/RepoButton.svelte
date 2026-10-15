@@ -19,13 +19,13 @@
 
 <Popover
 	bind:open
-	class="w-[32rem] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
+	class="w-[32rem] overflow-hidden rounded-xl border border-line bg-surface shadow-float"
 >
 	{#snippet trigger(props)}
 		<button
 			{...props}
 			class={[
-				'flex h-8 max-w-44 items-center gap-2 rounded-lg border bg-surface px-2.5 hover:border-muted',
+				'flex h-8 max-w-44 items-center gap-2 rounded-lg border bg-control px-2.5 shadow-raised hover:border-muted active:shadow-pressed',
 				open ? 'border-muted' : 'border-line'
 			]}
 			title={repo}

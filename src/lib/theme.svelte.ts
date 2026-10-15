@@ -1,5 +1,6 @@
 import { MediaQuery } from 'svelte/reactivity';
 import { readJson, readText, writeJson, writeText } from '$lib/storage';
+import { COPIED, THEMES, themeVars } from '$lib/themes/themes';
 
 /**
  * Light or dark, and which theme draws each. app.html reads the same keys before first
@@ -11,13 +12,25 @@ export type Mode = 'system' | 'light' | 'dark';
 export interface CustomTheme {
 	id: string;
 	label: string;
-	from: BuiltIn;
+	/** the built-in theme it was copied from, which draws what the copy doesn't set */
+	from: string;
+	/**
+	 * how it looked when it was copied, as a style attribute holds it: kept as it is, so a
+	 * later change to the one it came from doesn't reach it. Tweaks go over it
+	 */
+	vars?: string;
 }
 
 const MODE_KEY = 'sloppy-diff:theme';
 const PICK_KEY = { light: 'sloppy-diff:theme-light', dark: 'sloppy-diff:theme-dark' };
 const CUSTOM_KEY = 'sloppy-diff:themes';
 export const tweaksKey = (id: string) => `sloppy-diff:theme-css:${id}`;
+/** CSS rules of the reader's own for a theme, put in a <style> by app.html */
+export const rulesKey = (id: string) => `sloppy-diff:theme-rules:${id}`;
+
+/** declarations as a style attribute holds them, later ones winning */
+export const joinVars = (...parts: (string | null | undefined)[]) =>
+	parts.filter((part) => part?.trim()).join('; ');
 
 export const MODES: { value: Mode; label: string }[] = [
 	{ value: 'system', label: 'System' },
@@ -26,23 +39,15 @@ export const MODES: { value: Mode; label: string }[] = [
 ];
 
 /**
- * The themes that come with it. Each but the two defaults draws with the class of its id,
- * from its CSS in $lib/themes, beside .dark when it's a dark one
+ * The themes that come with it: the two defaults, drawn by layout.css itself, then the rest
+ * from $lib/themes/themes.ts, each drawn with the class of its id beside .dark when it's a
+ * dark one. Each side lists its default first
  */
 const BUILT_INS = [
 	{ id: 'light', label: 'Sloppy Light', dark: false },
-	{ id: 'catppuccin-latte', label: 'Catppuccin Latte', dark: false },
-	{ id: 'rose-pine-dawn', label: 'Rosé Pine Dawn', dark: false },
-	{ id: 'solarized-light', label: 'Solarized Light', dark: false },
 	{ id: 'dark', label: 'Sloppy Dark', dark: true },
-	{ id: 'catppuccin-mocha', label: 'Catppuccin Mocha', dark: true },
-	{ id: 'gruvbox-dark', label: 'Gruvbox Dark', dark: true },
-	{ id: 'kanagawa-dragon', label: 'Kanagawa Dragon', dark: true },
-	{ id: 'nord', label: 'Nord', dark: true },
-	{ id: 'tokyo-night', label: 'Tokyo Night', dark: true },
-	{ id: 'vesper', label: 'Vesper', dark: true }
-] as const;
-export type BuiltIn = (typeof BUILT_INS)[number]['id'];
+	...THEMES.map(({ id, label, dark }) => ({ id, label, dark }))
+];
 
 /** every class a theme puts on <html> */
 export const CLASSES = ['dark', ...BUILT_INS.map((t) => t.id)];
@@ -104,14 +109,25 @@ class Theme {
 		else this.setMode(side);
 	}
 
-	/** a copy of a theme, its tweaks included, to make one's own */
-	create(of: string): string {
+	/**
+	 * A copy of a theme to make one's own, frozen as it looks now: its own values, a copy's
+	 * frozen ones, its tweaks and its rules. shown is the page's style while it shows the
+	 * theme, for the two defaults, which only layout.css knows.
+	 */
+	create(of: string, shown?: CSSStyleDeclaration): string {
 		const source = this.find(of) ?? this.all[0];
+		const definition = THEMES.find((t) => t.id === source.id);
+		const own = definition
+			? themeVars(definition)
+			: (source.vars ??
+				joinVars(
+					...COPIED.map((name) => shown && `${name}: ${shown.getPropertyValue(name).trim()}`)
+				));
 		const id = `custom-${crypto.randomUUID().slice(0, 8)}`;
-		const label = `${source.label} copy`;
-		writeText(tweaksKey(id), readText(tweaksKey(source.id)));
-		this.custom.push({ id, label, from: source.from });
+		const vars = joinVars(own, readText(tweaksKey(source.id)));
+		this.custom.push({ id, label: `${source.label} copy`, from: source.from, vars });
 		writeJson(CUSTOM_KEY, this.custom);
+		writeText(rulesKey(id), readText(rulesKey(source.id)));
 		return id;
 	}
 
@@ -126,6 +142,7 @@ class Theme {
 		this.custom = this.custom.filter((t) => t.id !== id);
 		writeJson(CUSTOM_KEY, this.custom);
 		writeText(tweaksKey(id), null);
+		writeText(rulesKey(id), null);
 		// a picked one gives way to the default, shown already falls back to it
 		for (const side of ['light', 'dark'] as const) {
 			if (this.picked[side] === id) {

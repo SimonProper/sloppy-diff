@@ -16,7 +16,7 @@
 		<span>·</span>
 		<span title={new Date(commit.date).toLocaleString()}>{timeAgo(commit.date)} ago</span>
 		<span>·</span>
-		<span class="rounded-[4px] bg-subtle px-1 font-mono text-[11px] text-accent">{commit.sha}</span>
+		<span class="rounded-sm bg-subtle px-1 font-mono text-[11px] text-accent">{commit.sha}</span>
 		{#if commit.parents.length > 1}
 			<span>·</span>
 			<span>merge commit, compared against its first parent</span>

@@ -1,9 +1,22 @@
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { THEMES, themeCss } from './src/lib/themes/themes';
+
+/** The built-in themes' CSS, made from their definitions as the app is built or served. */
+function themes(): Plugin {
+	const id = 'virtual:themes.css';
+	return {
+		name: 'themes',
+		resolveId: (source) => (source === id ? `\0${id}` : undefined),
+		load: (resolved) => (resolved === `\0${id}` ? THEMES.map(themeCss).join('\n') : undefined)
+	};
+}
 
 export default defineConfig({
 	plugins: [
+		themes(),
 		tailwindcss(),
 		sveltekit({
 			compilerOptions: {

@@ -8,15 +8,21 @@ vi.stubGlobal('localStorage', {
 });
 vi.stubGlobal('dispatchEvent', () => true);
 
-const { theme, tweaksKey } = await import('./theme.svelte');
+const { rulesKey, theme, tweaksKey } = await import('./theme.svelte');
 
 test('a custom theme is a copy of one, picked on its own side and given up when deleted', () => {
 	theme.setMode('light');
 	stored.set(tweaksKey('vesper'), '--fg: #fff;');
+	stored.set(rulesKey('vesper'), '::selection { color: red }');
 
 	const id = theme.create('vesper');
-	expect(stored.get(tweaksKey(id))).toBe('--fg: #fff;');
 	expect(theme.sideOf(id)).toBe('dark');
+	// frozen as it looked: Vesper's own values with its tweaks over them, and its rules
+	const vars = theme.find(id)!.vars!;
+	expect(vars).toContain('--canvas: #101010');
+	expect(vars.endsWith('--fg: #fff;')).toBe(true);
+	expect(stored.has(tweaksKey(id))).toBe(false);
+	expect(stored.get(rulesKey(id))).toBe('::selection { color: red }');
 
 	// a dark one picked in the light switches to dark, the light pick stays
 	theme.pick(id);
@@ -27,6 +33,6 @@ test('a custom theme is a copy of one, picked on its own side and given up when 
 
 	theme.remove(id);
 	expect(theme.shown).toBe('dark');
-	expect(stored.has(tweaksKey(id))).toBe(false);
+	expect(stored.has(rulesKey(id))).toBe(false);
 	expect(stored.has('sloppy-diff:theme-dark')).toBe(false);
 });

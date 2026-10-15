@@ -1,8 +1,10 @@
 <script lang="ts">
 	import '@twinkleplop/theme-github';
 	import './layout.css';
-	// each outweighs layout.css's own colours, so the order they come in doesn't matter
-	import.meta.glob('$lib/themes/*.css', { eager: true });
+	// the built-in themes, made by vite.config.ts from $lib/themes/themes.ts, and what some of
+	// them add by hand. Each outweighs layout.css's own colours whatever order they come in
+	import 'virtual:themes.css';
+	import.meta.glob('$lib/themes/*.custom.css', { eager: true });
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();

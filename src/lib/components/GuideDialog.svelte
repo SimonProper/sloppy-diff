@@ -272,7 +272,7 @@
 			<p class="text-[11.5px] text-faint">Closing keeps it running in the background.</p>
 			<button
 				type="button"
-				class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted hover:border-del/50 hover:text-del"
+				class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-del/50 hover:text-del active:shadow-pressed"
 				onclick={cancel}>Cancel</button
 			>
 		</div>
@@ -322,8 +322,7 @@
 							<span class="font-mono text-fg">{info.base}</span>
 							<span class="font-mono text-accent">{info.mergeBase.slice(0, 7)}</span>
 							{#if info.merged}
-								<span
-									class="rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+								<span class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 									>merged</span
 								>
 							{/if}
@@ -430,7 +429,7 @@
 			{#if range?.hasGuide}
 				<button
 					type="button"
-					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium hover:border-muted"
+					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed"
 					onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
 				>
 			{/if}

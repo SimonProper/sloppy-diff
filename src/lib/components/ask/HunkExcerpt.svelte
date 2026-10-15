@@ -48,7 +48,9 @@
 </script>
 
 <section class="flex min-h-0 min-w-0 flex-col">
-	<header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3 text-[12px]">
+	<header
+		class="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3 text-[12px] shadow-strip"
+	>
 		<button
 			type="button"
 			class="flex h-7 items-center gap-1.5 rounded-md px-2 text-muted hover:bg-subtle hover:text-fg"
@@ -99,7 +101,7 @@
 			</p>
 		{:else if thread.outdated || !found}
 			<p
-				class="mb-3 flex items-start gap-2 rounded-[10px] bg-mod/10 px-3 py-2.5 text-[12px] leading-snug text-mod"
+				class="mb-3 flex items-start gap-2 rounded-[calc(var(--radius)*1.25)] bg-mod/10 px-3 py-2.5 text-[12px] leading-snug text-mod"
 			>
 				These lines have changed since you asked. Showing them as they were.
 			</p>
@@ -199,11 +201,11 @@
 	}
 	.row.add :global(.novel) {
 		background: var(--add-novel);
-		border-radius: 3px;
+		border-radius: calc(var(--radius-sm) - 1px);
 	}
 	.row.del :global(.novel) {
 		background: var(--del-novel);
-		border-radius: 3px;
+		border-radius: calc(var(--radius-sm) - 1px);
 	}
 	.row.asked {
 		box-shadow: inset 0 0 0 100vmax var(--ink-wash);

@@ -163,7 +163,9 @@
 {/snippet}
 
 <section class="flex min-h-0 min-w-0 flex-col bg-surface">
-	<header class="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3 text-[12px]">
+	<header
+		class="flex h-11 shrink-0 items-center gap-2 border-b border-line px-3 text-[12px] shadow-strip"
+	>
 		{@render leading?.()}
 		{#if onreveal}
 			<button
@@ -194,7 +196,7 @@
 			{#if message.role === 'user'}
 				<p
 					class={[
-						'ml-auto w-fit max-w-[85%] rounded-[10px] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
+						'ml-auto w-fit max-w-[85%] rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
 						i > 0 && 'mt-[26px]'
 					]}
 				>
@@ -218,7 +220,7 @@
 							{#if last && !live}
 								<button
 									type="button"
-									class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted hover:border-muted hover:text-fg"
+									class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
 									onclick={retry}>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</button
 								>
 							{/if}
@@ -231,7 +233,9 @@
 							<ol class="mt-3 flex flex-col gap-2">
 								{#each message.suggestions as suggestion, n (n)}
 									{@const key = `${i}.${n}`}
-									<li class="rounded-[10px] border border-line px-3 pt-2 pb-2.5">
+									<li
+										class="rounded-[calc(var(--radius)*1.25)] border border-line px-3 pt-2 pb-2.5"
+									>
 										<p class="flex items-center gap-2 text-[11px] text-faint">
 											<span class="tabular-nums">#{n + 1}</span>
 											{#if suggestion.kind === 'review'}
@@ -310,7 +314,7 @@
 				This answer was interrupted.
 				<button
 					type="button"
-					class="h-6 rounded-md border border-line px-2 text-[11.5px] hover:border-muted hover:text-fg"
+					class="h-6 rounded-md border border-line px-2 text-[11.5px] shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
 					onclick={retry}>Ask again</button
 				>
 			</p>

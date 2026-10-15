@@ -6,9 +6,10 @@
 		<meta name="text-scale" content="scale" />
 		<script>
 			// light or dark, picked in ThemeToggle or the OS's, before first paint, and the theme
-			// drawing it, see theme.svelte.ts: one of $lib/themes by the class of its name, beside
-			// .dark for a dark one. The colours tweaked for it go on <html> inline, above the
-			// theme's own. sloppy-diff:theme has it applied again
+			// drawing it, see theme.svelte.ts: a built-in one by the class of its name, beside
+			// .dark for a dark one. Inline on <html> over it go a copy's frozen values and the
+			// tweaks, and the reader's own rules for it in a <style>. sloppy-diff:theme has it
+			// applied again
 			(() => {
 				const query = matchMedia('(prefers-color-scheme: dark)');
 				const read = (key) => {
@@ -29,12 +30,21 @@
 					// picks are kept by side, so a picked theme is dark or not by where it's kept,
 					// and a custom one draws as the one it was copied from
 					const theme = read('sloppy-diff:theme-' + side) ?? side;
-					const from = custom.find((t) => t.id === theme)?.from ?? theme;
+					const own = custom.find((t) => t.id === theme);
+					const from = own?.from ?? theme;
 					const root = document.documentElement;
 					root.classList.remove(...added);
 					added = [side === 'dark' && 'dark', from !== side && from].filter(Boolean);
 					root.classList.add(...added);
-					root.style.cssText = read('sloppy-diff:theme-css:' + theme) ?? '';
+					root.style.cssText = [own?.vars, read('sloppy-diff:theme-css:' + theme)]
+						.filter(Boolean)
+						.join('; ');
+					const rules =
+						document.getElementById('theme-rules') ??
+						document.head.appendChild(
+							Object.assign(document.createElement('style'), { id: 'theme-rules' })
+						);
+					rules.textContent = read('sloppy-diff:theme-rules:' + theme) ?? '';
 				};
 				apply();
 				query.addEventListener('change', apply);

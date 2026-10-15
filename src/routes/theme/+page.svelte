@@ -2,7 +2,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import { readText, writeText } from '$lib/storage';
-	import { apply, CLASSES, theme, tweaksKey } from '$lib/theme.svelte';
+	import { apply, CLASSES, joinVars, rulesKey, theme, tweaksKey } from '$lib/theme.svelte';
 
 	let { data } = $props();
 
@@ -15,7 +15,8 @@
 				['--canvas', 'Canvas'],
 				['--surface', 'Surface'],
 				['--subtle', 'Subtle'],
-				['--line', 'Line']
+				['--line', 'Line'],
+				['--sidebar', 'Sidebar']
 			]
 		},
 		{
@@ -54,36 +55,81 @@
 	];
 	const NAMES = GROUPS.flatMap((group) => group.tokens.map(([name]) => name));
 
+	// layout.css's shape: the radius every corner is scaled from, and the fonts, each picked
+	// one in front of the stack it falls back to
+	const FONTS: [name: string, stack: string, label: string, suggestions: string[]][] = [
+		[
+			'--font-sans',
+			'--sans-stack',
+			'Text font',
+			['Inter', 'Geist', 'IBM Plex Sans', 'Helvetica Neue']
+		],
+		[
+			'--font-mono',
+			'--mono-stack',
+			'Code font',
+			['JetBrains Mono', 'Fira Code', 'Berkeley Mono', 'Cascadia Code', 'IBM Plex Mono', 'Menlo']
+		]
+	];
+	const SHAPE = ['--radius', ...FONTS.map(([name]) => name)];
+	// the radius in px, written in px or rem
+	const px = (value: string) => parseFloat(value) * (value.endsWith('rem') ? 16 : 1);
+
 	// the theme being customized is put on screen while here, whatever's picked, and
 	// the picked one comes back on the way out
 	let editing = $state(theme.shown);
 	const current = $derived(theme.find(editing));
-	// which have tweaks stored, for the list
-	const stored = () => theme.all.filter((t) => readText(tweaksKey(t.id))).map((t) => t.id);
+	// which have tweaks or rules stored, for the list
+	const stored = () =>
+		theme.all.filter((t) => readText(tweaksKey(t.id)) || readText(rulesKey(t.id))).map((t) => t.id);
 	let customized = $state(stored());
 
-	// the tweaks go inline on <html>, as app.html puts them, so editing them there
-	// shows them right away and storing them is a copy of the style attribute
+	// inline on <html>, as app.html puts them: a copy's frozen values, then the tweaks, kept
+	// apart in a style of their own so they can be read back, reset and stored on their own
 	const root = document.documentElement;
+	const tweaks = document.createElement('div').style;
+	const draw = () => (root.style.cssText = joinVars(current?.vars, tweaks.cssText));
+	// the reader's rules for the theme, in the <style> app.html made for them
+	const rulesStyle = () => document.getElementById('theme-rules');
+	let rules = $state('');
 	let values = $state<Record<string, string>>({});
 	let tweaked = $state<string[]>([]);
 	let css = $state('');
+	let fonts = $state<Record<string, string>>({});
+
+	/** the first font of a stack, the system's own named so */
+	const firstFont = (stack: string) => {
+		const font = stack.split(',')[0].replace(/["']/g, '').trim();
+		return font.startsWith('ui-') ? 'System' : font;
+	};
+	/** the font picked for a theme on top of its own, out of the stack behind it */
+	const family = (name: string) => {
+		const picked = tweaks.getPropertyValue(name);
+		return picked && firstFont(picked);
+	};
 
 	function readValues() {
 		const style = getComputedStyle(root);
-		values = Object.fromEntries(NAMES.map((name) => [name, style.getPropertyValue(name).trim()]));
-		tweaked = NAMES.filter((name) => root.style.getPropertyValue(name));
+		values = Object.fromEntries(
+			[...NAMES, ...SHAPE].map((name) => [name, style.getPropertyValue(name).trim()])
+		);
+		tweaked = [...NAMES, ...SHAPE].filter((name) => tweaks.getPropertyValue(name));
+		fonts = Object.fromEntries(FONTS.map(([name]) => [name, family(name)]));
 	}
 
 	function refresh() {
 		readValues();
-		css = root.style.cssText.replaceAll('; ', ';\n');
+		css = tweaks.cssText.replaceAll('; ', ';\n');
 	}
 
 	$effect(() => {
 		root.classList.remove(...CLASSES);
 		root.classList.add(...theme.classesOf(editing));
-		root.style.cssText = readText(tweaksKey(editing)) ?? '';
+		tweaks.cssText = readText(tweaksKey(editing)) ?? '';
+		draw();
+		rules = readText(rulesKey(editing)) ?? '';
+		const style = rulesStyle();
+		if (style) style.textContent = rules;
 		refresh();
 	});
 	// leaving, app.html puts the picked theme back, over none of the ones shown here
@@ -98,22 +144,28 @@
 	}
 
 	function save() {
-		store(root.style.cssText);
+		draw();
+		store(tweaks.cssText);
 		refresh();
 	}
 
 	function set(name: string, value: string) {
-		root.style.setProperty(name, value);
+		tweaks.setProperty(name, value);
 		save();
 	}
 
 	function reset(name: string) {
-		root.style.removeProperty(name);
+		tweaks.removeProperty(name);
 		save();
 	}
 
+	function setFont(name: string, stack: string, picked: string) {
+		if (picked.trim()) set(name, `"${picked.trim()}", var(${stack})`);
+		else reset(name);
+	}
+
 	function resetAll() {
-		root.style.cssText = '';
+		tweaks.cssText = '';
 		save();
 	}
 
@@ -122,13 +174,22 @@
 	function editCss(text: string) {
 		// an LLM's reply pasted whole: a code fence or a :root { } around it is let go
 		const declarations = text.replace(/```\w*/g, '').replace(/^[^{]*\{|\}/g, '');
-		root.style.cssText = declarations;
+		tweaks.cssText = declarations;
+		draw();
 		store(declarations);
 		readValues();
 	}
 
+	function editRules(text: string) {
+		rules = text;
+		const style = rulesStyle();
+		if (style) style.textContent = text;
+		writeText(rulesKey(editing), text.trim() ? text : null);
+		customized = stored();
+	}
+
 	function create() {
-		editing = theme.create(editing);
+		editing = theme.create(editing, getComputedStyle(root));
 		customized = stored();
 	}
 
@@ -155,10 +216,12 @@ Fill in this template, its values are the current ${current?.label || 'theme'}'s
 ${template}
 
 What they're for:
-- --canvas is the page, --surface panels and the code, --subtle hovers and code blocks, --line borders.
+- --canvas is the page, --surface panels and the code, --subtle hovers and code blocks, --line borders, --sidebar the lists beside the diff (the page's colour unless set).
 - --fg is text, --muted secondary text, --faint the quietest (line numbers, hints). --fg and --muted have to stay readable on --surface.
 - --add, --del, --mod and --move mark added, removed, modified and moved code. Line backgrounds are mixed from them over --surface, so pick hues that stay clear there.
 - --twp-* colour the syntax. Any other --twp-<token> can be set too, such as --twp-constant, --twp-variable, --twp-parameter, --twp-builtin, --twp-attribute or --twp-regex.
+- If the style has a shape of its own, --radius sets every corner (${px(values['--radius'] ?? '8px')}px now, 0 is square), and --font-sans and --font-mono a font, written as "Font Name", var(--sans-stack) or "Font Name", var(--mono-stack) so there's a fallback.
+- It can give the page depth with box-shadows, 0 0 #0000 being none: --raised for buttons, --pressed for one held down, --sunken for text fields, --strip for the bars along the top and over panels, --card for a file's card, and --control for a button's face colour.
 
 The theme I want: `;
 	}
@@ -172,18 +235,42 @@ The theme I want: `;
 
 	let back = $state('/');
 	afterNavigate(({ from }) => {
-		if (from) back = from.url.pathname + from.url.search;
+		if (from?.url) back = from.url.pathname + from.url.search;
 	});
 </script>
+
+{#snippet resetButton(name: string, label: string)}
+	<button
+		type="button"
+		class={[
+			'grid size-5 shrink-0 place-items-center rounded-sm text-faint hover:text-fg',
+			!tweaked.includes(name) && 'invisible'
+		]}
+		title={theme.isBuiltIn(editing) ? `Back to ${current?.label}'s` : 'Back to how it was copied'}
+		aria-label="Reset {label}"
+		onclick={() => reset(name)}
+	>
+		<svg
+			viewBox="0 0 16 16"
+			class="size-3"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.5"
+			stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8" /></svg
+		>
+	</button>
+{/snippet}
 
 <svelte:head>
 	<title>Theme · sloppy diff</title>
 </svelte:head>
 
-<header class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4">
+<header
+	class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 shadow-strip"
+>
 	<a
 		href={back}
-		class="grid size-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:border-muted hover:text-fg"
+		class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
 		title="Back"
 		aria-label="Back"
 	>
@@ -265,7 +352,7 @@ The theme I want: `;
 				</h2>
 			{:else}
 				<input
-					class="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] font-medium text-fg outline-none focus:border-muted"
+					class="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[12.5px] font-medium text-fg shadow-sunken outline-none focus:border-muted"
 					value={current?.label}
 					placeholder="Untitled"
 					aria-label="Theme name"
@@ -286,6 +373,56 @@ The theme I want: `;
 			{/if}
 		</div>
 
+		<div>
+			<h2 class="mb-1.5 text-[11px] font-medium tracking-wide text-faint uppercase">Shape</h2>
+			<ul class="flex flex-col">
+				<li class="flex h-8 items-center gap-2.5">
+					<span
+						class={[
+							'w-16 shrink-0 text-[12.5px]',
+							tweaked.includes('--radius') ? 'font-medium text-fg' : 'text-muted'
+						]}>Corners</span
+					>
+					<input
+						type="range"
+						class="min-w-0 flex-1 accent-fg"
+						min="0"
+						max="20"
+						value={px(values['--radius'] ?? '0')}
+						aria-label="Corners"
+						oninput={(event) => set('--radius', `${event.currentTarget.value}px`)}
+					/>
+					<span class="w-9 shrink-0 text-right font-mono text-[11px] text-faint"
+						>{px(values['--radius'] ?? '0')}px</span
+					>
+					{@render resetButton('--radius', 'Corners')}
+				</li>
+				{#each FONTS as [name, stack, label, suggestions] (name)}
+					<li class="flex h-8 items-center gap-2.5">
+						<span
+							class={[
+								'w-16 shrink-0 text-[12.5px]',
+								tweaked.includes(name) ? 'font-medium text-fg' : 'text-muted'
+							]}>{label}</span
+						>
+						<input
+							class="h-7 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[12px] text-fg shadow-sunken outline-none placeholder:text-faint focus:border-muted"
+							list="{name}-fonts"
+							placeholder={firstFont(values[name] ?? '')}
+							spellcheck="false"
+							value={fonts[name]}
+							aria-label={label}
+							onchange={(event) => setFont(name, stack, event.currentTarget.value)}
+						/>
+						<datalist id="{name}-fonts">
+							{#each suggestions as font (font)}<option value={font}></option>{/each}
+						</datalist>
+						{@render resetButton(name, label)}
+					</li>
+				{/each}
+			</ul>
+		</div>
+
 		{#each GROUPS as group (group.label)}
 			<div>
 				<h2 class="mb-1.5 text-[11px] font-medium tracking-wide text-faint uppercase">
@@ -297,7 +434,7 @@ The theme I want: `;
 						<li class="flex h-8 items-center gap-2.5">
 							<input
 								type="color"
-								class="size-6 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0 [&::-moz-color-swatch]:rounded-[5px] [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-[5px] [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
+								class="size-6 shrink-0 cursor-pointer rounded-md border border-line bg-transparent p-0 shadow-sunken [&::-moz-color-swatch]:rounded-[calc(var(--radius-md)-1px)] [&::-moz-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-[calc(var(--radius-md)-1px)] [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
 								value={values[name]}
 								aria-label={label}
 								oninput={(event) => set(name, event.currentTarget.value)}
@@ -306,25 +443,7 @@ The theme I want: `;
 								{label}
 							</span>
 							<span class="ml-auto font-mono text-[11px] text-faint">{values[name]}</span>
-							<button
-								type="button"
-								class={[
-									'grid size-5 place-items-center rounded text-faint hover:text-fg',
-									!changed && 'invisible'
-								]}
-								title="Back to {theme.find(current?.from ?? 'light')?.label}'s"
-								aria-label="Reset {label}"
-								onclick={() => reset(name)}
-							>
-								<svg
-									viewBox="0 0 16 16"
-									class="size-3"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="1.5"
-									stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8" /></svg
-								>
-							</button>
+							{@render resetButton(name, label)}
 						</li>
 					{/each}
 				</ul>
@@ -350,7 +469,7 @@ The theme I want: `;
 			<!-- any variable from layout.css or the --twp-* syntax ones, as declarations -->
 			<textarea
 				id="theme-css"
-				class="h-40 w-full resize-y rounded-lg border border-line bg-surface p-3 font-mono text-[12px] leading-5 text-fg outline-none placeholder:text-faint focus:border-muted"
+				class="h-40 w-full resize-y rounded-lg border border-line bg-surface p-3 font-mono text-[12px] leading-5 text-fg shadow-sunken outline-none placeholder:text-faint focus:border-muted"
 				spellcheck="false"
 				placeholder={'--fg: #ececec;\n--add-bg: #12261e;\n--twp-regex: #a5d6ff;'}
 				value={css}
@@ -359,6 +478,23 @@ The theme I want: `;
 			<p class="text-[12px] text-faint">
 				Want a theme like Kanagawa Dragon? Make a new theme, copy the prompt, give it to an LLM with
 				the theme's name, and paste its reply here.
+			</p>
+		</div>
+
+		<div class="flex flex-col gap-1.5">
+			<label for="rules-field" class="text-[11px] font-medium tracking-wide text-faint uppercase"
+				>CSS rules</label
+			>
+			<!-- whole rules for what no variable reaches, the scrollbars say, applied with the theme -->
+			<textarea
+				id="rules-field"
+				class="h-32 w-full resize-y rounded-lg border border-line bg-surface p-3 font-mono text-[12px] leading-5 text-fg shadow-sunken outline-none placeholder:text-faint focus:border-muted"
+				spellcheck="false"
+				placeholder={'::selection {\n\tbackground: #ffc799;\n}'}
+				value={rules}
+				oninput={(event) => editRules(event.currentTarget.value)}></textarea>
+			<p class="text-[12px] text-faint">
+				Whole rules, for what the variables don't reach. They apply with this theme only.
 			</p>
 		</div>
 	</div>

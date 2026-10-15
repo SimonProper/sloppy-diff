@@ -14,7 +14,9 @@
 
 	const itemVariants = ({ size, text, active }: { size: Size; text: Text; active: boolean }) => [
 		'relative flex items-center justify-center gap-1.5 transition-colors duration-200',
-		{ sm: 'h-5 rounded-[5px]', md: 'h-6 rounded-md', lg: 'h-7 rounded-md' }[size],
+		{ sm: 'h-5 rounded-[calc(var(--radius-md)-1px)]', md: 'h-6 rounded-md', lg: 'h-7 rounded-md' }[
+			size
+		],
 		{ sm: 'px-2 text-[11.5px]', md: 'px-2.5 text-[12px]', icon: 'px-1.5' }[text],
 		active ? 'text-fg' : 'text-muted hover:text-fg'
 	];
@@ -22,9 +24,11 @@
 	/** the active option's background, sliding between them */
 	const pillVariants = ({ size }: { size: Size }) => [
 		'absolute left-0 bg-subtle transition-[translate,width] duration-200 ease-out motion-reduce:transition-none',
-		{ sm: 'inset-y-px rounded-[5px]', md: 'inset-y-0.5 rounded-md', lg: 'inset-y-0.5 rounded-md' }[
-			size
-		]
+		{
+			sm: 'inset-y-px rounded-[calc(var(--radius-md)-1px)]',
+			md: 'inset-y-0.5 rounded-md',
+			lg: 'inset-y-0.5 rounded-md'
+		}[size]
 	];
 </script>
 

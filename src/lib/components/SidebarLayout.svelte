@@ -243,8 +243,8 @@
 		<aside
 			bind:this={panel}
 			class={[
-				'flex h-full flex-col border-r border-line',
-				floating && 'rail absolute inset-y-0 left-0 overflow-hidden bg-canvas',
+				'flex h-full flex-col border-r border-line bg-sidebar',
+				floating && 'rail absolute inset-y-0 left-0 overflow-hidden',
 				open && 'open shadow-float',
 				moving && 'moving',
 				instant && 'instant'
@@ -256,7 +256,9 @@
 			onscrollcapture={rail ? hideTip : undefined}
 		>
 			<div class="flex h-full min-h-0 flex-col" style:width={floating ? `${expanded}px` : null}>
-				<div class="flex h-10 shrink-0 items-center justify-between pr-2 pl-1">
+				<div
+					class="flex h-11 shrink-0 items-center justify-between border-b border-line pr-2 pl-1 shadow-strip"
+				>
 					{#if rail}
 						<button
 							bind:this={toggleButton}
@@ -321,7 +323,7 @@
 			</div>
 			{#if collapsed && railContent}
 				<div
-					class="absolute inset-x-0 top-10 bottom-0 flex [scrollbar-width:none] flex-col items-center gap-1.5 overflow-y-auto pt-1 pb-4"
+					class="absolute inset-x-0 top-11 bottom-0 flex [scrollbar-width:none] flex-col items-center gap-1.5 overflow-y-auto pt-1 pb-4"
 				>
 					{@render railContent()}
 				</div>

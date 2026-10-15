@@ -235,12 +235,12 @@
 								<span class="truncate text-[12.5px] font-medium">{pr.title}</span>
 								{#if pr.isDraft}
 									<span
-										class="shrink-0 rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+										class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 										>draft</span
 									>
 								{:else if pr.reviewDecision === 'APPROVED' || pr.reviewDecision === 'CHANGES_REQUESTED'}
 									{@const [label, colors] = PILLS[pr.reviewDecision]}
-									<span class="shrink-0 rounded-[4px] border px-1 text-[10px] font-medium {colors}"
+									<span class="shrink-0 rounded-sm border px-1 text-[10px] font-medium {colors}"
 										>{label}</span
 									>
 								{/if}

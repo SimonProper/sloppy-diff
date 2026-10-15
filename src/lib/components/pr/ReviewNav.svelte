@@ -24,13 +24,13 @@
 <Popover
 	bind:open
 	align="end"
-	class="max-h-[60vh] w-[26rem] overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
+	class="max-h-[60vh] w-[26rem] overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-float"
 >
 	{#snippet trigger(props)}
 		<button
 			{...props}
 			class={[
-				'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border bg-surface px-2.5 text-[12px] text-muted hover:border-muted hover:text-fg',
+				'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border bg-control px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
 				open ? 'border-muted' : 'border-line'
 			]}
 			title="Go to a review comment"

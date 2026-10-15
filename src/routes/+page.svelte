@@ -436,7 +436,7 @@
 
 <div class="min-h-screen font-sans">
 	<header
-		class="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-canvas px-4"
+		class="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-canvas px-4 shadow-strip"
 	>
 		<span
 			class="mr-1 grid size-6 shrink-0 place-items-center rounded-md border border-fg font-mono text-[12px]"
@@ -474,8 +474,7 @@
 							<span class="font-mono text-fg">{branchSel.base}</span>
 							<span class="font-mono text-accent">{branchSel.mergeBase.slice(0, 7)}</span>
 							{#if branchSel.merged}
-								<span
-									class="rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+								<span class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 									>merged</span
 								>
 							{/if}
@@ -514,7 +513,7 @@
 					/>
 					<button
 						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:border-muted hover:text-fg disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
 						title={older
 							? 'Older commit  ['
 							: commit
@@ -550,7 +549,7 @@
 					/>
 					<button
 						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:border-muted hover:text-fg disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
 						title={newer
 							? 'Newer commit  ]'
 							: commit
@@ -624,7 +623,7 @@
 					/>
 					<button
 						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:border-muted hover:text-fg"
+						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
 						title="Swap from and to"
 						aria-label="Swap from and to"
 						onclick={() => navigate({ from: data.inputs.to, to: data.inputs.from || 'HEAD' })}
@@ -672,7 +671,7 @@
 			{/if}
 			<button
 				type="button"
-				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent hover:bg-accent/14"
+				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
 				title="Generate or open review guides"
 				onclick={() => (dialog = 'pick')}
 			>
@@ -703,7 +702,7 @@
 	{#snippet toolbar()}
 		<!-- stays under the header so the change mode can be switched from anywhere -->
 		<div
-			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas px-4"
+			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas px-4 shadow-strip"
 		>
 			{@render viewTabs()}
 			<div class="ml-auto flex shrink-0 items-center">
@@ -737,7 +736,7 @@
 				<button
 					type="button"
 					class={[
-						'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-[12px] text-muted hover:border-muted hover:text-fg',
+						'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-control px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
 						threads.panel && 'border-muted text-fg'
 					]}
 					title="{threads.panel ? 'Close' : 'Open'} the agent panel  q"

@@ -1,0 +1,29 @@
+/* NeXTSTEP beyond its tokens, written by hand next to the generated nextstep.css: only
+   what no component owns, in the base layer so any utility still wins. The order is
+   Tailwind's own, stated again in case this file comes first */
+@layer theme, base, components, utilities;
+
+@layer base {
+	/* scrollers: a dark trough, the knob a raised button in it */
+	:root.nextstep ::-webkit-scrollbar {
+		width: 13px;
+		height: 13px;
+		background-color: var(--faint);
+	}
+	:root.nextstep ::-webkit-scrollbar-thumb {
+		background-color: var(--canvas);
+		box-shadow:
+			inset 1px 1px 0 var(--surface),
+			inset -1px -1px 0 var(--fg);
+	}
+	:root.nextstep ::-webkit-scrollbar-corner {
+		background-color: var(--faint);
+	}
+	/* Firefox has no scrollbar pseudo-elements, only the colours. Not where they exist:
+	   Chromium drops them for scrollbar-color, which every element would inherit */
+	@supports not selector(::-webkit-scrollbar) {
+		:root.nextstep {
+			scrollbar-color: var(--canvas) var(--faint);
+		}
+	}
+}

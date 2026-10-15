@@ -190,7 +190,7 @@
 <!-- clicking a heading or the padding keeps focus in the filter, the list stays open -->
 <Popover
 	bind:open
-	class="w-[28rem] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
+	class="w-[28rem] overflow-hidden rounded-xl border border-line bg-surface shadow-float"
 	role="presentation"
 	onpointerdown={(e) => {
 		if (!(e.target as HTMLElement).closest('button, input')) e.preventDefault();
@@ -202,7 +202,7 @@
 			{...props}
 			bind:this={button}
 			class={[
-				'flex h-8 w-56 items-center gap-2 rounded-lg border bg-surface px-2.5 text-left hover:border-muted',
+				'flex h-8 w-56 items-center gap-2 rounded-lg border bg-control px-2.5 text-left shadow-raised hover:border-muted active:shadow-pressed',
 				open ? 'border-muted' : 'border-line'
 			]}
 			aria-haspopup="listbox"
@@ -358,13 +358,13 @@
 						>
 						{#if item.current}
 							<span
-								class="shrink-0 rounded-[4px] bg-accent/12 px-1 text-[10px] font-medium text-accent"
+								class="shrink-0 rounded-sm bg-accent/12 px-1 text-[10px] font-medium text-accent"
 								>HEAD</span
 							>
 						{/if}
 						{#each item.refs ?? [] as ref (ref)}
 							<span
-								class="shrink-0 rounded-[4px] border border-line px-1 font-mono text-[10px] text-muted"
+								class="shrink-0 rounded-sm border border-line px-1 font-mono text-[10px] text-muted"
 								>{ref}</span
 							>
 						{/each}
@@ -389,7 +389,7 @@
 		{:else}
 			<p class="px-3 py-6 text-center text-[12px] text-muted">
 				{#if query.trim()}
-					Press <kbd class="rounded border border-line px-1 font-mono text-[11px]">↵</kbd> to use
+					Press <kbd class="rounded-sm border border-line px-1 font-mono text-[11px]">↵</kbd> to use
 					<span class="font-mono text-fg">{query.trim()}</span>
 				{:else}
 					Nothing here

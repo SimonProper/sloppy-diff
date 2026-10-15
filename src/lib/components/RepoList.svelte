@@ -158,7 +158,7 @@
 							<span class="truncate text-[12.5px] font-medium">{repo.name}</span>
 							{#if repo.branch}
 								<span
-									class="shrink-0 truncate rounded-[4px] border border-line px-1 font-mono text-[10px] text-muted"
+									class="shrink-0 truncate rounded-sm border border-line px-1 font-mono text-[10px] text-muted"
 									>{repo.branch}</span
 								>
 							{/if}
@@ -184,7 +184,8 @@
 			{:else}
 				<p class="px-3 py-6 text-center text-[12px] text-muted">
 					{#if query.trim().startsWith('/') || query.trim().startsWith('~')}
-						Press <kbd class="rounded border border-line px-1 font-mono text-[11px]">↵</kbd> to open
+						Press <kbd class="rounded-sm border border-line px-1 font-mono text-[11px]">↵</kbd> to
+						open
 						<span class="font-mono text-fg">{query.trim()}</span>
 					{:else if query.trim()}
 						No repository matches

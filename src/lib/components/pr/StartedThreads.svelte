@@ -54,7 +54,7 @@
 						onclick={() => onjump(thread)}>Go to comment</button
 					>
 					{#if thread.isResolved}
-						<span class="rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+						<span class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 							>Resolved</span
 						>
 					{/if}

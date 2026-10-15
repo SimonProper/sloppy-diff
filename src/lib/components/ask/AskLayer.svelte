@@ -105,7 +105,7 @@
 {#if threads.cursor}
 	<!-- picking lines from the keyboard, what the keys do meanwhile -->
 	<div
-		class="pointer-events-none fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-[10px] border border-line bg-surface px-3 py-2 text-[12px] whitespace-nowrap text-muted shadow-float"
+		class="pointer-events-none fixed bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-[calc(var(--radius)*1.25)] border border-line bg-surface px-3 py-2 text-[12px] whitespace-nowrap text-muted shadow-float"
 		role="status"
 	>
 		<span><kbd>↑</kbd><kbd>↓</kbd> line</span>

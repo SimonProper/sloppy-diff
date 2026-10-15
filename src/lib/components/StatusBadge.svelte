@@ -15,7 +15,7 @@
 <span
 	title={status}
 	class={[
-		'inline-grid size-4 shrink-0 place-items-center rounded-[5px] border font-mono text-[9px] leading-none font-semibold',
+		'inline-grid size-4 shrink-0 place-items-center rounded-[calc(var(--radius-md)-1px)] border font-mono text-[9px] leading-none font-semibold',
 		status === 'added' && 'border-add/40 bg-add/10 text-add',
 		status === 'deleted' && 'border-del/40 bg-del/10 text-del',
 		status === 'modified' && 'border-mod/40 bg-mod/10 text-mod',

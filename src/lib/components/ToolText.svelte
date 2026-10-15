@@ -11,7 +11,7 @@
 	<span class="flex min-w-0 items-center gap-1.5">
 		<span class="shrink-0">{read[1]}</span>
 		<span
-			class="flex min-w-0 items-center gap-1 rounded-[5px] border border-line bg-surface py-px pr-1.5 pl-1"
+			class="flex min-w-0 items-center gap-1 rounded-[calc(var(--radius-md)-1px)] border border-line bg-surface py-px pr-1.5 pl-1"
 			title={read[2]}
 		>
 			<FileIcon path={read[2]} />

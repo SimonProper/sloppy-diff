@@ -21,7 +21,7 @@
 				<div class="bone h-2.5 w-12 rounded-full"></div>
 				{#each LIST as width, i (i)}
 					<div class="flex h-5 items-center gap-2">
-						<div class="bone size-3.5 rounded-[4px]"></div>
+						<div class="bone size-3.5 rounded-sm"></div>
 						<div class="bone h-2.5 rounded-full {width}"></div>
 					</div>
 				{/each}
@@ -29,7 +29,7 @@
 		{/snippet}
 		{#snippet rail()}
 			{#each LIST as _, i (i)}
-				<div class="bone size-4 shrink-0 rounded-[4px]"></div>
+				<div class="bone size-4 shrink-0 rounded-sm"></div>
 			{/each}
 		{/snippet}
 		<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
@@ -41,7 +41,7 @@
 			{#each FILES as file, i (i)}
 				<section class="overflow-clip rounded-xl border border-line bg-surface">
 					<header class="flex h-10 items-center gap-2.5 border-b border-line px-3">
-						<div class="bone size-3.5 rounded-[4px]"></div>
+						<div class="bone size-3.5 rounded-sm"></div>
 						<div class="bone h-3 rounded-full {file.path}"></div>
 					</header>
 					<div class="py-1">

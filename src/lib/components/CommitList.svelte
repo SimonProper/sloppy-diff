@@ -78,6 +78,7 @@
 					selected ? 'bg-accent/8' : 'hover:bg-subtle',
 					narrowed && !selected && 'opacity-55'
 				]}
+				aria-current={selected || undefined}
 				title="{commit.subject}&#10;{commit.author} · {commit.sha}"
 				onclick={(e) => click(e, commit.sha)}
 			>

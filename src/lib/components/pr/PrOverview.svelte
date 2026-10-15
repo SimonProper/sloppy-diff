@@ -101,7 +101,7 @@
 			<p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-faint">
 				<span
 					class={[
-						'rounded-[4px] border px-1 text-[10.5px] font-medium capitalize',
+						'rounded-sm border px-1 text-[10.5px] font-medium capitalize',
 						pr.state === 'OPEN' && !pr.isDraft && 'border-add/40 bg-add/10 text-add',
 						pr.state === 'MERGED' && 'border-move/40 bg-move/10 text-move',
 						pr.state === 'CLOSED' && 'border-del/40 bg-del/10 text-del',

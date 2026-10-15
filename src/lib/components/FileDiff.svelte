@@ -329,7 +329,7 @@
 	data-path={file.newPath}
 	bind:this={root}
 	class={[
-		'relative overflow-clip rounded-xl border border-line bg-surface',
+		'relative overflow-clip rounded-xl border border-line bg-surface shadow-card',
 		inSection ? 'scroll-mt-38' : 'scroll-mt-28',
 		threads && 'ask',
 		threads && !picked && 'unpicked'
@@ -342,7 +342,7 @@
 	<header
 		bind:this={header}
 		class={[
-			'flex h-10 items-center gap-2.5 bg-surface px-3 text-[13px]',
+			'flex h-10 items-center gap-2.5 bg-surface px-3 text-[13px] shadow-strip',
 			// below the header and the sticky changes bar, and a guide step's title (44px)
 			sticky && 'sticky z-10',
 			sticky && (inSection ? 'top-34' : 'top-23'),
@@ -838,11 +838,11 @@
 	/* the pieces of a line that are actually new */
 	.row.add :global(.novel) {
 		background: var(--add-novel);
-		border-radius: 3px;
+		border-radius: calc(var(--radius-sm) - 1px);
 	}
 	.row.del :global(.novel) {
 		background: var(--del-novel);
-		border-radius: 3px;
+		border-radius: calc(var(--radius-sm) - 1px);
 	}
 
 	/* changed according to git, but nothing new: re-indented or re-wrapped, so a

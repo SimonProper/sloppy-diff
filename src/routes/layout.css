@@ -5,10 +5,22 @@
    The other themes, $lib/themes, add a class of their own, beside it for a dark one */
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+/* the shape, kept as variables rather than inlined into the utilities so a theme's
+   tweaks on <html> reach them: one radius every corner is scaled from, the fonts, and
+   --spacing, Tailwind's own unit every padding, gap and size is a multiple of */
+@theme {
+	--font-sans: var(--sans-stack);
+	--font-mono: var(--mono-stack);
 
+	--radius-xs: calc(var(--radius) * 0.25);
+	--radius-sm: calc(var(--radius) * 0.5);
+	--radius-md: calc(var(--radius) * 0.75);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.5);
+	--radius-2xl: calc(var(--radius) * 2);
+}
+
+@theme inline {
 	--color-canvas: var(--canvas);
 	--color-surface: var(--surface);
 	--color-subtle: var(--subtle);
@@ -16,6 +28,8 @@
 	--color-fg: var(--fg);
 	--color-muted: var(--muted);
 	--color-faint: var(--faint);
+	--color-sidebar: var(--sidebar);
+	--color-control: var(--control);
 
 	--color-accent: var(--accent);
 	--color-add: var(--add);
@@ -27,9 +41,19 @@
 	--color-ink-soft: var(--ink-soft);
 	--color-ink-wash: var(--ink-wash);
 	--shadow-float: var(--float);
+	--shadow-raised: var(--raised);
+	--shadow-pressed: var(--pressed);
+	--shadow-sunken: var(--sunken);
+	--shadow-strip: var(--strip);
+	--shadow-card: var(--card);
 }
 
 :root {
+	--radius: 0.5rem;
+	/* a font picked on /theme goes in front of these, they stay as its fallback */
+	--sans-stack: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--mono-stack: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
 	--canvas: #fafafa;
 	--surface: #ffffff;
 	--subtle: #f4f4f4;
@@ -37,6 +61,8 @@
 	--fg: #0a0a0a;
 	--muted: #6e6e6e;
 	--faint: #a6a6a6;
+	/* the lists beside the diff, the page's own colour unless a theme sets one */
+	--sidebar: var(--canvas);
 
 	/* the UI's own chrome is drawn in the text colour, so every hue on screen says
 	   something about the diff: added, removed, modified, moved */
@@ -67,6 +93,17 @@
 	--ink-mark: color-mix(in oklab, var(--fg) 62%, transparent);
 	--ink-mark-seen: color-mix(in oklab, var(--fg) 34%, transparent);
 	--float: 0 8px 30px -12px rgb(0 0 0 / 0.25);
+	/* depth a theme can give the page, flat unless it does: a button stands out and is pushed
+	   in while held, a field sinks in, a bar is lit along its top, a file's card. Opted into
+	   with shadow-raised active:shadow-pressed, shadow-sunken, shadow-strip and shadow-card.
+	   0 0 #0000 rather than none, Tailwind lists them with its rings */
+	--raised: 0 0 #0000;
+	--pressed: var(--raised);
+	--sunken: 0 0 #0000;
+	--strip: 0 0 #0000;
+	--card: 0 0 #0000;
+	/* a raised button's face */
+	--control: var(--surface);
 	color-scheme: light;
 }
 
@@ -152,14 +189,14 @@ html:has(dialog:modal) {
 	font-family: var(--font-mono);
 	font-size: 0.88em;
 	padding: 0.1em 0.3em;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: var(--subtle);
 	color: var(--fg);
 }
 .prose pre {
 	overflow-x: auto;
 	padding: 0.5em 0.75em;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--subtle);
 }
 .prose pre code {
@@ -206,7 +243,7 @@ html:has(dialog:modal) {
 .prose video {
 	max-width: 100%;
 	max-height: 480px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 .prose strong {
 	font-weight: 600;
@@ -247,7 +284,7 @@ html:has(dialog:modal) {
 	padding: 0.05em 0.35em;
 	border: 1px solid var(--line);
 	border-bottom-width: 2px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--fg);
 }
 .prose li:has(> input[type='checkbox']) {
@@ -261,7 +298,7 @@ html:has(dialog:modal) {
 .prose .markdown-alert {
 	padding: 0.35em 0.75em;
 	border-left: 3px solid var(--alert);
-	border-radius: 0 6px 6px 0;
+	border-radius: 0 var(--radius-md) var(--radius-md) 0;
 	background: color-mix(in oklab, var(--alert) 6%, transparent);
 }
 .prose .markdown-alert-title {

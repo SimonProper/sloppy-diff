@@ -29,7 +29,7 @@
 {#if peek && thread}
 	<!-- opens to the left of the dot, which sits at the diff's right edge -->
 	<div
-		class="pointer-events-none fixed z-30 w-[340px] rounded-[10px] border border-line bg-surface px-3 py-2.5 text-[12px] leading-normal shadow-float"
+		class="pointer-events-none fixed z-30 w-[340px] rounded-[calc(var(--radius)*1.25)] border border-line bg-surface px-3 py-2.5 text-[12px] leading-normal shadow-float"
 		style:top="{peek.y - 6}px"
 		style:right="{window.innerWidth - peek.x + 10}px"
 		role="tooltip"

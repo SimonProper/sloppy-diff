@@ -409,8 +409,8 @@
 				</div>
 				<p class="mt-4 flex items-center gap-1.5 text-[11px] text-faint">
 					Use
-					<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">j</kbd>
-					<kbd class="rounded border border-line px-1 font-mono text-[10.5px] text-muted">k</kbd>
+					<kbd class="rounded-sm border border-line px-1 font-mono text-[10.5px] text-muted">j</kbd>
+					<kbd class="rounded-sm border border-line px-1 font-mono text-[10.5px] text-muted">k</kbd>
 					to move between sections.
 				</p>
 			</div>
@@ -447,7 +447,7 @@
 							}
 							onpointerenter={(e) => hover(e, section.id)}
 							onpointerleave={(e) => hover(e, null)}
-							class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-[0_8px_30px_-12px_rgb(0_0_0/0.25)]"
+							class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
 						>
 							{#snippet trigger(props)}
 								<button
@@ -479,7 +479,7 @@
 					<span class="flex-1"></span>
 					{#if guide.earlier && section.changed}
 						<span
-							class="shrink-0 rounded-[4px] border border-line px-1 text-[10px] font-medium text-muted"
+							class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 							title="Its code changed since the guide was written, the description may be out of date"
 							>changed</span
 						>
@@ -495,7 +495,7 @@
 					<button
 						type="button"
 						class={[
-							'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium',
+							'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
 							done
 								? 'border-add/40 bg-add/10 text-add'
 								: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
@@ -566,7 +566,7 @@
 		<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-faint">
 			from
 			{#each section.commits as sha (sha)}
-				<span class="rounded-[4px] bg-subtle px-1 font-mono text-[10.5px] text-accent">{sha}</span>
+				<span class="rounded-sm bg-subtle px-1 font-mono text-[10.5px] text-accent">{sha}</span>
 			{/each}
 		</p>
 	{/if}

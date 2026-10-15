@@ -23,7 +23,7 @@
 
 <section class="flex min-h-0 min-w-0 flex-col bg-canvas">
 	<header
-		class="flex h-11 shrink-0 items-center justify-between gap-2.5 border-b border-line px-3 text-[12px] font-medium"
+		class="flex h-11 shrink-0 items-center justify-between gap-2.5 border-b border-line px-3 text-[12px] font-medium shadow-strip"
 	>
 		<span>Chats <span class="font-normal text-faint tabular-nums">{threads.list.length}</span></span
 		>
