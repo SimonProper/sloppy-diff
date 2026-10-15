@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { THEMES, themeCss } from './src/lib/themes/themes';
+import { THEMES, themeCss } from './src/lib/themes/themes.ts';
 
 /** The built-in themes' CSS, made from their definitions as the app is built or served. */
 function themes(): Plugin {
