@@ -74,6 +74,7 @@
 
 	let info = $state<Awaited<ReturnType<typeof getBranch>> | null>(null);
 	let infoError = $state('');
+	const branchNeedsRange = $derived(info?.status === 'no-unpushed-commits' && info.name === branch);
 
 	$effect(() => {
 		if (!canGenerate || tab !== 'branch' || !branch) return;
@@ -95,9 +96,10 @@
 	/** What the guide covers: the whole branch, a span of it, or the range. */
 	const target = $derived.by(() => {
 		if (tab === 'range') return { start, stop };
-		if (!info || info.name !== branch) return null;
+		if (!info || info.status !== 'ready' || info.name !== branch) return null;
 		if (!first || !last) return { start: info.mergeBase, stop: info.tip };
-		const at = (sha: string) => info!.commits.findIndex((c) => c.sha === sha);
+		const commits = info.commits;
+		const at = (sha: string) => commits.findIndex((c) => c.sha === sha);
 		const [a, b] = at(first) <= at(last) ? [first, last] : [last, first];
 		return { start: `${a}^`, stop: b };
 	});
@@ -106,6 +108,14 @@
 		// the range starts out as whatever the branch covered
 		if (next === 'range' && target) ({ start, stop } = target);
 		tab = next;
+	}
+
+	function chooseCommitRange() {
+		// A first commit's parent resolves to the empty tree, so this also works
+		// when the selected branch has only one commit or HEAD is somewhere else.
+		start = `${branch}^`;
+		stop = branch;
+		tab = 'range';
 	}
 
 	let range = $state<Awaited<ReturnType<typeof getRange>> | null>(null);
@@ -311,11 +321,42 @@
 
 			{#if tab === 'branch'}
 				<div class="rounded-xl border border-line">
-					{#if infoError}
+					{#if branchNeedsRange}
+						<div class="flex items-start gap-3 px-4 py-4">
+							<span
+								class="grid size-8 shrink-0 place-items-center rounded-lg border border-line bg-subtle text-muted"
+								aria-hidden="true"
+							>
+								<svg
+									viewBox="0 0 16 16"
+									class="size-4"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.4"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><circle cx="4.5" cy="3.5" r="1.5" /><circle cx="4.5" cy="12.5" r="1.5" /><circle
+										cx="11.5"
+										cy="5"
+										r="1.5"
+									/><path d="M4.5 5v6M11.5 6.5c0 3-7 2-7 4.5" /></svg
+								>
+							</span>
+							<div>
+								<p class="text-[12.5px] font-medium">
+									No unpushed commits on <span class="font-mono">{branch}</span>
+								</p>
+								<p class="mt-1 max-w-sm text-[12px] leading-relaxed text-muted">
+									Choose a commit range to create a guide from changes already in this branch’s
+									history.
+								</p>
+							</div>
+						</div>
+					{:else if infoError}
 						<p class="flex items-center gap-1.5 px-3 py-2.5 text-[11.5px] text-del">
 							<span class="size-1.5 rounded-full bg-del"></span>{infoError}
 						</p>
-					{:else if info && info.name === branch}
+					{:else if info?.status === 'ready' && info.name === branch}
 						<p
 							class="flex items-center gap-1.5 border-b border-line px-3 py-2 text-[11.5px] text-muted"
 						>
@@ -427,21 +468,41 @@
 		</div>
 
 		<div class="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-			{#if range?.hasGuide}
+			{#if tab === 'branch' && branchNeedsRange}
 				<button
 					type="button"
-					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed"
-					onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
+					class="flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
+					onclick={chooseCommitRange}
 				>
+					Choose a commit range
+					<svg
+						viewBox="0 0 16 16"
+						class="size-3.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"><path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" /></svg
+					>
+				</button>
+			{:else}
+				{#if range?.hasGuide}
+					<button
+						type="button"
+						class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed"
+						onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
+					>
+				{/if}
+				<button
+					type="button"
+					class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
+					disabled={!target || !range || range.commits.length === 0}
+					onclick={generate}
+				>
+					{range?.hasGuide ? 'Regenerate' : 'Generate guide'}
+				</button>
 			{/if}
-			<button
-				type="button"
-				class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
-				disabled={!target || !range || range.commits.length === 0}
-				onclick={generate}
-			>
-				{range?.hasGuide ? 'Regenerate' : 'Generate guide'}
-			</button>
 		</div>
 	{/if}
 

@@ -379,6 +379,14 @@ export interface BranchInfo {
 	commits: Commit[];
 }
 
+/** Expected when the default branch has no unpushed comparison to guide. */
+export class NoUnpushedCommitsError extends Error {
+	constructor(branch: string) {
+		super(`${branch} is the default branch and has nothing unpushed, pick a range instead`);
+		this.name = 'NoUnpushedCommitsError';
+	}
+}
+
 /** A branch from where it split off to its tip, what Branch mode and the guide dialog show. */
 export async function describeBranch(
 	root: string,
@@ -390,11 +398,8 @@ export async function describeBranch(
 		resolveCommit(root, name)
 	]);
 	if (!base) {
-		throw new Error(
-			isDefaultBranch(name, defaultBase)
-				? `${name} is the default branch and has nothing unpushed, pick a range instead`
-				: `Couldn't tell which branch ${name} was taken from, pick a range instead`
-		);
+		if (isDefaultBranch(name, defaultBase)) throw new NoUnpushedCommitsError(name);
+		throw new Error(`Couldn't tell which branch ${name} was taken from, pick a range instead`);
 	}
 	const commits = await commitsInRange(root, base.mergeBase, tip);
 	return { name, base: base.name, mergeBase: base.mergeBase, merged: base.merged, tip, commits };

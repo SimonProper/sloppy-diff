@@ -5,6 +5,7 @@ import {
 	commitsInRange,
 	defaultBranch,
 	describeBranch,
+	NoUnpushedCommitsError,
 	repoRoot,
 	resolveCommit,
 	resolveStart
@@ -21,7 +22,15 @@ type Range = { repo: string; start: string; stop: string };
 export const getBranch = query('unchecked', ({ repo, branch }: { repo: string; branch: string }) =>
 	badRequestOnError(async () => {
 		const root = await repoRoot(repo);
-		return describeBranch(root, branch, await defaultBranch(root));
+		try {
+			const info = await describeBranch(root, branch, await defaultBranch(root));
+			return { status: 'ready' as const, ...info };
+		} catch (e) {
+			if (e instanceof NoUnpushedCommitsError) {
+				return { status: 'no-unpushed-commits' as const, name: branch };
+			}
+			throw e;
+		}
 	})
 );
 

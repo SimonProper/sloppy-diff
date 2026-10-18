@@ -3,7 +3,18 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { branchBase, formerTips, nearestBranch, readFileAt, resolveCommit } from './git';
+import {
+	branchBase,
+	commitsInRange,
+	describeBranch,
+	emptyTree,
+	formerTips,
+	nearestBranch,
+	NoUnpushedCommitsError,
+	readFileAt,
+	resolveCommit,
+	resolveStart
+} from './git';
 
 interface Repo {
 	root: string;
@@ -119,6 +130,53 @@ describe('branchBase', () => {
 
 	test('the default branch has nothing to compare against without a remote', async () => {
 		expect(await branchBase(r.root, 'main', 'main')).toBeNull();
+	});
+});
+
+describe('describeBranch', () => {
+	test('a synced default branch identifies the expected no-unpushed state', async () => {
+		const r = graph();
+		r.git('update-ref', 'refs/remotes/origin/main', 'main');
+		const failure = await describeBranch(r.root, 'main', 'origin/main').catch((e) => e);
+		expect(failure).toBeInstanceOf(NoUnpushedCommitsError);
+		expect(failure.message).toBe(
+			'main is the default branch and has nothing unpushed, pick a range instead'
+		);
+	});
+
+	test('a default branch with unpushed commits still returns its comparison', async () => {
+		const r = graph();
+		r.git('update-ref', 'refs/remotes/origin/main', 'm2');
+		const info = await describeBranch(r.root, 'main', 'origin/main');
+		expect(info).toMatchObject({
+			name: 'main',
+			base: 'origin/main',
+			mergeBase: await r.sha('m2'),
+			tip: await r.sha('main')
+		});
+		expect(info.commits.map((c) => c.subject)).toContain('m3');
+	});
+
+	test('an unrelated branch keeps its honest comparison error', async () => {
+		const r = graph();
+		r.git('checkout', '-q', '--orphan', 'unrelated');
+		r.commit('u1');
+		const failure = await describeBranch(r.root, 'unrelated', 'main').catch((e) => e);
+		expect(failure).toBeInstanceOf(Error);
+		expect(failure).not.toBeInstanceOf(NoUnpushedCommitsError);
+		expect(failure.message).toBe(
+			"Couldn't tell which branch unrelated was taken from, pick a range instead"
+		);
+	});
+
+	test('the recovery range covers the selected branch even when it has only a root commit', async () => {
+		const r = graph();
+		r.git('branch', 'root-only', 'm1');
+		const start = await resolveStart(r.root, 'root-only^');
+		const stop = await resolveCommit(r.root, 'root-only');
+		expect(start).toBe(await emptyTree(r.root));
+		expect(stop).not.toBe(await r.sha('HEAD'));
+		expect((await commitsInRange(r.root, start, stop)).map((c) => c.subject)).toEqual(['m1']);
 	});
 });
 
