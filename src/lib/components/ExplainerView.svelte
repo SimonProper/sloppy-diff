@@ -31,6 +31,7 @@
 	let failure = $state('');
 	let focus = $state('');
 	let expanded = $state(false);
+	let inlineInset = $state(0);
 	let viewer = $state<HTMLDialogElement>();
 	let expandButton = $state<HTMLButtonElement>();
 	let restoreViewport: (() => void) | undefined;
@@ -87,6 +88,32 @@
 			event.preventDefault();
 			exitExpanded();
 		}
+	}
+
+	function fitPreview(frame: HTMLIFrameElement) {
+		let pending = 0;
+		const measure = () => {
+			pending = 0;
+			if (expanded || !frame.isConnected) return;
+			// Use the document position so scrolling does not resize the scene. Leave
+			// room below the frame while accounting for wrapped metadata and controls.
+			const inset = Math.ceil(frame.getBoundingClientRect().top + window.scrollY + 16);
+			if (inlineInset !== inset) inlineInset = inset;
+		};
+		const schedule = () => {
+			cancelAnimationFrame(pending);
+			pending = requestAnimationFrame(measure);
+		};
+		const observer = new ResizeObserver(schedule);
+		const container = frame.closest('dialog');
+		if (container) observer.observe(container);
+		window.addEventListener('resize', schedule);
+		schedule();
+		return () => {
+			observer.disconnect();
+			window.removeEventListener('resize', schedule);
+			cancelAnimationFrame(pending);
+		};
 	}
 
 	function current(serial: number) {
@@ -463,14 +490,13 @@
 					</div>
 				{/if}
 				<iframe
+					{@attach fitPreview}
 					srcdoc={preview}
 					title={explainer.title}
 					sandbox="allow-scripts"
 					referrerpolicy="no-referrer"
-					class={[
-						'block w-full border-0 bg-white',
-						expanded ? 'min-h-0 flex-1' : 'h-[calc(100dvh-18rem)] min-h-[24rem]'
-					]}
+					class={['block w-full border-0 bg-white', expanded && 'min-h-0 flex-1']}
+					style:height={expanded ? undefined : `max(12rem, calc(100dvh - ${inlineInset}px))`}
 				></iframe>
 			{/if}
 		</dialog>
