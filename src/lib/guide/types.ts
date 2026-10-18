@@ -1,3 +1,5 @@
+import type { AgentProvider } from '$lib/agent';
+
 export type SectionKind = 'core' | 'supporting' | 'chore';
 
 export interface GuideNote {
@@ -36,6 +38,8 @@ export interface Guide extends Omit<GuideDraft, 'sections'> {
 	stop: string;
 	createdAt: string;
 	model: string;
+	/** Missing on guides created before provider selection; those used Claude Code. */
+	provider?: AgentProvider;
 	sections: GuideSection[];
 	/** written for an earlier version of the branch, found through its reflog */
 	earlier?: boolean;

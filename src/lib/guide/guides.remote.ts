@@ -12,6 +12,7 @@ import {
 import { deleteGuide, loadGuide } from '$lib/server/guides';
 import { watchJob } from '$lib/server/jobs';
 import { badRequestOnError } from '$lib/server/requests';
+import { requestProvider } from '$lib/server/provider-request';
 import { applyGuideEvent, startProgress } from './progress';
 
 type Range = { repo: string; start: string; stop: string };
@@ -57,7 +58,7 @@ export const generateGuide = command(
 				start: await resolveStart(root, start),
 				stop: await resolveCommit(root, stop)
 			};
-			startGuide(root, range.start, range.stop, pr);
+			startGuide(root, range.start, range.stop, pr, requestProvider());
 			return { repo: root, ...range };
 		})
 );

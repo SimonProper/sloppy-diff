@@ -37,7 +37,7 @@
 		canGenerate: boolean;
 		/** for the span on screen, `initial`'s range, with nothing to pick */
 		onscreen?: boolean;
-		/** the pull request the range is, for Claude to read */
+		/** the pull request the range is, for the agent to read */
 		pr?: number;
 		/** show the finished or chosen guide */
 		onopen: (start: string, stop: string) => void;
@@ -206,7 +206,8 @@
 		<div>
 			<h2 class="text-[14px] font-semibold">Review guide</h2>
 			<p class="mt-0.5 text-[12px] text-muted">
-				Claude Code reads the commits and splits the change into sections to review in order.
+				Your selected agent reads the commits and splits the change into sections to review in
+				order.
 			</p>
 		</div>
 		<button
@@ -240,7 +241,7 @@
 				></span>
 				<div class="min-w-0">
 					<p class="truncate text-[13px] font-medium">
-						{progress?.status || 'Starting Claude Code…'}
+						{progress?.status || 'Starting the agent…'}
 					</p>
 					{#if range}
 						<p class="font-mono text-[11px] text-faint">

@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>TITLE</title>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+					"three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+				}
+			}
+		</script>
+		<style>
+			html,
+			body {
+				margin: 0;
+				height: 100%;
+				background: #0f1115;
+				color: #d8dde6;
+				font:
+					14px/1.45 ui-sans-serif,
+					system-ui,
+					sans-serif;
+				overflow: hidden;
+			}
+			#c {
+				position: fixed;
+				inset: 0;
+			}
+			#cap {
+				position: fixed;
+				left: 28px;
+				top: 22px;
+				max-width: 520px;
+				pointer-events: none;
+				z-index: 5;
+			}
+			#cap .n {
+				color: #8a93a3;
+				font-size: 12px;
+				letter-spacing: 0.1em;
+			}
+			#cap h1 {
+				margin: 4px 0 6px;
+				font-size: 26px;
+				font-weight: 600;
+			}
+			#cap p {
+				margin: 0;
+				font-size: 15px;
+				color: #aeb7c6;
+			}
+			#legend {
+				position: fixed;
+				right: 22px;
+				top: 22px;
+				z-index: 5;
+				font-size: 12px;
+				color: #8a93a3;
+				line-height: 1.9;
+			}
+			#legend i {
+				display: inline-block;
+				width: 10px;
+				height: 10px;
+				border-radius: 2px;
+				margin-right: 6px;
+				vertical-align: -1px;
+			}
+			#bar {
+				position: fixed;
+				left: 50%;
+				bottom: 22px;
+				transform: translateX(-50%);
+				display: flex;
+				gap: 8px;
+				align-items: center;
+				z-index: 5;
+				background: #171a21d0;
+				border: 1px solid #2a2f3a;
+				border-radius: 12px;
+				padding: 8px 12px;
+			}
+			button {
+				background: #232834;
+				border: 1px solid #2a2f3a;
+				color: #d8dde6;
+				border-radius: 7px;
+				padding: 6px 12px;
+				cursor: pointer;
+				font: inherit;
+			}
+			button.on {
+				border-color: #3ddc97;
+				color: #3ddc97;
+			}
+			.dot {
+				width: 11px;
+				height: 11px;
+				border-radius: 50%;
+				padding: 0;
+				background: #2a2f3a;
+				border: none;
+			}
+			.dot.on {
+				background: #4ea1ff;
+			}
+			.lbl {
+				font:
+					12px ui-monospace,
+					Menlo,
+					monospace;
+				color: #eef1f6;
+				text-shadow:
+					0 1px 3px #000,
+					0 0 6px #000;
+			}
+			.lbl.h {
+				color: #8a93a3;
+				font-size: 11px;
+			}
+			.lbl.big {
+				font:
+					600 26px ui-sans-serif,
+					system-ui;
+				color: #fff;
+			}
+			.lbl.sec {
+				font:
+					600 13px ui-sans-serif,
+					system-ui;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="c"></div>
+		<div id="cap">
+			<div class="n" id="capN"></div>
+			<h1 id="capT"></h1>
+			<p id="capP"></p>
+		</div>
+		<div id="legend">
+			<div><i style="background: #4ea1ff"></i>LEGEND ITEM</div>
+		</div>
+		<div id="bar">
+			<button id="prev">◀</button><span id="dots"></span><button id="next">▶</button
+			><button id="again">↻</button><button id="auto">auto</button>
+		</div>
+
+		<script type="module">
+			import * as THREE from 'three';
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+			import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+			const $ = (id) => document.getElementById(id);
+			const V = (x, y, z) => new THREE.Vector3(x, y, z);
+			const COL = {
+				slot: 0x4ea1ff,
+				raw: 0xff9d42,
+				pack: 0xb67cff,
+				tick: 0x3ddc97,
+				hot: 0xff4d6d,
+				main: 0xe7c75b,
+				cells: 0x7f8fd6,
+				card: 0xffc46b
+			};
+
+			/* ---------- renderer ---------- */
+			const renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setPixelRatio(devicePixelRatio);
+			$('c').append(renderer.domElement);
+			const css = new CSS2DRenderer();
+			css.domElement.style.cssText = 'position:fixed;inset:0;pointer-events:none';
+			document.body.append(css.domElement);
+			const scene = new THREE.Scene();
+			scene.background = new THREE.Color(0x0f1115);
+			scene.fog = new THREE.Fog(0x0f1115, 35, 80);
+			const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+			camera.position.set(-10, 12, 16);
+			const controls = new OrbitControls(camera, renderer.domElement);
+			controls.enableDamping = true;
+			scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+			const sun = new THREE.DirectionalLight(0xffffff, 1.7);
+			sun.position.set(6, 14, 8);
+			scene.add(sun);
+			const grid = new THREE.GridHelper(80, 80, 0x1f2430, 0x171b23);
+			grid.position.y = -1.4;
+			scene.add(grid);
+			const world = new THREE.Group();
+			scene.add(world);
+			function resize() {
+				renderer.setSize(innerWidth, innerHeight);
+				css.setSize(innerWidth, innerHeight);
+				camera.aspect = innerWidth / innerHeight;
+				camera.updateProjectionMatrix();
+			}
+			addEventListener('resize', resize);
+			resize();
+
+			/* ---------- tweens ---------- */
+			const tweens = new Set();
+			const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+			const tween = (ms, fn) =>
+				new Promise((res) => tweens.add({ t0: performance.now(), ms, fn, res }));
+			const sleep = (ms) => tween(ms, () => {});
+			const idle = new Set();
+			(function loop(now) {
+				requestAnimationFrame(loop);
+				for (const t of tweens) {
+					const k = Math.min(1, (now - t.t0) / t.ms);
+					t.fn(ease(k), k);
+					if (k >= 1) {
+						tweens.delete(t);
+						t.res();
+					}
+				}
+				for (const f of idle) f(now);
+				controls.update();
+				renderer.render(scene, camera);
+				css.render(scene, camera);
+			})(performance.now());
+
+			/* ---------- helpers ---------- */
+			const mat = (color, o = {}) =>
+				new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.1, ...o });
+			const box = (w, h, d, color, o) =>
+				new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, o));
+			function label(text, cls = 'lbl') {
+				const d = document.createElement('div');
+				d.className = cls;
+				d.textContent = text;
+				return new CSS2DObject(d);
+			}
+			const showLabels = (o, v) => o.traverse((x) => x.isCSS2DObject && (x.visible = v));
+			function drop(o) {
+				o.traverse((x) => x.isCSS2DObject && x.element.remove());
+				o.parent?.remove(o);
+			}
+			function clearWorld() {
+				world.traverse((x) => x.isCSS2DObject && x.element.remove());
+				world.clear();
+				idle.clear();
+			}
+			const move = (o, to, ms = 900, lift = 0) => {
+				const a = o.position.clone();
+				return tween(ms, (e) => {
+					o.position.lerpVectors(a, to, e);
+					o.position.y += Math.sin(Math.PI * e) * lift;
+				});
+			};
+			const scaleTo = (o, s, ms = 500) => {
+				const a = o.scale.x;
+				return tween(ms, (e) => o.scale.setScalar(a + (s - a) * e));
+			};
+			function fade(o, to, ms = 600) {
+				const mats = [],
+					els = [];
+				o.traverse((x) => {
+					if (x.material) {
+						x.material.transparent = true;
+						x.material.needsUpdate = true;
+						mats.push(x.material);
+					}
+					if (x.isCSS2DObject) els.push(x.element);
+				});
+				const from = mats.map((m) => m.opacity);
+				return tween(ms, (e) => {
+					mats.forEach((m, i) => (m.opacity = from[i] + (to - from[i]) * e));
+					els.forEach((el) => (el.style.opacity = 1 + (to - 1) * e));
+				});
+			}
+			function flash(m, color = COL.hot, ms = 1200) {
+				const mm = m.material;
+				return tween(ms, (_, k) => mm.emissive?.setHex(color).multiplyScalar(1 - k));
+			}
+			const camTo = (pos, target, ms = 1400) => {
+				const p0 = camera.position.clone(),
+					t0 = controls.target.clone();
+				return tween(ms, (e) => {
+					camera.position.lerpVectors(p0, pos, e);
+					controls.target.lerpVectors(t0, target, e);
+				});
+			};
+			const worldPos = (o) => o.getWorldPosition(new THREE.Vector3());
+
+			/* ---------- domain objects: build the persistent metaphor here ---------- */
+			const CX = [0, 1.7, 3.4],
+				RZ = (r) => r * 1.05 - 2;
+			function buildThing(rows) {
+				const g = new THREE.Group();
+				world.add(g);
+				const cells = rows.map((name, r) => {
+					const m = box(1.35, 0.45, 0.85, COL.slot);
+					m.position.set(0, 0, RZ(r));
+					g.add(m);
+					const l = label(name);
+					l.position.y = 0.45;
+					m.add(l);
+					return { m, l };
+				});
+				return { g, cells };
+			}
+
+			/* ---------- scenes: one concept each, title + one sentence ---------- */
+			const SCENES = [
+				{
+					t: 'Before: how main does it',
+					p: 'One sentence, the concept only.',
+					cam: [V(-8, 7, 9), V(0, 0, 0)],
+					setup() {
+						return { T: buildThing(['Kitchen', 'Office', 'Corridor']) };
+					},
+					async play({ T }, w) {
+						await w(sleep(400));
+						const tok = box(0.8, 0.3, 0.6, COL.card);
+						tok.position.set(0, 4, RZ(0));
+						world.add(tok);
+						await w(move(tok, worldPos(T.cells[0].m), 900, 1));
+						drop(tok);
+						T.cells[0].l.element.textContent = 'Lab';
+						flash(T.cells[0].m, 0xffffff);
+					}
+				}
+			];
+
+			/* ---------- player ---------- */
+			let cur = 0,
+				gen = 0,
+				auto = false;
+			const ABORT = {};
+			function ui() {
+				const S = SCENES[cur];
+				$('capN').textContent = `${cur + 1} / ${SCENES.length}`;
+				$('capT').textContent = S.t;
+				$('capP').textContent = S.p;
+				$('dots').innerHTML = SCENES.map(
+					(_, i) => `<button class="dot ${i === cur ? 'on' : ''}" data-i="${i}"></button>`
+				).join(' ');
+				$('auto').classList.toggle('on', auto);
+			}
+			async function go(i) {
+				cur = Math.max(0, Math.min(SCENES.length - 1, i));
+				const g = ++gen;
+				for (const t of tweens) t.res();
+				tweens.clear();
+				clearWorld();
+				ui();
+				const S = SCENES[cur],
+					ctx = S.setup();
+				const w = (p) =>
+					p.then(() => {
+						if (g !== gen) throw ABORT;
+					});
+				try {
+					await w(camTo(...S.cam));
+					await S.play(ctx, w);
+					if (auto && cur < SCENES.length - 1) {
+						await w(sleep(2200));
+						go(cur + 1);
+					}
+				} catch (e) {
+					if (e !== ABORT) throw e;
+				}
+			}
+			$('prev').onclick = () => go(cur - 1);
+			$('next').onclick = () => go(cur + 1);
+			$('again').onclick = () => go(cur);
+			$('auto').onclick = () => {
+				auto = !auto;
+				ui();
+				if (auto) go(cur);
+			};
+			$('dots').onclick = (e) => e.target.dataset.i !== undefined && go(+e.target.dataset.i);
+			addEventListener('keydown', (e) => {
+				if (e.key === 'ArrowRight') go(cur + 1);
+				if (e.key === 'ArrowLeft') go(cur - 1);
+			});
+			window.__go = go;
+			go(0);
+		</script>
+	</body>
+</html>

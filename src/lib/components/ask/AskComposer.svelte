@@ -102,7 +102,7 @@
 	let sending = $state(false);
 	let failure = $state('');
 
-	/** on a pull request, what's typed goes to Claude or to your pending review, as picked */
+	/** on a pull request, what's typed goes to the agent or to your pending review, as picked */
 	const choosing = $derived(!!threads.review && !!draft && !!(draft.span || draft.path));
 	const commenting = $derived(choosing && threads.intent === 'comment');
 	const what = $derived(draft?.span ? 'these lines' : 'this file');
@@ -145,7 +145,7 @@
 		<button
 			type="button"
 			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
-			title="What else this change affects: where the compiler finds it used, judged by Claude"
+			title="What else this change affects: where the compiler finds it used, judged by the agent"
 			disabled={sending}
 			onclick={() => send('', true)}>Blast radius</button
 		>
@@ -179,7 +179,7 @@
 			<div class="flex px-2 pt-2">
 				<SegmentedControl
 					options={[
-						{ value: 'ask', label: 'Ask Claude' },
+						{ value: 'ask', label: 'Ask AI' },
 						{ value: 'comment', label: 'Comment' }
 					]}
 					value={threads.intent}
@@ -207,7 +207,7 @@
 			placeholder={commenting ? `Comment on ${what}` : 'Ask about these lines'}
 			hints={choosing
 				? [
-						commenting ? 'tab to ask Claude' : 'tab to comment',
+						commenting ? 'tab to ask AI' : 'tab to comment',
 						commenting ? '⌘↵ adds it to your review' : '⌘↵ to ask'
 					]
 				: ['esc', '⌘↵ to ask']}

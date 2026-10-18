@@ -19,13 +19,13 @@
 
 	/** set once the reader opens or folds this trail themselves */
 	let chosen = $state<boolean | null>(null);
-	// while Claude works the trail is the thing to watch, once the answer starts it folds away
+	// while the agent works the trail is the thing to watch, once the answer starts it folds away
 	const working = $derived(live !== undefined && !live.text);
 	const open = $derived(working || (chosen ?? preferOpen));
 
 	const elapsed = $derived(live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0);
 
-	// Claude's own, a blast radius's analysis steps carry what they found and aren't counted
+	// The agent's own, a blast radius's analysis steps carry what they found and aren't counted
 	const reads = $derived(
 		steps.filter((s) => s.type === 'tool' && !s.detail && s.text.startsWith('Reading'))
 	);
@@ -140,7 +140,7 @@
 					<li class="text-[12px] text-faint">
 						{working
 							? 'Waiting for the first thought…'
-							: `Claude thought for about ${thinkingTokens} tokens, this version of Claude Code doesn't share what.`}
+							: `About ${thinkingTokens} thinking tokens. No reasoning summary was provided.`}
 					</li>
 				{/each}
 			</ol>

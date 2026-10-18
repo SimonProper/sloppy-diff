@@ -289,7 +289,7 @@ describe('asking about lines', () => {
 		await deleteThread(fixture.root, source.scope, thread.id);
 		expect(await finished(thread)).toEqual({
 			type: 'error',
-			message: 'The thread was deleted while Claude answered'
+			message: 'The thread was deleted while the agent answered'
 		});
 		expect(await loadThreads(fixture.root, source.scope)).toEqual([]);
 	});
@@ -451,10 +451,14 @@ describe('the blast radius of lines', () => {
 		);
 		cancelAsk(fixture.root, source.scope, thread.id);
 		expect(await finished(thread)).toEqual({ type: 'error', message: 'Cancelled' });
-		await vi.waitFor(async () => {
-			const [saved] = await loadThreads(fixture.root, source.scope);
-			expect(saved.messages.map((m) => m.error)).toEqual([undefined, 'Cancelled']);
-		});
+		// The event is immediate; persistence follows LSP process shutdown and the concurrent git read.
+		await vi.waitFor(
+			async () => {
+				const [saved] = await loadThreads(fixture.root, source.scope);
+				expect(saved.messages.map((m) => m.error)).toEqual([undefined, 'Cancelled']);
+			},
+			{ timeout: 5_000 }
+		);
 		// a blast radius at another commit gets the checkout, and Claude never ran
 		const other = await holdCheckout(
 			fixture.root,

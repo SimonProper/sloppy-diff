@@ -41,7 +41,7 @@
 		layout?: Layout;
 		/** only render lines near the viewport, for diffs too big to render whole */
 		virtualize?: boolean;
-		/** questions to Claude about lines of the diff, none when absent */
+		/** questions to AI about lines of the diff, none when absent */
 		threads?: Threads;
 		/** the guide section the file is read in, context for the questions */
 		section?: string;
@@ -94,7 +94,7 @@
 	}
 
 	const REFORMATTED = 'Reformatted, nothing in this line is new';
-	const PICK = 'Drag to pick lines to ask Claude about, shift-click to extend';
+	const PICK = 'Drag to pick lines to ask AI about, shift-click to extend';
 	/** lines rendered together, each block only once it's near the viewport */
 	const BLOCK = 100;
 	/** height of a row, leading-5; split rows can wrap so theirs is a guess until rendered */
@@ -133,7 +133,7 @@
 		);
 	});
 
-	// asking Claude: lines are picked by dragging over their numbers, or by selecting
+	// asking the agent: lines are picked by dragging over their numbers, or by selecting
 	// text and taking up the offer that shows up under it. Rows carry their hunk and
 	// index so a pointer, a selection or the keyboard cursor can be traced to lines.
 	// The conversations themselves live in the lens, a question only leaves a marker
@@ -219,7 +219,7 @@
 
 	// a pull request's review threads: a bar down the left edge of their lines, and on
 	// the last one, where GitHub shows them, a marker that opens their comments. Drawn
-	// apart from the questions to Claude down the right edge
+	// apart from the questions to AI down the right edge
 	const placed = $derived(placeThreads(file, hunks, review, layout));
 	const reviewMarks = $derived(placed.marks);
 	const unplaced = $derived(placed.unplaced);
@@ -393,7 +393,7 @@
 					type="button"
 					id="ask-{anchor ?? file.id}"
 					class="h-6 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
-					title="Ask Claude about this whole file"
+					title="Ask AI about this whole file"
 					onclick={() => threads.selectWhole(file.newPath, section, `ask-${anchor ?? file.id}`)}
 					>Ask</button
 				>
@@ -404,7 +404,7 @@
 					class="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
 					title="{headerThreads.length} {headerThreads.length === 1
 						? 'question'
-						: 'questions'} to Claude in this file, open the first"
+						: 'questions'} to AI in this file, open the first"
 					onclick={() => threads?.openLens(headerThreads[0].id)}
 				>
 					<svg
@@ -620,7 +620,7 @@
 					onpointerdown={(e) => e.preventDefault()}
 					onclick={() => acceptOffer(threads?.review ? intent : undefined)}
 				>
-					{intent === 'ask' ? 'Ask Claude' : 'Comment'}
+					{intent === 'ask' ? 'Ask AI' : 'Comment'}
 					<kbd class="font-mono text-[10.5px] font-normal text-faint"
 						>{intent === 'ask' ? 'a' : 'c'}</kbd
 					>
@@ -860,7 +860,7 @@
 		opacity: 0.5;
 	}
 
-	/* asking Claude, drawn in ink: line numbers pick lines. Hovering them darkens the
+	/* asking the agent, drawn in ink: line numbers pick lines. Hovering them darkens the
 	   gutter a step in its own colour, below a pick and the cursor, and shows faintly
 	   where the question's marker will go. Only on the numbers, a press on the code
 	   selects text instead */

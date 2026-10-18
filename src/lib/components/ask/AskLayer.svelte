@@ -48,7 +48,7 @@
 		}
 
 		if (event.key === 'a' || (event.key === 'c' && threads.review)) {
-			// on a pull request, a asks Claude and c comments
+			// on a pull request, a asks the agent and c comments
 			if (threads.review) threads.setIntent(event.key === 'c' ? 'comment' : 'ask');
 			const selected = selectedSpan(document.querySelector('main') ?? undefined);
 			if (selected) {

@@ -16,6 +16,9 @@ export const handle: Handle = ({ event, resolve }) => {
 	if (foreignSite || foreignOrigin) {
 		return new Response('Requests from other sites are refused', { status: 403 });
 	}
+	// An explainer can run scripts, but may not navigate its frame to another site.
+	// Its own CSP restricts subresources; this policy also governs that frame's URL.
+	event.setHeaders({ 'content-security-policy': "frame-src 'self'" });
 	return resolve(event);
 };
 

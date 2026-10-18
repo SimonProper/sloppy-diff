@@ -25,7 +25,7 @@
 		layout?: Layout;
 		/** only render lines near the viewport, for big diffs */
 		virtualize?: boolean;
-		/** questions to Claude about lines of the diff */
+		/** questions to the agent about lines of the diff */
 		threads?: Threads;
 		/** a pull request's review threads */
 		review?: ReviewThread[];
@@ -310,7 +310,7 @@
 										{#if threads}
 											{@const asked = threads.in(section.hunks)}
 											{#if asked.length}
-												<span class="text-faint" title="Questions to Claude in this section"
+												<span class="text-faint" title="Questions to AI in this section"
 													>· {asked.length} ?</span
 												>
 												{#if asked.some((t) => threads.live[t.id])}

@@ -1,16 +1,17 @@
-import { env } from '$env/dynamic/private';
+import { providerLabel, type AgentProvider } from '$lib/agent';
 import { parseDiff } from '$lib/diff/parse';
 import type { DiffFile } from '$lib/diff/types';
 import type { Guide, GuideDraft, GuideEvent } from '$lib/guide/types';
 import { prContextOf } from './ask';
-import { describeTool, runClaude } from './claude';
+import { runAgent } from './agent';
+import { defaultProvider, modelFor } from './provider';
 import { checkPrNumber } from './gh';
 import { commitLog, readDiff } from './git';
 import { reconcile, saveGuide } from './guides';
 import { jobQueue, type Job } from './jobs';
 import { hunkText } from './threads';
 
-/** The structured output Claude must return. */
+/** The structured output the agent must return. */
 const GUIDE_SCHEMA = {
 	type: 'object',
 	additionalProperties: false,
@@ -26,7 +27,7 @@ const GUIDE_SCHEMA = {
 				required: ['title', 'kind', 'rationale', 'commits', 'hunks', 'notes'],
 				properties: {
 					title: { type: 'string' },
-					kind: { enum: ['core', 'supporting', 'chore'] },
+					kind: { type: 'string', enum: ['core', 'supporting', 'chore'] },
 					rationale: { type: 'string', description: 'Markdown: why this part exists' },
 					commits: { type: 'array', items: { type: 'string' } },
 					hunks: { type: 'array', items: { type: 'string' }, minItems: 1 },
@@ -45,13 +46,7 @@ const GUIDE_SCHEMA = {
 	}
 };
 
-// read-only: Claude may look around the repo for context but never change it. No git
-// through Bash, flags like `git grep -O<cmd>` or `--output=<file>` run commands or write
-// files, and the diff it reviews may carry instructions written to make it try
-const ALLOWED_TOOLS = 'Read,Grep,Glob';
-const DISALLOWED_TOOLS = 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch';
-
-// beyond this the hunk bodies are shortened and Claude reads the rest itself
+// Beyond this the hunk bodies are shortened and the agent reads the rest itself.
 const MAX_DIFF_CHARS = 400_000;
 const SHORT_HUNK_LINES = 30;
 
@@ -75,12 +70,20 @@ export function startGuide(
 	root: string,
 	start: string,
 	stop: string,
-	pr?: number
+	pr?: number,
+	provider: AgentProvider = defaultProvider()
 ): Job<GuideEvent> {
-	return jobs.start(jobKey(root, start, stop), (job) => run(job, root, start, stop, pr));
+	return jobs.start(jobKey(root, start, stop), (job) => run(job, root, start, stop, pr, provider));
 }
 
-async function run(job: Job<GuideEvent>, root: string, start: string, stop: string, pr?: number) {
+async function run(
+	job: Job<GuideEvent>,
+	root: string,
+	start: string,
+	stop: string,
+	pr: number | undefined,
+	provider: AgentProvider
+) {
 	jobs.emit(job, { type: 'status', text: 'Reading commits and diff' });
 	const [log, patch, context] = await Promise.all([
 		commitLog(root, start, stop),
@@ -94,51 +97,44 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 		throw new Error('There are no content changes to guide in this range.');
 	}
 
-	const args = [
-		'-p',
-		'--verbose',
-		'--output-format',
-		'stream-json',
-		'--json-schema',
-		JSON.stringify(GUIDE_SCHEMA),
-		'--allowedTools',
-		ALLOWED_TOOLS,
-		'--disallowedTools',
-		DISALLOWED_TOOLS
-	];
-	if (env.GUIDE_MODEL) args.push('--model', env.GUIDE_MODEL);
-
-	const claude = runClaude({
-		args,
+	const label = providerLabel(provider);
+	const selectedModel = modelFor(provider, 'guide');
+	const agent = await runAgent({
+		provider,
+		root,
 		input: prompt(start, stop, log, files, context),
 		cwd: root,
+		schema: GUIDE_SCHEMA,
+		model: selectedModel,
+		signal: job.stop.signal,
 		onSpawnError: (error) =>
-			jobs.emit(job, { type: 'error', message: `Couldn't start claude: ${error.message}` })
+			jobs.emit(job, { type: 'error', message: `Couldn't start ${label}: ${error.message}` })
 	});
-	const child = claude.child;
+	const child = agent.child;
 	job.child = child;
+	if (job.finished) {
+		child.kill();
+		return;
+	}
 
-	jobs.emit(job, { type: 'status', text: 'Starting Claude Code' });
-	let model = env.GUIDE_MODEL || 'default';
+	jobs.emit(job, { type: 'status', text: `Starting ${label}` });
+	let model = selectedModel || 'default';
 
-	for await (const message of claude.messages) {
-		if (message.type === 'system' && message.subtype === 'init') {
-			model = message.model ?? model;
-			jobs.emit(job, { type: 'status', text: `Claude is reviewing the change (${model})` });
-		} else if (message.type === 'assistant') {
-			for (const block of message.message?.content ?? []) {
-				if (block.type !== 'tool_use') continue;
-				if (block.name === 'StructuredOutput') {
-					jobs.emit(job, { type: 'status', text: 'Writing the guide' });
-				} else {
-					jobs.emit(job, { type: 'tool', text: describeTool(block.name, block.input, root) });
-				}
+	for await (const event of agent.events) {
+		if (job.finished) return;
+		if (event.type === 'init') {
+			model = event.model ?? model;
+			jobs.emit(job, { type: 'status', text: `${label} is reviewing the change (${model})` });
+		} else if (event.type === 'content') {
+			for (const block of event.blocks) {
+				if (block.type === 'tool') jobs.emit(job, { type: 'tool', text: block.text });
 			}
-		} else if (message.type === 'result') {
-			const draft: GuideDraft | undefined = message.structured_output;
-			if (message.is_error || !draft) {
-				throw new Error(message.result || `Claude stopped without a guide (${message.subtype})`);
+		} else if (event.type === 'result') {
+			const draft = event.structured as GuideDraft | undefined;
+			if (event.error || !draft) {
+				throw new Error(event.error || `${label} stopped without a guide`);
 			}
+			jobs.emit(job, { type: 'status', text: 'Writing the guide' });
 			const guide: Guide = {
 				version: 1,
 				repo: root,
@@ -146,6 +142,7 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 				stop,
 				createdAt: new Date().toISOString(),
 				model,
+				provider,
 				title: draft.title,
 				summary: draft.summary,
 				sections: reconcile(draft, files)
@@ -158,9 +155,9 @@ async function run(job: Job<GuideEvent>, root: string, start: string, stop: stri
 		}
 	}
 
-	const code = await claude.exited;
+	const code = await agent.exited;
 	if (!job.finished) {
-		throw new Error(claude.stderr().trim() || `claude exited with code ${code} before finishing`);
+		throw new Error(agent.stderr().trim() || `${label} exited with code ${code} before finishing`);
 	}
 }
 

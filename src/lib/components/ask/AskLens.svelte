@@ -212,7 +212,7 @@
 			return () => el.close();
 		}}
 		class={['lens', flipped && 'flip']}
-		aria-label="Questions to Claude"
+		aria-label="Questions to AI"
 		oncancel={(event) => {
 			event.preventDefault();
 			// esc leaves a box being typed in first, then the lens for the docked panel

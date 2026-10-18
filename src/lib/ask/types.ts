@@ -1,3 +1,5 @@
+import type { AgentProvider } from '$lib/agent';
+
 /** Which side of a split diff a selection was made on. */
 export type Side = 'old' | 'new';
 
@@ -29,12 +31,12 @@ export interface Anchor extends Partial<LineSpan> {
 export const linesOf = (anchor: Anchor): LineSpan | null =>
 	anchor.hunk === undefined ? null : (anchor as LineSpan);
 
-/** Something Claude did on the way to an answer. */
+/** Something the agent did on the way to an answer. */
 export type Step =
 	| { type: 'thinking'; text: string }
 	/** `detail`: what a step found, for the reader to unfold, e.g. the language server's answers */
 	| { type: 'tool'; text: string; detail?: string }
-	/** what Claude said before carrying on, e.g. before looking at a file */
+	/** what the agent said before carrying on, e.g. before looking at a file */
 	| { type: 'text'; text: string };
 
 export interface Message {
@@ -49,12 +51,14 @@ export interface Message {
 	/** assistant: thinking and tool calls, in order */
 	steps?: Step[];
 	thinkingTokens?: number;
-	/** assistant: how long Claude thought, the tool calls and the answer not counted */
+	/** assistant: how long the agent thought, the tool calls and the answer not counted */
 	thinkingMs?: number;
 	/** assistant: what this answer cost, in USD */
 	cost?: number;
 	durationMs?: number;
 	model?: string;
+	/** the CLI that wrote this answer */
+	provider?: AgentProvider;
 	/** assistant: the answer failed or was cancelled */
 	error?: string;
 }
@@ -64,7 +68,9 @@ export interface Thread {
 	anchor: Anchor;
 	messages: Message[];
 	createdAt: string;
-	/** the Claude Code session, resumed for follow-ups */
+	/** pinned when created; older saved threads without it belong to Claude */
+	provider?: AgentProvider;
+	/** the provider's session, resumed for follow-ups */
 	sessionId?: string;
 	/** what the session has cost so far, claude reports a running total */
 	sessionCost?: number;
@@ -79,7 +85,7 @@ export interface Thread {
 /** Which diff a thread belongs to: a commit range, or the uncommitted changes. */
 export type Scope = 'worktree' | `${string}..${string}`;
 
-/** What happens while Claude answers, folded into an Answer for the page. */
+/** What happens while the agent answers, folded into an Answer for the page. */
 export type AskEvent =
 	| { type: 'status'; text: string }
 	| { type: 'thinking'; text: string }
@@ -90,7 +96,7 @@ export type AskEvent =
 	| { type: 'error'; message: string };
 
 /**
- * A comment Claude suggests, written as a fenced block in its answer:
+ * A comment the agent suggests, written as a fenced block in its answer:
  *
  * ````
  * ```review path=src/a.ts line=12-14 side=new

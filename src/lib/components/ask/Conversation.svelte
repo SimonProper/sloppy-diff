@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { providerLabel } from '$lib/agent';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
@@ -29,6 +30,7 @@
 	const live = $derived(threads.live[thread.id]);
 	const lost = $derived(threads.lost[thread.id] ?? false);
 	const cost = $derived(thread.messages.reduce((sum, m) => sum + (m.cost ?? 0), 0));
+	const provider = $derived(providerLabel(thread.provider ?? 'claude'));
 	/** where Delete sits: beside Copy, or Retry, under the first answer */
 	const firstAnswer = $derived(thread.messages.findIndex((m) => m.role === 'assistant'));
 
@@ -180,6 +182,11 @@
 			<div class="flex min-w-0 flex-col">{@render heading()}</div>
 		{/if}
 		<span class="flex-1"></span>
+		<span
+			class="shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[10.5px] text-faint"
+			title="This conversation continues with {provider}"
+			aria-label="Conversation agent: {provider}">{provider}</span
+		>
 		{@render actions?.()}
 	</header>
 
@@ -321,7 +328,7 @@
 		{/if}
 	</div>
 
-	<!-- the follow-up field, send turns to stop while Claude answers -->
+	<!-- the follow-up field, send turns to stop while the agent answers -->
 	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup>
 		<AskField
 			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}

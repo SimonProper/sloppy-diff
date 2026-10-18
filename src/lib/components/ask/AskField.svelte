@@ -22,7 +22,7 @@
 		bare?: boolean;
 		/** after what it's about, before the hint and send */
 		trailing?: Snippet;
-		/** Claude is answering: send becomes stop */
+		/** The agent is answering: send becomes stop */
 		onstop?: () => void;
 	}
 

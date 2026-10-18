@@ -22,6 +22,7 @@
 	import FileList from '$lib/components/FileList.svelte';
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
 	import GuideView from '$lib/components/GuideView.svelte';
+	import ExplainerView from '$lib/components/ExplainerView.svelte';
 	import RefPicker from '$lib/components/RefPicker.svelte';
 	import RepoButton from '$lib/components/RepoButton.svelte';
 	import RepoList from '$lib/components/RepoList.svelte';
@@ -34,6 +35,7 @@
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
 	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+	import AgentPicker from '$lib/components/AgentPicker.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import { jumpToThread } from '$lib/pr/jump';
 	import type { PrSummary, PrView, ReviewThread } from '$lib/pr/types';
@@ -50,13 +52,16 @@
 	let ready = $state(false);
 	let pending = $state(true);
 	// the tab is only in the url, switching it loads nothing: what was loaded is reused
-	type View = 'overview' | 'guide' | 'files';
+	type View = 'overview' | 'guide' | 'explainer' | 'files';
 	// a pull request opens on its overview, anything else on its diff: the one with no
 	// `view` in the url
 	const defaultView = $derived<View>(data.mode === 'pr' ? 'overview' : 'files');
 	const asked = $derived(page.url.searchParams.get('view'));
 	const urlView = $derived<View>(
-		asked === 'guide' || asked === 'files' || (asked === 'overview' && data.mode === 'pr')
+		asked === 'guide' ||
+			asked === 'explainer' ||
+			asked === 'files' ||
+			(asked === 'overview' && data.mode === 'pr')
 			? asked
 			: defaultView
 	);
@@ -127,7 +132,12 @@
 
 	const tabs = $derived<{ value: View; label: string }[]>([
 		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
-		...(range ? [{ value: 'guide' as const, label: 'Guide' }] : []),
+		...(range
+			? [
+					{ value: 'guide' as const, label: 'Guide' },
+					{ value: 'explainer' as const, label: 'Visual explainer' }
+				]
+			: []),
 		{ value: 'files', label: 'Diff' }
 	]);
 
@@ -695,6 +705,7 @@
 					>
 				{/if}
 			</button>
+			<AgentPicker />
 			<ThemeToggle />
 		</div>
 	</header>
@@ -852,6 +863,27 @@
 			bind:view={prView}
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
+	{:else if view === 'explainer'}
+		{#if range}
+			{#key JSON.stringify([data.repo, range.from, range.to])}
+				<ExplainerView
+					repo={data.repo}
+					start={range.from}
+					stop={range.to}
+					pr={pr?.number}
+					toolbar={viewTabs}
+					hasChanges={diff.files.length > 0}
+				/>
+			{/key}
+		{:else}
+			<div class="flex flex-col items-center px-4 py-24 text-center">
+				<div class="mb-8">{@render viewTabs()}</div>
+				<p class="text-[13px] font-medium">Pick a committed change to explain</p>
+				<p class="mt-1 max-w-sm text-[12px] text-muted">
+					Choose a branch, commit, range or pull request to create a visual explainer.
+				</p>
+			</div>
+		{/if}
 	{:else if view === 'guide' && diff.guide}
 		<GuideView
 			guide={diff.guide}
@@ -871,13 +903,13 @@
 			{#if pr}
 				<p class="text-[13px] font-medium">No guide for this pull request yet</p>
 				<p class="mt-1 max-w-sm text-[12px] text-muted">
-					Claude Code can split its changes into sections to review in order.
+					Your selected agent can split its changes into sections to review in order.
 				</p>
 			{:else}
 				<p class="text-[13px] font-medium">No guide for this range yet</p>
 				<p class="mt-1 max-w-sm text-[12px] text-muted">
-					Claude Code can split these changes into sections to review in order. Guides are saved per
-					commit range, a branch keeps its guide through new commits and rebases.
+					Your selected agent can split these changes into sections to review in order. Guides are
+					saved per commit range, a branch keeps its guide through new commits and rebases.
 				</p>
 			{/if}
 			<button
