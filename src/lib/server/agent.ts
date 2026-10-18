@@ -230,8 +230,16 @@ async function runCodex(options: AgentOptions): Promise<AgentRun> {
 	child.stdin!.on('error', () => {});
 	child.on('error', options.onSpawnError);
 	const exited = new Promise<number | null>((resolve) => {
-		child.once('close', (code) => void cleanup().then(() => resolve(code)));
-		child.once('error', () => void cleanup().then(() => resolve(null)));
+		let settled = false;
+		const finish = (code: number | null) => {
+			if (settled) return;
+			// A failed spawn emits error followed by close. Claim the result before
+			// asynchronous cleanup so close cannot race error's null exit status.
+			settled = true;
+			void cleanup().then(() => resolve(code));
+		};
+		child.once('close', finish);
+		child.once('error', () => finish(null));
 	});
 	cancelOnAbort(child, options.signal);
 	const directories = Array.from(new Set([options.root, options.cwd, ...(options.dirs ?? [])]));

@@ -21,7 +21,8 @@
 	interface Props {
 		guide: Guide;
 		files: DiffFile[];
-		toolbar?: Snippet;
+		/** the shared page chrome above the guide and its sidebar */
+		stickyTop?: number;
 		layout?: Layout;
 		/** only render lines near the viewport, for big diffs */
 		virtualize?: boolean;
@@ -39,7 +40,7 @@
 	let {
 		guide,
 		files,
-		toolbar,
+		stickyTop = 92,
 		layout = 'unified',
 		virtualize = false,
 		threads,
@@ -215,7 +216,7 @@
 			.map((s) => document.getElementById(s.id))
 			.filter((el): el is HTMLElement => el !== null);
 		// header plus the sticky changes bar, where a step's sticky title sits
-		const offset = 92;
+		const offset = stickyTop;
 		const next =
 			event.key === 'j'
 				? headers.find((el) => el.getBoundingClientRect().top > offset + 4)
@@ -226,7 +227,7 @@
 
 <svelte:window {onkeydown} />
 
-<SidebarLayout {layout} asideClass="overflow-y-auto" {panel} bind:panelWidth>
+<SidebarLayout {layout} {stickyTop} asideClass="overflow-y-auto" {panel} bind:panelWidth>
 	{#snippet aside()}
 		<div class="border-b border-line p-4">
 			<p class="text-[13px] leading-snug font-medium">{guide.title}</p>
@@ -364,9 +365,8 @@
 	{/snippet}
 
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
-		{@render toolbar?.()}
 		<!-- clipped to its corners, so a header band can run edge to edge -->
-		<div class="-mt-4 overflow-clip rounded-xl border border-line bg-surface">
+		<div class="overflow-clip rounded-xl border border-line bg-surface">
 			{#if guide.earlier}
 				<!-- a band across the top of the card, set apart by its surface: hues mean the diff -->
 				<div

@@ -13,7 +13,7 @@
 	];
 
 	const itemVariants = ({ size, text, active }: { size: Size; text: Text; active: boolean }) => [
-		'relative flex items-center justify-center gap-1.5 transition-colors duration-200',
+		'relative flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors duration-200',
 		{ sm: 'h-5 rounded-[calc(var(--radius-md)-1px)]', md: 'h-6 rounded-md', lg: 'h-7 rounded-md' }[
 			size
 		],

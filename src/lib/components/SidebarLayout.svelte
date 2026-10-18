@@ -12,6 +12,8 @@
 	import ResizeHandle, { storedSize } from './ResizeHandle.svelte';
 
 	interface Props {
+		/** combined height of the page header and shared view navigation, in pixels */
+		stickyTop?: number;
 		/** how diffs are shown, split needs room for two sides */
 		layout: Layout;
 		/** the sidebar, without one its column is gone */
@@ -34,6 +36,7 @@
 	}
 
 	let {
+		stickyTop = 48,
 		layout,
 		aside,
 		sizeKey = 'sidebar-width',
@@ -230,11 +233,13 @@
 	     above their sticky headers and below the page's -->
 	<div
 		class={[
-			'sticky top-12 h-[calc(100vh-3rem)]',
+			'sticky',
 			floating && 'z-[18]',
 			// still a grid cell, so the diffs keep theirs
 			!aside && 'invisible overflow-hidden'
 		]}
+		style:top="{stickyTop}px"
+		style:height="calc(100dvh - {stickyTop}px)"
 	>
 		<!-- as a rail the panel stays laid out at its open width, hidden under the rail's
 		     column, so opening only moves its edge and keeps its scroll and state. Docked in a
@@ -334,7 +339,12 @@
 
 	<!-- the question panel, a column of the page like the sidebar, resized from its left edge.
 	     Laid out at its full width, so opening only moves its edge and nothing in it reflows -->
-	<div bind:this={rightPanel} class="sticky top-12 h-[calc(100vh-3rem)] overflow-x-clip">
+	<div
+		bind:this={rightPanel}
+		class="sticky overflow-x-clip"
+		style:top="{stickyTop}px"
+		style:height="calc(100dvh - {stickyTop}px)"
+	>
 		<div class="relative flex h-full flex-col" style:width="{panelSize}px">
 			{#if panelContent}
 				<div class="absolute inset-y-0 left-0 w-px">

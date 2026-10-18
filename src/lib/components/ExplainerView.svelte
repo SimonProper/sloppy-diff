@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { errorText } from '$lib/errors';
 	import { explainerDocument } from '$lib/explainer/document';
 	import {
@@ -16,11 +16,10 @@
 		start: string;
 		stop: string;
 		pr?: number;
-		toolbar?: Snippet;
 		hasChanges?: boolean;
 	}
 
-	let { repo, start, stop, pr, toolbar, hasChanges = true }: Props = $props();
+	let { repo, start, stop, pr, hasChanges = true }: Props = $props();
 	type Range = { repo: string; start: string; stop: string };
 	let range = $state<Range | null>(null);
 	let explainer = $state<VisualExplainer | null>(null);
@@ -31,6 +30,10 @@
 	let cancelling = $state(false);
 	let failure = $state('');
 	let focus = $state('');
+	let expanded = $state(false);
+	let viewer = $state<HTMLDialogElement>();
+	let expandButton = $state<HTMLButtonElement>();
+	let restoreViewport: (() => void) | undefined;
 	let closed = false;
 	let operation = 0;
 
@@ -38,6 +41,53 @@
 	const preview = $derived(explainer ? explainerDocument(explainer.html) : '');
 	const canGenerate = $derived(hasChanges && !loading && !generating && !!range);
 	const focusId = $props.id();
+	const titleId = `${focusId}-title`;
+
+	function exitExpanded() {
+		if (!expanded || !viewer) return;
+		expanded = false;
+		// Switching a dialog between modal and inline modes keeps its iframe mounted.
+		viewer.close();
+		viewer.show();
+		restoreViewport?.();
+		restoreViewport = undefined;
+		void tick().then(() => {
+			if (!closed && !expanded) expandButton?.focus({ preventScroll: true });
+		});
+	}
+
+	function toggleExpanded() {
+		if (!viewer || !expandButton) return;
+		if (expanded) {
+			exitExpanded();
+			return;
+		}
+		const { scrollX, scrollY } = window;
+		const htmlOverflow = document.documentElement.style.overflow;
+		const bodyOverflow = document.body.style.overflow;
+		restoreViewport = () => {
+			document.documentElement.style.overflow = htmlOverflow;
+			document.body.style.overflow = bodyOverflow;
+			window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' });
+		};
+		expanded = true;
+		viewer.close();
+		viewer.showModal();
+		document.documentElement.style.overflow = 'hidden';
+		document.body.style.overflow = 'hidden';
+		expandButton.focus({ preventScroll: true });
+	}
+
+	function onViewerKeydown(event: KeyboardEvent) {
+		if (!expanded) return;
+		// Page shortcuts must leave this modal alone. The sandboxed iframe handles
+		// its own keys; its Escape cannot reach the parent, so the exit stays visible.
+		event.stopPropagation();
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			exitExpanded();
+		}
+	}
 
 	function current(serial: number) {
 		return !closed && serial === operation;
@@ -78,6 +128,7 @@
 		return () => {
 			closed = true;
 			operation += 1;
+			restoreViewport?.();
 		};
 	});
 
@@ -176,8 +227,6 @@
 </script>
 
 <main class="min-w-0 p-4 pb-12">
-	{@render toolbar?.()}
-
 	{#if loading}
 		<div class="flex items-center justify-center gap-2 py-24 text-[12px] text-muted" role="status">
 			<span
@@ -186,21 +235,48 @@
 			Loading visual explainer…
 		</div>
 	{:else}
-		<section
+		<dialog
+			{@attach (element) => {
+				viewer = element;
+				return () => (viewer = undefined);
+			}}
+			open
 			class={[
-				'mt-4 overflow-hidden rounded-xl border border-line bg-surface',
-				!explainer && 'mx-auto max-w-2xl'
+				'explainer m-0 min-w-0 overflow-hidden border border-line bg-surface p-0 text-fg',
+				expanded ? 'expanded min-h-0 flex-col' : 'rounded-xl',
+				explainer ? 'max-w-none' : 'mx-auto max-w-2xl'
 			]}
-			aria-label="Visual explainer"
+			aria-label={explainer ? undefined : 'Visual explainer'}
+			aria-labelledby={explainer ? titleId : undefined}
+			onkeydown={onViewerKeydown}
+			oncancel={(event) => {
+				event.preventDefault();
+				exitExpanded();
+			}}
 		>
 			{#if explainer}
-				<header class="flex flex-wrap items-start justify-between gap-4 px-5 py-4">
+				<header
+					class={[
+						'flex shrink-0 flex-wrap justify-between px-5',
+						expanded ? 'items-center gap-3 py-3' : 'items-start gap-4 py-4'
+					]}
+				>
 					<div class="min-w-0 flex-1">
-						<p class="mb-1 text-[10.5px] font-medium tracking-wide text-faint uppercase">
-							Visual explainer
-						</p>
-						<h1 class="text-[17px] font-semibold tracking-tight">{explainer.title}</h1>
-						{#if explainer.summary}
+						{#if !expanded}
+							<p class="mb-1 text-[10.5px] font-medium tracking-wide text-faint uppercase">
+								Visual explainer
+							</p>
+						{/if}
+						<h1
+							id={titleId}
+							class={[
+								'font-semibold tracking-tight',
+								expanded ? 'truncate text-[14px]' : 'text-[17px]'
+							]}
+						>
+							{explainer.title}
+						</h1>
+						{#if explainer.summary && !expanded}
 							<p class="mt-1 max-w-3xl text-[12.5px] leading-relaxed text-muted">
 								{explainer.summary}
 							</p>
@@ -214,22 +290,51 @@
 							>Download HTML</button
 						>
 						<button
+							{@attach (element) => {
+								expandButton = element;
+								return () => (expandButton = undefined);
+							}}
 							type="button"
-							onclick={generate}
-							disabled={!canGenerate}
-							class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed disabled:opacity-40"
-							>Regenerate</button
+							onclick={toggleExpanded}
+							aria-pressed={expanded}
+							class="flex h-8 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-medium text-fg shadow-raised hover:border-muted active:shadow-pressed"
 						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.4"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+								>{#if expanded}<path d="M6 2v4H2m8-4v4h4M6 14v-4H2m8 4v-4h4" />{:else}<path
+										d="M6 2H2v4m8-4h4v4M2 10v4h4m8-4v4h-4"
+									/>{/if}</svg
+							>
+							{expanded ? 'Exit expanded view' : 'Expand'}
+						</button>
+						{#if !expanded}
+							<button
+								type="button"
+								onclick={generate}
+								disabled={!canGenerate}
+								class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed disabled:opacity-40"
+								>Regenerate</button
+							>
+						{/if}
 					</div>
 				</header>
-				<details class="border-t border-line px-5 py-2.5">
-					<summary class="w-fit cursor-pointer text-[11.5px] text-muted hover:text-fg"
-						>Choose a focus for regeneration</summary
-					>
-					<div class="max-w-2xl pt-3 pb-1">
-						{@render focusField()}
-					</div>
-				</details>
+				{#if !expanded}
+					<details class="border-t border-line px-5 py-2.5">
+						<summary class="w-fit cursor-pointer text-[11.5px] text-muted hover:text-fg"
+							>Choose a focus for regeneration</summary
+						>
+						<div class="max-w-2xl pt-3 pb-1">
+							{@render focusField()}
+						</div>
+					</details>
+				{/if}
 			{:else}
 				<div class="px-6 pt-8 pb-6 sm:px-8">
 					<div
@@ -347,21 +452,28 @@
 			{/if}
 
 			{#if explainer}
-				<div
-					class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line bg-subtle/40 px-5 py-2 text-[10.5px] text-faint"
-				>
-					<p>Use the scene controls to explore. Drag to orbit · scroll to zoom.</p>
-					<span class="font-mono">{explainer.start.slice(0, 7)}..{explainer.stop.slice(0, 7)}</span>
-				</div>
+				{#if !expanded}
+					<div
+						class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-line bg-subtle/40 px-5 py-2 text-[10.5px] text-faint"
+					>
+						<p>Use the scene controls to explore. Drag to orbit · scroll to zoom.</p>
+						<span class="font-mono"
+							>{explainer.start.slice(0, 7)}..{explainer.stop.slice(0, 7)}</span
+						>
+					</div>
+				{/if}
 				<iframe
 					srcdoc={preview}
 					title={explainer.title}
 					sandbox="allow-scripts"
 					referrerpolicy="no-referrer"
-					class="block h-[calc(100dvh-18rem)] min-h-[24rem] w-full border-0 bg-white"
+					class={[
+						'block w-full border-0 bg-white',
+						expanded ? 'min-h-0 flex-1' : 'h-[calc(100dvh-18rem)] min-h-[24rem]'
+					]}
 				></iframe>
 			{/if}
-		</section>
+		</dialog>
 	{/if}
 </main>
 
@@ -379,3 +491,29 @@
 		class="block w-full resize-y rounded-lg border border-line bg-canvas px-3 py-2 text-[12px] leading-relaxed placeholder:text-faint focus:border-accent focus:outline-none disabled:opacity-50"
 	></textarea>
 {/snippet}
+
+<style>
+	.explainer {
+		position: static;
+		width: 100%;
+		max-height: none;
+	}
+
+	.explainer.expanded {
+		position: fixed;
+		inset: 0;
+		width: 100vw;
+		height: 100dvh;
+		max-width: none;
+		border: 0;
+		border-radius: 0;
+	}
+
+	.explainer.expanded[open] {
+		display: flex;
+	}
+
+	.explainer::backdrop {
+		background: var(--canvas);
+	}
+</style>

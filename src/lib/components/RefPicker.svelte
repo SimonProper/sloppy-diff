@@ -16,6 +16,8 @@
 
 	interface Props {
 		label: string;
+		/** fit a comparison header: share its available width and abbreviate commit ids */
+		compact?: boolean;
 		/** selected revision, empty for the default */
 		value: string;
 		/** what an empty value means, shown on the button */
@@ -36,6 +38,7 @@
 
 	let {
 		label,
+		compact = false,
 		value,
 		fallback,
 		branches,
@@ -127,6 +130,10 @@
 		if (commit) return { title: commit.subject, sha: commit.sha };
 		return { title: value, sha: '' };
 	});
+	const fullLabel = $derived(`${label}: ${display.sha ? `${display.sha} · ` : ''}${display.title}`);
+	const shownSha = $derived(
+		compact && /^[0-9a-f]{8,64}$/.test(display.sha) ? display.sha.slice(0, 7) : display.sha
+	);
 
 	// runs before the browser toggles the popover, so `open` is still the old state
 	function toggle() {
@@ -202,15 +209,18 @@
 			{...props}
 			bind:this={button}
 			class={[
-				'flex h-8 w-56 items-center gap-2 rounded-lg border bg-control px-2.5 text-left shadow-raised hover:border-muted active:shadow-pressed',
+				'flex h-8 items-center gap-2 rounded-lg border bg-control px-2.5 text-left shadow-raised hover:border-muted active:shadow-pressed',
+				compact ? 'compact' : 'w-56',
 				open ? 'border-muted' : 'border-line'
 			]}
+			title={fullLabel}
+			aria-label={fullLabel}
 			aria-haspopup="listbox"
 			onclick={toggle}
 		>
 			<span class="shrink-0 text-[11px] text-faint">{label}</span>
 			{#if display.sha}
-				<span class="shrink-0 font-mono text-[11.5px] text-accent">{display.sha}</span>
+				<span class="shrink-0 font-mono text-[11.5px] text-accent">{shownSha}</span>
 			{/if}
 			<span class={['min-w-0 flex-1 truncate text-[12px]', !display.sha && 'font-mono']}>
 				{display.title}
@@ -398,3 +408,19 @@
 		{/each}
 	</div>
 </Popover>
+
+<style>
+	.compact {
+		flex: 1 1 11rem;
+		width: 11rem;
+		min-width: 8rem;
+		max-width: 14rem;
+	}
+	@media (max-width: 1350px) {
+		.compact {
+			max-width: 11rem;
+			padding-inline: 0.5rem;
+			column-gap: 0.375rem;
+		}
+	}
+</style>

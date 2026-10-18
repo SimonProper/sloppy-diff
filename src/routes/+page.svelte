@@ -131,14 +131,14 @@
 	const pr = $derived(diff.selection?.pr ?? null);
 
 	const tabs = $derived<{ value: View; label: string }[]>([
+		{ value: 'files', label: 'Diff' },
 		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
 		...(range
 			? [
 					{ value: 'guide' as const, label: 'Guide' },
 					{ value: 'explainer' as const, label: 'Visual explainer' }
 				]
-			: []),
-		{ value: 'files', label: 'Diff' }
+			: [])
 	]);
 
 	// each tab comes back scrolled where it was left, a long diff most of all. Whatever
@@ -393,6 +393,9 @@
 	];
 	/** PR mode without one picked, the list of open ones to pick from */
 	const pickingPr = $derived(data.mode === 'pr' && !data.inputs.pr);
+	const hasViewNavigation = $derived(ready && !pickingPr && !diff.error);
+	/** 48px page header and, for an open comparison, the 44px shared view strip. */
+	const stickyTop = $derived(hasViewNavigation ? 92 : 48);
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
 	/** The checked-out branch, or the most recent one that isn't the base. */
@@ -446,7 +449,7 @@
 
 <div class="min-h-screen font-sans">
 	<header
-		class="sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-line bg-canvas px-4 shadow-strip"
+		class="sticky top-0 z-20 flex h-12 items-center gap-1.5 border-b border-line bg-canvas px-3 shadow-strip min-[1351px]:gap-2 min-[1351px]:px-4"
 	>
 		<span
 			class="mr-1 grid size-6 shrink-0 place-items-center rounded-md border border-fg font-mono text-[12px]"
@@ -456,13 +459,14 @@
 		<RepoButton repo={data.repo} />
 
 		{#if data.branches.length}
-			<div class="ml-1">
+			<div class="ml-1 shrink-0">
 				<SegmentedControl options={MODES} value={tab} onchange={setMode} label="Compare" />
 			</div>
 
-			<div class="flex items-center gap-1.5">
+			<div class="flex min-w-0 flex-1 items-center gap-1.5">
 				{#if data.mode === 'branch'}
 					<RefPicker
+						compact
 						label="branch"
 						value={data.inputs.branch}
 						fallback=""
@@ -475,14 +479,14 @@
 					{#if branchSel}
 						<!-- found from the history, a different base is a range -->
 						<span
-							class="flex h-8 items-center gap-1.5 px-1 text-[11.5px] text-muted"
+							class="flex h-8 min-w-0 items-center gap-1.5 px-1 text-[11.5px] text-muted"
 							title={branchSel.merged
 								? `Merged into ${branchSel.base}, shown against where it split off before the merge`
 								: `Where ${branchSel.name} split off ${branchSel.base}, found from the history`}
 						>
-							<span class="text-faint">from</span>
-							<span class="font-mono text-fg">{branchSel.base}</span>
-							<span class="font-mono text-accent">{branchSel.mergeBase.slice(0, 7)}</span>
+							<span class="shrink-0 text-faint">from</span>
+							<span class="truncate font-mono text-fg">{branchSel.base}</span>
+							<span class="shrink-0 font-mono text-accent">{branchSel.mergeBase.slice(0, 7)}</span>
 							{#if branchSel.merged}
 								<span class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
 									>merged</span
@@ -512,6 +516,7 @@
 					{/if}
 				{:else if data.mode === 'commit'}
 					<RefPicker
+						compact
 						label="branch"
 						value={lane?.name ?? ''}
 						fallback="on no branch"
@@ -544,6 +549,7 @@
 						>
 					</button>
 					<RefPicker
+						compact
 						label="commit"
 						value={data.inputs.commit}
 						fallback=""
@@ -611,6 +617,7 @@
 					<!-- the list of pull requests has nothing to compare against yet -->
 					{#if pr}
 						<RefPicker
+							compact
 							label="PR"
 							value={data.inputs.pr}
 							fallback=""
@@ -624,6 +631,7 @@
 					{/if}
 				{:else if data.mode === 'range'}
 					<RefPicker
+						compact
 						label="from"
 						value={data.inputs.from}
 						fallback="HEAD"
@@ -649,6 +657,7 @@
 						>
 					</button>
 					<RefPicker
+						compact
 						label="to"
 						value={data.inputs.to}
 						fallback=""
@@ -658,6 +667,7 @@
 					/>
 				{:else}
 					<RefPicker
+						compact
 						label="vs"
 						value={data.inputs.from}
 						fallback={headLabel}
@@ -669,7 +679,7 @@
 			</div>
 		{/if}
 
-		<div class="ml-auto flex shrink-0 items-center gap-3">
+		<div class="ml-auto flex shrink-0 items-center gap-2">
 			{#if diff.files.length > 0}
 				<div class="flex items-center gap-3 font-mono text-[11px] text-muted tabular-nums">
 					<span>{diff.files.length} {diff.files.length === 1 ? 'file' : 'files'}</span>
@@ -710,10 +720,15 @@
 		</div>
 	</header>
 
-	{#snippet toolbar()}
-		<!-- stays under the header so the change mode can be switched from anywhere -->
-		<div
-			class="sticky top-12 z-[15] -mx-4 -mt-4 flex h-11 items-center border-b border-line bg-canvas px-4 shadow-strip"
+	{#if hasViewNavigation}
+		{@render viewToolbar()}
+	{/if}
+
+	{#snippet viewToolbar()}
+		<!-- Every comparison view shares this position, including views without saved content. -->
+		<nav
+			aria-label="Review views"
+			class="sticky top-12 z-[19] flex h-11 items-center border-b border-line bg-canvas px-4 shadow-strip"
 		>
 			{@render viewTabs()}
 			<div class="ml-auto flex shrink-0 items-center">
@@ -724,7 +739,7 @@
 						target="_blank"
 						rel="noopener noreferrer">Open on GitHub ↗</a
 					>
-				{:else}
+				{:else if view === 'files' || (view === 'guide' && diff.guide)}
 					<ChangesToolbar
 						mode={data.changeMode}
 						summary={diff.changes}
@@ -742,7 +757,7 @@
 			{#if view === 'files' && pr?.threads.length}
 				<ReviewNav threads={pr.threads} files={diff.files} />
 			{/if}
-			{#if asking}
+			{#if asking && (view === 'files' || view === 'overview' || (view === 'guide' && diff.guide))}
 				<!-- the agent panel: every chat about this diff, and a new one about the whole change -->
 				<button
 					type="button"
@@ -766,7 +781,7 @@
 					{/if}
 				</button>
 			{/if}
-		</div>
+		</nav>
 	{/snippet}
 
 	<!-- tabs are a way around, no box: the settings beside them have one -->
@@ -871,13 +886,11 @@
 					start={range.from}
 					stop={range.to}
 					pr={pr?.number}
-					toolbar={viewTabs}
 					hasChanges={diff.files.length > 0}
 				/>
 			{/key}
 		{:else}
 			<div class="flex flex-col items-center px-4 py-24 text-center">
-				<div class="mb-8">{@render viewTabs()}</div>
 				<p class="text-[13px] font-medium">Pick a committed change to explain</p>
 				<p class="mt-1 max-w-sm text-[12px] text-muted">
 					Choose a branch, commit, range or pull request to create a visual explainer.
@@ -888,7 +901,7 @@
 		<GuideView
 			guide={diff.guide}
 			files={diff.files}
-			{toolbar}
+			{stickyTop}
 			layout={shownLayout}
 			{virtualize}
 			threads={asking}
@@ -899,7 +912,6 @@
 		/>
 	{:else if view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
-			<div class="mb-8">{@render viewTabs()}</div>
 			{#if pr}
 				<p class="text-[13px] font-medium">No guide for this pull request yet</p>
 				<p class="mt-1 max-w-sm text-[12px] text-muted">
@@ -990,6 +1002,7 @@
 		{/snippet}
 		<SidebarLayout
 			layout={shownLayout}
+			{stickyTop}
 			aside={view === 'overview' ? prSidebar : fileSidebar}
 			rail={view === 'overview' ? undefined : fileRail}
 			sizeKey={view === 'overview' ? 'pr-sidebar-width' : undefined}
@@ -998,7 +1011,6 @@
 			bind:panelWidth
 		>
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
-				{@render toolbar()}
 				{#if view === 'overview' && pr}
 					{#if loading.current}
 						<PrSkeleton />

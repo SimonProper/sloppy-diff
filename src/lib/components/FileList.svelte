@@ -16,15 +16,33 @@
 
 	let { files, current = null }: Props = $props();
 	let list = $state<HTMLElement>();
+	let query = $state('');
+	const searchId = $props.id();
+	const filter = $derived(query.trim().toLowerCase());
+	const matching = $derived(
+		filter
+			? files.filter((file) =>
+					[file.newPath, file.oldPath].some((path) => path?.toLowerCase().includes(filter))
+				)
+			: files
+	);
 
 	type View = 'list' | 'tree';
 	const KEY = 'file-list-view';
 
 	// a per-browser preference, the tree when nothing is stored
 	let view = $state<View>(readText(KEY) === 'list' ? 'list' : 'tree');
-	const tree = $derived(view === 'tree' ? fileTree(files) : []);
+	const tree = $derived(view === 'tree' ? fileTree(matching) : []);
 	/** folders folded shut, by path, for this visit */
 	const folded = new SvelteSet<string>();
+	// Searching opens the matching branches without changing the normal tree's folds.
+	const searchFolded = new SvelteSet<string>();
+	const folds = $derived(filter ? searchFolded : folded);
+
+	function search(value: string) {
+		query = value;
+		searchFolded.clear();
+	}
 
 	function choose(next: View) {
 		view = next;
@@ -32,8 +50,8 @@
 	}
 
 	function fold(path: string) {
-		if (folded.has(path)) folded.delete(path);
-		else folded.add(path);
+		if (folds.has(path)) folds.delete(path);
+		else folds.add(path);
 	}
 
 	// folders stick at the top while their files scroll, nested ones stacked under
@@ -86,9 +104,77 @@
 	</SegmentedControl>
 </div>
 
-<nav bind:this={list} class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2">
-	{#if view === 'list'}
-		{#each files as file (file.id)}
+<div class="shrink-0 px-3 pt-1 pb-2">
+	<label for={searchId} class="sr-only">Find a changed file by name or path</label>
+	<div
+		class="flex h-8 items-center gap-2 rounded-lg border border-line bg-canvas px-2.5 text-faint focus-within:border-muted"
+	>
+		<svg
+			viewBox="0 0 16 16"
+			class="size-3 shrink-0"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.5"
+			aria-hidden="true"><circle cx="7" cy="7" r="4" /><path d="m10 10 3 3" /></svg
+		>
+		<input
+			id={searchId}
+			type="text"
+			inputmode="search"
+			autocomplete="off"
+			spellcheck="false"
+			value={query}
+			oninput={(event) => search(event.currentTarget.value)}
+			placeholder="Find file…"
+			aria-controls="{searchId}-results"
+			onkeydown={(event) => {
+				if (event.key === 'Escape' && !event.isComposing) {
+					search('');
+					event.preventDefault();
+					event.stopPropagation();
+				}
+			}}
+			class="min-w-0 flex-1 bg-transparent text-[12px] text-fg outline-none placeholder:text-faint"
+		/>
+		{#if query}
+			<button
+				type="button"
+				aria-label="Clear file search"
+				onclick={() => {
+					search('');
+					document.getElementById(searchId)?.focus();
+				}}
+				class="grid size-5 shrink-0 place-items-center rounded text-faint hover:bg-subtle hover:text-fg"
+				><svg
+					viewBox="0 0 16 16"
+					class="size-3"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"
+					aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg
+				></button
+			>
+		{/if}
+	</div>
+	{#if filter}
+		<p class="px-1 pt-1.5 text-[10.5px] text-faint" role="status">
+			Showing {matching.length} of {files.length} files
+		</p>
+	{/if}
+</div>
+
+<nav
+	id="{searchId}-results"
+	bind:this={list}
+	class="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto px-2 pb-2"
+	aria-label="Changed files"
+>
+	{#if matching.length === 0}
+		<p class="px-3 py-5 text-[12px] text-muted">
+			{#if filter}No files match “{query}”.{:else}No changed files.{/if}
+		</p>
+	{:else if view === 'list'}
+		{#each matching as file (file.id)}
 			{@const path = splitPath(displayPath(file))}
 			{@render row(file, 0, path.name, path.dir.replace(/\/$/, ''))}
 		{/each}
@@ -100,7 +186,7 @@
 {#snippet nodes(list: TreeNode[], depth: number)}
 	{#each list as node (node.kind === 'dir' ? `d:${node.path}` : `f:${node.file.id}`)}
 		{#if node.kind === 'dir'}
-			{@const open = !folded.has(node.path)}
+			{@const open = !folds.has(node.path)}
 			{@const sticky = depth < STICKY_DEPTH}
 			<!-- the folder wraps its contents, so its sticky row lets go when they end -->
 			<div class="flex flex-col gap-px">
