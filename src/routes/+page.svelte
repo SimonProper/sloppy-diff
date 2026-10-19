@@ -1008,7 +1008,7 @@
 			/>
 		{/snippet}
 		<SidebarLayout
-			layout={shownLayout}
+			layout={view === 'overview' ? 'unified' : shownLayout}
 			chars={columnsOf(diff.files)}
 			{stickyTop}
 			aside={view === 'overview' ? prSidebar : fileSidebar}
