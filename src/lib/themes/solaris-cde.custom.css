@@ -1,0 +1,29 @@
+/* Solaris CDE beyond its tokens, written by hand next to the generated solaris-cde.css: only
+   what no component owns, in the base layer so any utility still wins. The order is
+   Tailwind's own, stated again in case this file comes first */
+@layer theme, base, components, utilities;
+
+@layer base {
+	/* Motif scrollbars: a trough sunk in the select colour, the slider raised in it */
+	:root.solaris-cde ::-webkit-scrollbar {
+		width: 15px;
+		height: 15px;
+		background-color: #9497a6;
+	}
+	:root.solaris-cde ::-webkit-scrollbar-thumb {
+		background-color: var(--canvas);
+		box-shadow:
+			inset 2px 2px 0 var(--surface),
+			inset -2px -2px 0 var(--line);
+	}
+	:root.solaris-cde ::-webkit-scrollbar-corner {
+		background-color: var(--canvas);
+	}
+	/* Firefox has no scrollbar pseudo-elements, only the colours. Not where they exist:
+	   Chromium drops them for scrollbar-color, which every element would inherit */
+	@supports not selector(::-webkit-scrollbar) {
+		:root.solaris-cde {
+			scrollbar-color: var(--canvas) #9497a6;
+		}
+	}
+}

@@ -968,6 +968,81 @@ const nextstep: ThemeDef = {
 	}
 };
 
+// Solaris CDE: Sun's palette for the Common Desktop Environment, its lavender grey window
+// panes, the maroon of the active window's frame and the purple desktop behind. Motif drew
+// every control with a 2px bevel, the shadows mixed from the pane: the top lit, the bottom
+// dark, the select colour between. Its editors had no syntax colours, so these come from the
+// palette's own hues, darkened to read on the text areas
+const cde = {
+	pane: '#aeb2c3', // window pane background, color set 5
+	frame: '#b24d7a', // front window border, color set 1
+	desktop: '#574c8f', // desktop background
+	teal: '#4992a7',
+	slate: '#4f5e86',
+	black: '#000000',
+	white: '#ffffff'
+};
+const cdeTop = mix(cde.pane, cde.white, 0.45);
+const cdeBottom = mix(cde.pane, cde.black, 0.5);
+const cdeSelect = mix(cde.pane, cde.black, 0.85);
+const cdeMaroon = mix(cde.frame, cde.black, 0.75);
+const cdeTeal = mix(cde.teal, cde.black, 0.6);
+const solarisCde: ThemeDef = {
+	id: 'solaris-cde',
+	label: 'Solaris CDE',
+	dark: false,
+	about: "Sun's Common Desktop Environment on Solaris",
+	credit: 'its palette, Motif bevels, corners and font',
+	roles: {
+		canvas: cde.pane,
+		surface: cdeTop, // text entry areas, a lit step off the pane
+		subtle: mix(cde.pane, cde.white, 0.75),
+		line: cdeBottom,
+		fg: cde.black, // foregroundColor Dynamic, black on a light pane
+		muted: mix(cde.pane, cde.black, 0.3),
+		faint: mix(cde.pane, cde.black, 0.55),
+		add: '#1f6b35',
+		mod: '#7a5a00',
+		move: cde.desktop,
+		del: '#a8243a',
+		comment: mix(cde.pane, cde.black, 0.55),
+		keyword: cde.desktop,
+		operator: cde.black,
+		punct: cde.black,
+		string: cdeMaroon,
+		escape: cdeTeal,
+		regex: cdeTeal,
+		number: cdeTeal,
+		boolean: cdeTeal,
+		constant: cdeTeal,
+		function: cde.slate,
+		type: cdeMaroon,
+		namespace: cde.black,
+		property: cde.black,
+		variable: cde.black,
+		parameter: cde.black,
+		builtin: cde.desktop,
+		tag: cde.desktop,
+		attribute: cde.slate,
+		decorator: cde.slate,
+		heading: cde.desktop
+	},
+	shape: {
+		radius: '0px',
+		'font-sans': 'Helvetica, var(--sans-stack)',
+		control: 'var(--canvas)',
+		raised: `inset 2px 2px 0 ${cdeTop}, inset -2px -2px 0 ${cdeBottom}`,
+		pressed: `inset 2px 2px 0 ${cdeBottom}, inset -2px -2px 0 ${cdeTop}, inset 0 0 0 100vmax ${cdeSelect}`,
+		// outside the border, which the field's own content would cover inside
+		sunken: `-1px -1px 0 ${cdeBottom}, 1px 1px 0 ${cdeTop}`,
+		card: `-1px -1px 0 ${cdeBottom}, 1px 1px 0 ${cdeTop}`,
+		// a menu bar, lit along the top over a face of pane, painted by the shadow so a bar on
+		// a text area turns to pane too
+		strip: `inset 0 1px 0 ${cdeTop}, inset 0 0 0 100vmax var(--canvas)`,
+		float: `inset 2px 2px 0 ${cdeTop}, inset -2px -2px 0 ${cdeBottom}`
+	}
+};
+
 /** in the order they're listed, the light ones then the dark ones */
 export const THEMES: ThemeDef[] = [
 	{
@@ -981,6 +1056,7 @@ export const THEMES: ThemeDef[] = [
 	neobrutalism,
 	nextstep,
 	rosePineDawn,
+	solarisCde,
 	solarizedLight,
 	{
 		id: 'catppuccin-mocha',
