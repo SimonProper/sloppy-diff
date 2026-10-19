@@ -1,6 +1,12 @@
 import { command, query } from '$app/server';
 import type { Suggestion } from '$lib/ask/types';
-import { addPrComment, addToDraft, deleteComment, listPullRequests } from '$lib/server/gh';
+import {
+	addPrComment,
+	addToDraft,
+	deleteComment,
+	editComment,
+	listPullRequests
+} from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
 import { forgetPrs } from '$lib/server/cache';
 import { badRequestOnError } from '$lib/server/requests';
@@ -37,6 +43,26 @@ export const removeComment = command(
 	({ repo, id, kind }: { repo: string; id: string; kind: 'issue' | 'thread' }) =>
 		badRequestOnError(async () => {
 			await deleteComment(await repoRoot(repo), id, kind);
+			forgetPrs();
+		})
+);
+
+/** Edits a comment GitHub says you may edit. */
+export const updateComment = command(
+	'unchecked',
+	({
+		repo,
+		id,
+		kind,
+		body
+	}: {
+		repo: string;
+		id: string;
+		kind: 'issue' | 'thread';
+		body: string;
+	}) =>
+		badRequestOnError(async () => {
+			await editComment(await repoRoot(repo), id, kind, body);
 			forgetPrs();
 		})
 );

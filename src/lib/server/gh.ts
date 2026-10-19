@@ -103,7 +103,7 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
         }
       }
       closingIssuesReferences(first: 10) { nodes { number title url } }
-      comments(first: 100) { nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url viewerCanDelete } }
+      comments(first: 100) { nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url viewerCanDelete viewerCanUpdate } }
       reviews(states: PENDING, first: 1) { nodes { id } }
       submitted: reviews(states: [APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED], first: 100) {
         nodes { id author { login avatarUrl(size: 40) } state body bodyHTML submittedAt url }
@@ -112,7 +112,7 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
         nodes {
           id path line startLine diffSide subjectType isResolved isOutdated
           comments(first: 100) {
-            nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url state diffHunk pullRequestReview { id } viewerCanDelete }
+            nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url state diffHunk pullRequestReview { id } viewerCanDelete viewerCanUpdate }
           }
         }
       }
@@ -133,6 +133,7 @@ interface RawComment {
 	pullRequestReview?: { id: string } | null;
 	/** yours, or you're an admin; a review's own text isn't asked, GitHub can't delete it */
 	viewerCanDelete?: boolean;
+	viewerCanUpdate?: boolean;
 }
 
 export interface RawPullRequest {
@@ -205,7 +206,8 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		createdAt: c.createdAt,
 		url: c.url,
 		pending: c.state === 'PENDING',
-		...(kind && c.viewerCanDelete && { deletable: kind })
+		...(kind && c.viewerCanDelete && { deletable: kind }),
+		...(kind && c.viewerCanUpdate && { editable: kind })
 	});
 	const threads = raw.reviewThreads.nodes.map((t): ReviewThread => ({
 		id: t.id,
@@ -622,11 +624,16 @@ async function draft(root: string, pr: string, commit: string, s: Suggestion) {
 }
 
 // ---------------------------------------------------------------------------
-// deleting a comment, one GitHub says you may: on the conversation, or in a review thread
+// deleting or editing a comment, one GitHub says you may: on the conversation, or in a review thread
 
 const DELETE = {
 	issue: `mutation($id: ID!) { deleteIssueComment(input: { id: $id }) { clientMutationId } }`,
 	thread: `mutation($id: ID!) { deletePullRequestReviewComment(input: { id: $id }) { clientMutationId } }`
+};
+
+const UPDATE = {
+	issue: `mutation($id: ID!, $body: String!) { updateIssueComment(input: { id: $id, body: $body }) { clientMutationId } }`,
+	thread: `mutation($id: ID!, $body: String!) { updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) { clientMutationId } }`
 };
 
 const COMMENT = `mutation($pr: ID!, $body: String!) {
@@ -636,10 +643,25 @@ const COMMENT = `mutation($pr: ID!, $body: String!) {
 /** Comments on the pull request `pr` (its node id), posted at once, not part of a review. */
 export async function addPrComment(root: string, pr: string, body: string) {
 	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	await graphql(root, COMMENT, { pr, body: checkBody(body) });
+}
+
+function checkBody(body: string) {
 	if (typeof body !== 'string' || !body.trim() || body.length > MAX_BODY) {
 		throw new Error('That comment is not one GitHub can take');
 	}
-	await graphql(root, COMMENT, { pr, body });
+	return body;
+}
+
+export async function editComment(
+	root: string,
+	id: string,
+	kind: 'issue' | 'thread',
+	body: string
+) {
+	if (!NODE_ID.test(id)) throw new Error('Invalid comment');
+	if (kind !== 'issue' && kind !== 'thread') throw new Error('Invalid comment');
+	await graphql(root, UPDATE[kind], { id, body: checkBody(body) });
 }
 
 export async function deleteComment(root: string, id: string, kind: 'issue' | 'thread') {

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { errorText } from '$lib/errors';
-	import { readText, writeText } from '$lib/storage';
+	import { readJson, readText, writeText } from '$lib/storage';
 	import AskField from '../ask/AskField.svelte';
 	import Avatar from './Avatar.svelte';
+	import CommentEditor from './CommentEditor.svelte';
 
 	interface Props {
-		/** a reply to a thread or a comment on the pull request, emptied once it's sent */
+		/** a reply to a thread or a comment on the pull request, done once it's in the page */
 		onsend: (body: string) => Promise<unknown>;
-		/** where what's typed is kept until it's sent, through a failed send or a reload */
+		/** where what's typed is kept until it's sent, and a send that failed, through a reload */
 		keep: string;
 		/** yours: given, the field is a row among the thread's comments, one line until it wraps */
 		avatar?: string;
@@ -15,6 +16,9 @@
 		/** what sending does, for its button */
 		action?: string;
 		hint?: string;
+		/** given, each sent comment is a card of its own, and the field the next one: on the
+		 * conversation, where a comment isn't a reply to the one before */
+		card?: string;
 	}
 
 	let {
@@ -23,33 +27,50 @@
 		avatar,
 		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
 		action = 'Add to your review',
-		hint = '⌘↵ to add to your review'
+		hint = '⌘↵ to add to your review',
+		card
 	}: Props = $props();
 
+	/** sent, shown under the comments until it's in them; one that failed is open to edit */
+	interface Sent {
+		id: string;
+		body: string;
+		failure?: string;
+	}
+
 	const key = $derived(`sloppy-diff:reply:${keep}`);
+	const failedKey = $derived(`sloppy-diff:reply-failed:${keep}`);
 	let reply = $derived(readText(key) ?? '');
 	$effect(() => writeText(key, reply.trim() ? reply : null));
-	let sending = $state(false);
-	let failure = $state('');
+	let sent = $derived(readJson<Sent[]>(failedKey, []));
+	$effect(() => {
+		const failed = sent.filter((s) => s.failure);
+		writeText(failedKey, failed.length ? JSON.stringify(failed) : null);
+	});
 	const typed = $derived(reply.trim().length > 0);
 
-	async function send(body: string) {
-		sending = true;
-		failure = '';
+	// the field is free again at once, for the next one
+	function send(body: string) {
+		reply = '';
+		post({ id: crypto.randomUUID(), body });
+	}
+
+	async function post(item: Sent) {
+		sent = sent.some((s) => s.id === item.id)
+			? sent.map((s) => (s.id === item.id ? item : s))
+			: [...sent, item];
 		try {
-			await onsend(body);
-			reply = '';
+			await onsend(item.body);
+			sent = sent.filter((s) => s.id !== item.id);
 		} catch (e) {
-			failure = errorText(e);
-		} finally {
-			sending = false;
+			sent = sent.map((s) => (s.id === item.id ? { ...s, failure: errorText(e) } : s));
 		}
 	}
 
 	function onkeydown(event: KeyboardEvent) {
 		if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
 		event.preventDefault();
-		if (typed && !sending) send(reply.trim());
+		if (typed) send(reply.trim());
 	}
 
 	// one line until the text wraps, then up to six, as AskField grows. Runs again as it's typed
@@ -62,11 +83,37 @@
 	}
 </script>
 
-<div>
+<div class={card ? 'flex flex-col gap-3' : [avatar !== undefined && 'divide-y divide-line']}>
+	{#each sent as item (item.id)}
+		<div
+			class={[
+				'flex items-start gap-2',
+				card,
+				avatar === undefined ? 'mb-3' : card ? 'px-3.5 py-3' : 'px-3 py-2'
+			]}
+		>
+			{#if avatar !== undefined}<Avatar src={avatar} class="mt-0.5 size-4" />{/if}
+			<div class="min-w-0 flex-1">
+				{#if item.failure}
+					<CommentEditor
+						body={item.body}
+						failure="Not sent: {item.failure}"
+						action="Retry"
+						cancel="Discard"
+						onsave={(body) => post({ id: item.id, body })}
+						oncancel={() => (sent = sent.filter((s) => s.id !== item.id))}
+					/>
+				{:else}
+					<p class="text-[12px] leading-5 whitespace-pre-wrap text-muted">{item.body}</p>
+					<p class="text-[11px] text-faint">Sending…</p>
+				{/if}
+			</div>
+		</div>
+	{/each}
 	{#if avatar === undefined}
-		<AskField bind:value={reply} {placeholder} hints={['', hint]} busy={sending} onsend={send} />
+		<AskField bind:value={reply} {placeholder} hints={['', hint]} onsend={send} />
 	{:else}
-		<div class="flex items-start gap-2 px-3 py-2">
+		<div class={['flex items-start gap-2 px-3 py-2', card]}>
 			<Avatar src={avatar} class="mt-0.5 size-4" />
 			<textarea
 				bind:value={reply}
@@ -84,40 +131,19 @@
 				]}
 				aria-label={action}
 				title="{action}  ⌘↵"
-				disabled={!typed || sending}
+				disabled={!typed}
 				onclick={() => send(reply.trim())}
 			>
-				{#if sending}
-					<span class="spin size-2.5 rounded-full border-[1.5px] border-surface/40 border-t-surface"
-					></span>
-				{:else}
-					<svg
-						viewBox="0 0 16 16"
-						class="size-2.5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"><path d="M8 12.5v-9M4 7l4-4 4 4" /></svg
-					>
-				{/if}
+				<svg
+					viewBox="0 0 16 16"
+					class="size-2.5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="M8 12.5v-9M4 7l4-4 4 4" /></svg
+				>
 			</button>
 		</div>
 	{/if}
-	{#if failure}
-		<p class={['text-[12px] text-del', avatar === undefined ? 'px-2.5 pt-1.5' : 'pr-3 pb-2 pl-9']}>
-			{failure}
-		</p>
-	{/if}
 </div>
-
-<style>
-	.spin {
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-</style>

@@ -10,10 +10,15 @@
 </script>
 
 <script lang="ts">
+	import { page } from '$app/state';
+	import { errorText } from '$lib/errors';
+	import { updateComment } from '$lib/pr/pr.remote';
+	import { refresh } from '$lib/pr/refresh';
 	import { timeAgo } from '$lib/refs';
 	import type { PrComment } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
-	import DeleteComment from './DeleteComment.svelte';
+	import CommentEditor from './CommentEditor.svelte';
+	import CommentMenu from './CommentMenu.svelte';
 
 	interface Props {
 		comment: PrComment;
@@ -24,6 +29,26 @@
 	let { comment, threads }: Props = $props();
 
 	const verdict = $derived(comment.review && VERDICTS[comment.review]);
+
+	/** open to edit, with what's typed and why the last save failed */
+	let editing = $state<{ body: string; failure?: string } | null>(null);
+	/** saved and shown already, until GitHub's rendering of it is in */
+	let saving = $state<string | null>(null);
+
+	async function save(body: string) {
+		const kind = comment.editable;
+		editing = null;
+		if (!kind || body === comment.body.trim()) return;
+		saving = body;
+		try {
+			await updateComment({ repo: page.data.repo, id: comment.id, kind, body });
+			await refresh();
+		} catch (e) {
+			editing = { body, failure: errorText(e) };
+		} finally {
+			saving = null;
+		}
+	}
 </script>
 
 <!-- the body sits under the name, the avatar alone in its column marks where one starts -->
@@ -54,9 +79,27 @@
 			rel="noopener noreferrer"
 			title={new Date(comment.createdAt).toLocaleString()}>{timeAgo(comment.createdAt)} ago</a
 		>
-		{#if comment.deletable}<DeleteComment {comment} />{/if}
+		{#if (comment.editable || comment.deletable) && !editing && saving === null}
+			<CommentMenu
+				{comment}
+				onedit={comment.editable && (() => (editing = { body: comment.body }))}
+			/>
+		{/if}
 	</p>
-	{#if comment.html}
+	{#if editing}
+		<div class="mt-1 pl-7">
+			<CommentEditor
+				body={editing.body}
+				failure={editing.failure}
+				onsave={save}
+				oncancel={() => (editing = null)}
+			/>
+		</div>
+	{:else if saving !== null}
+		<p class="mt-0.5 pl-7 text-[12.5px] leading-relaxed whitespace-pre-wrap text-muted">
+			{saving}
+		</p>
+	{:else if comment.html}
 		<div class="prose mt-0.5 pl-7 text-[12.5px] leading-relaxed">{@html comment.html}</div>
 	{/if}
 </div>

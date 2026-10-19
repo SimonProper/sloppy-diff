@@ -261,11 +261,12 @@
 					{/if}
 				</li>
 			{/each}
-			<li class="overflow-hidden rounded-lg border border-line bg-surface">
+			<li>
 				<CommentField
 					onsend={post}
 					keep={pr.id}
 					avatar={pr.viewerAvatar}
+					card="overflow-hidden rounded-lg border border-line bg-surface"
 					placeholder="Leave a comment…"
 					action="Comment"
 					hint="⌘↵ to comment"

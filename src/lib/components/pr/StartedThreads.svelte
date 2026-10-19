@@ -4,7 +4,7 @@
 	import { timeAgo } from '$lib/refs';
 	import type { PrComment, ReviewThread } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
-	import DeleteComment from './DeleteComment.svelte';
+	import CommentMenu from './CommentMenu.svelte';
 	import CommentField from './CommentField.svelte';
 
 	interface Props {
@@ -89,7 +89,7 @@
 			<Avatar src={comment.avatar} />
 			<span class="text-[11.5px] font-medium text-fg">{comment.author}</span>
 			{timeAgo(comment.createdAt)} ago
-			{#if comment.deletable}<DeleteComment {comment} />{/if}
+			{#if comment.deletable}<CommentMenu {comment} />{/if}
 		</span>
 		<span class="mt-0.5 line-clamp-3 pl-6 text-[12px] leading-relaxed text-fg"
 			>{glance(comment.html)}</span

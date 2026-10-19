@@ -5,6 +5,7 @@ import {
 	checkPrNumber,
 	checkSuggestion,
 	deleteComment,
+	editComment,
 	draftStep,
 	threadInput,
 	toPrSummary,
@@ -98,6 +99,19 @@ test('a comment GitHub lets you delete says how, a review never does', async () 
 	// turned down before gh is asked
 	await expect(deleteComment('.', 'IC_1;rm', 'issue')).rejects.toThrow();
 	await expect(deleteComment('.', 'IC_1', 'review' as never)).rejects.toThrow();
+});
+
+test('a comment GitHub lets you edit says how, and a bad edit is turned down before gh is asked', async () => {
+	const raw = structuredClone(response.data.repository.pullRequest);
+	Object.assign(raw.comments.nodes[0], { viewerCanUpdate: true });
+	Object.assign(raw.reviewThreads.nodes[0].comments.nodes[0], { viewerCanUpdate: true });
+	const pr = toPullRequest(raw as never);
+	expect(pr.comments.find((c) => c.id === raw.comments.nodes[0].id)?.editable).toBe('issue');
+	expect(pr.threads[0].comments[0].editable).toBe('thread');
+	expect(pr.threads[0].comments[1]?.editable).toBeUndefined();
+	await expect(editComment('.', 'IC_1;rm', 'issue', 'hi')).rejects.toThrow();
+	await expect(editComment('.', 'IC_1', 'review' as never, 'hi')).rejects.toThrow();
+	await expect(editComment('.', 'IC_1', 'issue', '  ')).rejects.toThrow();
 });
 
 test("a comment on the PR that GitHub can't take is turned down before gh is asked", async () => {
