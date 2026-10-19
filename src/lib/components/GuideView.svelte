@@ -15,6 +15,9 @@
 	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
 	import { readJson, writeJson } from '$lib/storage';
 	import FileDiff from './FileDiff.svelte';
+	import StatusBadge from './StatusBadge.svelte';
+	import StepChip, { type Step } from './StepChip.svelte';
+	import { displayPath, splitPath } from '$lib/diff/path';
 	import Popover from './Popover.svelte';
 	import type { ReviewThread } from '$lib/pr/types';
 
@@ -78,6 +81,27 @@
 		return [...byFile.values()];
 	}
 
+	// one file can be split across steps, each showing only its own hunks. Every step
+	// it's read in, in reading order, so each can point to the others
+	const fileSteps = $derived.by(() => {
+		const steps = new Map<string, GuideSection[]>();
+		for (const s of sections)
+			for (const { file } of groups(s)) steps.set(file.id, [...(steps.get(file.id) ?? []), s]);
+		return steps;
+	});
+
+	/** The other steps `file` is read in, to jump to it there. */
+	function also(section: GuideSection, file: DiffFile): Step[] {
+		return (fileSteps.get(file.id) ?? [])
+			.filter((s) => s !== section)
+			.map((s) => {
+				const done = isReviewed(s);
+				// a reviewed step's files are folded away, its title is what's left to go to
+				const href = done ? `#${s.id}` : `#${s.id}-${file.id}`;
+				return { n: number.get(s.id)!, title: s.title, href, done };
+			});
+	}
+
 	function counts(section: GuideSection) {
 		return lineStats(
 			section.hunks.flatMap((id) => hunkFile.get(id)?.hunks.find((h) => h.id === id) ?? [])
@@ -107,6 +131,17 @@
 			? reviewed.filter((r) => r !== mark(section))
 			: [...reviewed, mark(section)];
 		writeJson(storageKey, reviewed);
+	}
+
+	// each step's files in the sidebar, open until it's reviewed unless the reader
+	// opened or closed them, which is remembered like reviewed steps are
+	const listsKey = $derived(`sloppy-diff:step-files:${guideKey}`);
+	let lists = $derived(readJson<Record<string, boolean>>(listsKey, {}));
+	const listed = (section: GuideSection) => lists[section.id] ?? !isReviewed(section);
+
+	function toggleList(section: GuideSection) {
+		lists = { ...lists, [section.id]: !listed(section) };
+		writeJson(listsKey, lists);
 	}
 
 	const FOLD = 240;
@@ -321,7 +356,53 @@
 										{/if}
 									</span>
 								</a>
+								<button
+									type="button"
+									class="mt-px grid size-[18px] shrink-0 place-items-center rounded-md text-faint hover:bg-line hover:text-fg"
+									aria-expanded={listed(section)}
+									aria-label="{listed(section) ? 'Hide' : 'Show'} the files of {section.title}"
+									title={listed(section) ? 'Hide its files' : 'Show its files'}
+									onclick={() => toggleList(section)}
+								>
+									<svg
+										viewBox="0 0 16 16"
+										class={['size-3 transition-transform', !listed(section) && '-rotate-90']}
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
+									>
+								</button>
 							</div>
+							{#if listed(section)}
+								<!-- each step's files, to jump to one. A reviewed step's are folded away, its
+							     title is what's left to go to -->
+								<div class={['flex flex-col pb-1 pl-[30px]', done && 'opacity-60']}>
+									{#each groups(section) as { file, ids } (file.id)}
+										{@const path = splitPath(displayPath(file))}
+										{@const others = also(section, file)}
+										<div
+											class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] hover:bg-subtle"
+										>
+											<StatusBadge status={file.status} />
+											<a
+												href={done ? `#${section.id}` : `#${section.id}-${file.id}`}
+												class="min-w-0 flex-1 truncate font-mono text-muted hover:text-fg"
+												title={displayPath(file)}>{path.name}</a
+											>
+											{#if ids.length < file.hunks.length}
+												<span
+													class="shrink-0 font-mono text-[10.5px] text-faint tabular-nums"
+													title="{ids.length} of the file's {file.hunks
+														.length} hunks are in this step">{ids.length}/{file.hunks.length}</span
+												>
+											{/if}
+											{#each others as step (step.n)}<StepChip {...step} />{/each}
+										</div>
+									{/each}
+								</div>
+							{/if}
 						{/each}
 					</div>
 				{/if}
@@ -537,6 +618,7 @@
 								<FileDiff
 									{file}
 									only={ids}
+									also={also(section, file)}
 									notes={section.notes}
 									anchor="{section.id}-{file.id}"
 									href={fileHref(file)}

@@ -17,6 +17,7 @@
 	import { chunk } from '$lib/chunk';
 	import type { ReviewThread } from '$lib/pr/types';
 	import StatusBadge from './StatusBadge.svelte';
+	import StepChip, { type Step } from './StepChip.svelte';
 	import ChangeBar from './ChangeBar.svelte';
 	import LazyBlock from './LazyBlock.svelte';
 	import ReviewCard from './pr/ReviewCard.svelte';
@@ -26,6 +27,8 @@
 		file: DiffFile;
 		/** only show these hunks, used by guide sections */
 		only?: string[];
+		/** the guide's other steps this file is read in */
+		also?: Step[];
 		notes?: GuideNote[];
 		/** element id, defaults to the file id */
 		anchor?: string;
@@ -56,6 +59,7 @@
 	let {
 		file,
 		only,
+		also = [],
 		notes = [],
 		anchor,
 		href,
@@ -406,8 +410,16 @@
 			>
 		{/if}
 		{#if only && hunks.length < file.hunks.length}
-			<span class="shrink-0 text-[11px] text-faint">
-				{hunks.length} of {file.hunks.length} hunks
+			<span
+				class="shrink-0 text-[11px] text-faint tabular-nums"
+				title="{hunks.length} of the file's {file.hunks.length} hunks are in this step"
+				>{hunks.length}/{file.hunks.length}</span
+			>
+		{/if}
+		{#if also.length}
+			<span class="flex shrink-0 items-center gap-1 text-[11px] text-faint">
+				also in
+				{#each also as step (step.n)}<StepChip {...step} />{/each}
 			</span>
 		{/if}
 		<span class="ml-auto flex shrink-0 items-center gap-3">
