@@ -1,13 +1,12 @@
 <script lang="ts">
-	import SidebarLayout from './SidebarLayout.svelte';
+	import SidebarLayout, { diffWidth } from './SidebarLayout.svelte';
 	import type { Snippet } from 'svelte';
-	import { quintOut } from 'svelte/easing';
-	import type { TransitionConfig } from 'svelte/transition';
+	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Layout } from '$lib/diff/split';
 	import type { DiffFile } from '$lib/diff/types';
-	import { lineStats } from '$lib/diff/hunks';
+	import { columnsOf, lineStats } from '$lib/diff/hunks';
 	import { KINDS, orderSections } from '$lib/guide/order';
 	import type { Guide, GuideSection } from '$lib/guide/types';
 	import { typing } from '$lib/keys';
@@ -38,6 +37,8 @@
 		/** a column at the right, the question panel */
 		panel?: Snippet;
 		panelWidth?: number | null;
+		/** closes the question panel, for the sidebar kept open where there's no room for both */
+		onpanelclose?: () => void;
 	}
 
 	let {
@@ -50,7 +51,8 @@
 		review,
 		onregenerate,
 		panel,
-		panelWidth = $bindable(null)
+		panelWidth = $bindable(null),
+		onpanelclose
 	}: Props = $props();
 
 	// sections read core first, whatever order they were written in
@@ -94,12 +96,12 @@
 	function also(section: GuideSection, file: DiffFile): Step[] {
 		return (fileSteps.get(file.id) ?? [])
 			.filter((s) => s !== section)
-			.map((s) => {
-				const done = isReviewed(s);
-				// a reviewed step's files are folded away, its title is what's left to go to
-				const href = done ? `#${s.id}` : `#${s.id}-${file.id}`;
-				return { n: number.get(s.id)!, title: s.title, href, done };
-			});
+			.map((s) => ({
+				n: number.get(s.id)!,
+				title: s.title,
+				href: `#${s.id}-${file.id}`,
+				done: isReviewed(s)
+			}));
 	}
 
 	function counts(section: GuideSection) {
@@ -114,23 +116,55 @@
 		return `?${params}#${file.id}`;
 	}
 
-	// reviewed sections are a per-browser convenience, so localStorage is enough. Keyed by
+	// reviewed files are a per-browser convenience, so localStorage is enough. Keyed by
 	// when the guide was written too: a regenerated guide's sections share ids with the
 	// old one's, and must not show as reviewed with their diffs hidden
 	const guideKey = $derived(`${guide.repo}:${guide.start}..${guide.stop}:${guide.createdAt}`);
 	const storageKey = $derived(`sloppy-diff:reviewed:${guideKey}`);
-	// read while rendering, so reviewed steps are collapsed before the page scrolls to a step
+	// read while rendering, so reviewed files are folded before the page scrolls to a step
 	let reviewed = $derived(readJson<string[]>(storageKey, []));
 
-	// a step is reviewed with the hunks it had then, one they've changed in since isn't
+	type Group = { file: DiffFile; ids: string[] };
+	// a file is reviewed in a step with the hunks it had there then, one they've changed
+	// in since isn't. A whole step's mark is from before files were reviewed one by one
 	const mark = (section: GuideSection) => `${section.id} ${section.hunks.join(' ')}`;
-	const isReviewed = (section: GuideSection) => reviewed.includes(mark(section));
+	const fileMark = (section: GuideSection, { file, ids }: Group) =>
+		`${section.id}/${file.id} ${ids.join(' ')}`;
+	const isFileReviewed = (section: GuideSection, group: Group) =>
+		reviewed.includes(fileMark(section, group)) || reviewed.includes(mark(section));
+	/** A step is reviewed once all of its files are. */
+	const isReviewed = (section: GuideSection) => {
+		const all = groups(section);
+		return (
+			reviewed.includes(mark(section)) ||
+			(all.length > 0 && all.every((g) => isFileReviewed(section, g)))
+		);
+	};
 
-	function toggleReviewed(section: GuideSection) {
-		reviewed = isReviewed(section)
-			? reviewed.filter((r) => r !== mark(section))
-			: [...reviewed, mark(section)];
+	function setReviewed(section: GuideSection, files: Group[], on: boolean) {
+		// a whole step's mark is spread over its files first, so one can be taken back
+		let next = reviewed.includes(mark(section))
+			? [
+					...reviewed.filter((r) => r !== mark(section)),
+					...groups(section).map((g) => fileMark(section, g))
+				]
+			: reviewed;
+		const marks = files.map((g) => fileMark(section, g));
+		next = next.filter((r) => !marks.includes(r));
+		reviewed = on ? [...next, ...marks] : next;
 		writeJson(storageKey, reviewed);
+	}
+
+	/**
+	 * Marks all of a step's files, or none. Read partway down, the files above fold
+	 * and the page would land further on, so it goes back to the step's top instead.
+	 */
+	async function toggleReviewed(section: GuideSection) {
+		const step = document.getElementById(section.id);
+		const into = step && step.getBoundingClientRect().top < stickyTop;
+		setReviewed(section, groups(section), !isReviewed(section));
+		await tick();
+		if (into) step.scrollIntoView({ behavior: 'instant' });
 	}
 
 	// each step's files in the sidebar, open until it's reviewed unless the reader
@@ -144,54 +178,21 @@
 		writeJson(listsKey, lists);
 	}
 
-	const FOLD = 240;
-	const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+	// with room beside the diffs, each step's title, description and files sit in a
+	// column of their own that stays beside its diffs: the room the diffs keep beside the
+	// panels (their longest line, see SidebarLayout), the step's column (28rem) and the
+	// gap between (4rem). Never at the cost of the diffs' room
+	const chars = $derived(columnsOf(files));
+	let mainWidth = $state(0);
+	const wide = $derived(mainWidth - 32 >= diffWidth(layout, chars) + 32 * 16);
 
-	/**
-	 * Folds a reviewed step's body up into its title. With the title stuck partway down
-	 * the step, the part scrolled away above it goes at once and the page scrolls with
-	 * it, so nothing on screen moves. The rest folds up and the next step follows right
-	 * below the title, like collapsing a file does, rather than the page landing a few
-	 * steps further on.
-	 */
-	function fold(node: HTMLElement): TransitionConfig {
-		const inner = node.firstElementChild as HTMLElement;
-		const box = node.getBoundingClientRect();
-		const under = (node.previousElementSibling as HTMLElement).getBoundingClientRect().bottom;
-		const hidden = box.top < under && box.bottom > under ? under - box.top : 0;
-		const height = box.height - hidden;
-		node.style.overflow = 'clip';
-		if (hidden) {
-			const top = inner.getBoundingClientRect().top;
-			node.style.height = `${height}px`;
-			inner.style.marginTop = `${-hidden}px`;
-			// measured, the browser's scroll anchoring may have made up for it already
-			const moved = inner.getBoundingClientRect().top - top;
-			if (moved) window.scrollBy({ top: moved, behavior: 'instant' });
-		}
-		return {
-			duration: still() ? 0 : FOLD,
-			easing: quintOut,
-			css: (t) => `height: ${t * height}px`
-		};
-	}
-
-	/**
-	 * Opens a step's body again, and undoes a fold cut short by opening it mid-way.
-	 * Clipped rather than hidden like `slide` does: hidden would make the body a scroll
-	 * container, and its files' sticky headers would stick inside it, over their first
-	 * hunk, until it's open.
-	 */
-	function unfold(node: HTMLElement): TransitionConfig {
-		node.style.overflow = node.style.height = '';
-		(node.firstElementChild as HTMLElement).style.marginTop = '';
-		const height = node.offsetHeight;
-		return {
-			duration: still() ? 0 : FOLD,
-			easing: quintOut,
-			css: (t) => `overflow: clip; height: ${t * height}px`
-		};
-	}
+	// stuck, a step's column sits in the middle of the screen below the page's header,
+	// at the top once it's as tall as that
+	let innerHeight = $state(0);
+	let columnHeights = $state<Record<string, number>>({});
+	const columnTop = (id: string) =>
+		stickyTop + Math.max(16, (innerHeight - stickyTop - (columnHeights[id] ?? 0)) / 2);
+	const pad = (n: number) => String(n).padStart(2, '0');
 
 	/** steps whose description has scrolled up under their sticky title */
 	let past = $state<Record<string, boolean>>({});
@@ -230,11 +231,11 @@
 
 	$effect(() => () => clearTimeout(hoverTimer));
 
-	// its ⓘ is gone once the description is back in view or the step is reviewed, and
+	// its ⓘ is gone once the description is back in view, and
 	// the panel mustn't pop open again by itself when the ⓘ returns
 	$effect(() => {
 		const open = sections.find((s) => s.id === described);
-		if (open && (!past[open.id] || isReviewed(open))) described = null;
+		if (open && !past[open.id]) described = null;
 	});
 
 	const progress = $derived(
@@ -260,9 +261,17 @@
 	}
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} bind:innerHeight />
 
-<SidebarLayout {layout} {stickyTop} asideClass="overflow-y-auto" {panel} bind:panelWidth>
+<SidebarLayout
+	{layout}
+	{chars}
+	{stickyTop}
+	asideClass="overflow-y-auto"
+	{panel}
+	bind:panelWidth
+	{onpanelclose}
+>
 	{#snippet aside()}
 		<div class="border-b border-line p-4">
 			<p class="text-[13px] leading-snug font-medium">{guide.title}</p>
@@ -356,52 +365,31 @@
 										{/if}
 									</span>
 								</a>
-								<button
-									type="button"
-									class="mt-px grid size-[18px] shrink-0 place-items-center rounded-md text-faint hover:bg-line hover:text-fg"
-									aria-expanded={listed(section)}
-									aria-label="{listed(section) ? 'Hide' : 'Show'} the files of {section.title}"
-									title={listed(section) ? 'Hide its files' : 'Show its files'}
-									onclick={() => toggleList(section)}
-								>
-									<svg
-										viewBox="0 0 16 16"
-										class={['size-3 transition-transform', !listed(section) && '-rotate-90']}
-										fill="none"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-										stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
+								<!-- beside the diffs, each step's own column lists its files -->
+								{#if !wide}
+									<button
+										type="button"
+										class="mt-px grid size-[18px] shrink-0 place-items-center rounded-md text-faint hover:bg-line hover:text-fg"
+										aria-expanded={listed(section)}
+										aria-label="{listed(section) ? 'Hide' : 'Show'} the files of {section.title}"
+										title={listed(section) ? 'Hide its files' : 'Show its files'}
+										onclick={() => toggleList(section)}
 									>
-								</button>
-							</div>
-							{#if listed(section)}
-								<!-- each step's files, to jump to one. A reviewed step's are folded away, its
-							     title is what's left to go to -->
-								<div class={['flex flex-col pb-1 pl-[30px]', done && 'opacity-60']}>
-									{#each groups(section) as { file, ids } (file.id)}
-										{@const path = splitPath(displayPath(file))}
-										{@const others = also(section, file)}
-										<div
-											class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] hover:bg-subtle"
+										<svg
+											viewBox="0 0 16 16"
+											class={['size-3 transition-transform', !listed(section) && '-rotate-90']}
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
 										>
-											<StatusBadge status={file.status} />
-											<a
-												href={done ? `#${section.id}` : `#${section.id}-${file.id}`}
-												class="min-w-0 flex-1 truncate font-mono text-muted hover:text-fg"
-												title={displayPath(file)}>{path.name}</a
-											>
-											{#if ids.length < file.hunks.length}
-												<span
-													class="shrink-0 font-mono text-[10.5px] text-faint tabular-nums"
-													title="{ids.length} of the file's {file.hunks
-														.length} hunks are in this step">{ids.length}/{file.hunks.length}</span
-												>
-											{/if}
-											{#each others as step (step.n)}<StepChip {...step} />{/each}
-										</div>
-									{/each}
-								</div>
+									</button>
+								{/if}
+							</div>
+							{#if !wide && listed(section)}
+								<!-- each step's files, to jump to one -->
+								<div class="flex flex-col pb-1 pl-[30px]">{@render fileRows(section)}</div>
 							{/if}
 						{/each}
 					</div>
@@ -445,12 +433,16 @@
 		{/each}
 	{/snippet}
 
-	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
+	<main
+		class={['flex min-w-0 flex-col p-4 pb-40', wide ? 'gap-24' : 'gap-16']}
+		bind:clientWidth={mainWidth}
+	>
 		<!-- clipped to its corners, so a header band can run edge to edge -->
 		<div
 			class={[
 				'page-column overflow-clip rounded-xl border border-line bg-surface',
-				layout === 'unified' && 'narrow'
+				// as wide as the steps below it
+				wide ? ['two-col', layout] : layout === 'unified' && 'narrow'
 			]}
 		>
 			{#if guide.earlier}
@@ -504,140 +496,220 @@
 
 		{#each sections as section (section.id)}
 			{@const done = isReviewed(section)}
-			<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
-			<article id={section.id} class="flex scroll-mt-23 flex-col">
-				<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
-				<header class="sticky top-23 z-[12] -mx-4 border-b border-line bg-canvas px-5">
-					<!-- the line runs across the page, what's on it stays in the step's column -->
+			{#if wide}
+				<!-- what the step is about in a column of its own, staying beside its diffs -->
+				<article id={section.id} class={['page-column two-col grid scroll-mt-23 gap-16', layout]}>
 					<div
-						class={['page-column flex h-11 items-center gap-2.5', layout === 'unified' && 'narrow']}
+						class="sticky flex flex-col gap-3 self-start overflow-x-hidden overflow-y-auto pb-1"
+						style:top="{columnTop(section.id)}px"
+						bind:clientHeight={columnHeights[section.id]}
+						style:max-height="calc(100vh - {stickyTop + 32}px)"
 					>
-						<span
-							class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
-							>{number.get(section.id)}</span
-						>
-						<h2 class={['min-w-0 text-[15px] font-semibold tracking-tight', done && 'text-muted']}>
-							<!-- back to the top of the step, for the description in place -->
-							<button
-								type="button"
-								class="block max-w-full truncate text-left"
-								title={section.title}
-								onclick={() =>
-									document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
-								>{section.title}</button
-							>
+						<p class="flex items-center gap-2 text-[11px] text-faint tabular-nums">
+							{pad(number.get(section.id)!)} / {pad(sections.length)}
+							<span class="flex-1"></span>
+							{@render badges(section)}
+						</p>
+						<h2 class={['-mt-2 text-[16px] font-semibold tracking-tight', done && 'text-muted']}>
+							{section.title}
 						</h2>
-						{#if past[section.id] && !done}
-							<!-- the description once it has scrolled away, over the diff rather than pushing it -->
-							<Popover
-								bind:open={
-									() => described === section.id, (open) => (described = open ? section.id : null)
-								}
-								onpointerenter={(e) => hover(e, section.id)}
-								onpointerleave={(e) => hover(e, null)}
-								class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
-							>
-								{#snippet trigger(props)}
-									<button
-										{...props}
-										onpointerenter={(e) => hover(e, section.id)}
-										onpointerleave={(e) => hover(e, null)}
-										onclick={(e) => {
-											// already open from hovering, the click keeps it open rather than closing it
-											if (described === section.id) e.preventDefault();
-										}}
-										class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
-										title="Show what this step is about"
-										aria-label="Show the description of {section.title}"
-									>
-										<svg
-											viewBox="0 0 16 16"
-											class="size-3.5"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="1.5"
-											stroke-linecap="round"
-											><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
-										>
-									</button>
-								{/snippet}
-								{@render description(section)}
-							</Popover>
-						{/if}
-						<span class="flex-1"></span>
-						{#if guide.earlier && section.changed}
-							<span
-								class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
-								title="Its code changed since the guide was written, the description may be out of date"
-								>changed</span
-							>
-						{/if}
-						<span
+						{@render description(section)}
+						<div class="-mx-1.5 flex flex-col">{@render fileRows(section)}</div>
+						<div>{@render reviewButton(section, done)}</div>
+					</div>
+					<div class="flex min-w-0 flex-col gap-4">{@render diffs(section, false)}</div>
+				</article>
+			{:else}
+				<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
+				<article id={section.id} class="flex scroll-mt-23 flex-col">
+					<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
+					<header class="sticky top-23 z-[12] -mx-4 border-b border-line bg-canvas px-5">
+						<!-- the line runs across the page, what's on it stays in the step's column -->
+						<div
 							class={[
-								'shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium',
-								section.kind === 'core' && 'bg-accent/10 text-accent',
-								section.kind === 'supporting' && 'bg-subtle text-muted',
-								section.kind === 'chore' && 'text-faint'
-							]}>{section.kind}</span
-						>
-						<button
-							type="button"
-							class={[
-								'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
-								done
-									? 'border-add/40 bg-add/10 text-add'
-									: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
+								'page-column flex h-11 items-center gap-2.5',
+								layout === 'unified' && 'narrow'
 							]}
-							onclick={() => toggleReviewed(section)}
 						>
-							<svg
-								viewBox="0 0 16 16"
-								class="size-3"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
+							<span
+								class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
+								>{number.get(section.id)}</span
 							>
-							{done ? 'Reviewed' : 'Mark reviewed'}
-						</button>
-					</div>
-				</header>
-
-				{#if !done}
-					<!-- right after the title, which the fold measures against -->
-					<div in:unfold out:fold>
-						<div class="flex flex-col gap-3 pt-3">
-							<div
-								class={['page-column pr-1 pl-[35px]', layout === 'unified' && 'narrow']}
-								{@attach trackPast(section.id)}
+							<h2
+								class={['min-w-0 text-[15px] font-semibold tracking-tight', done && 'text-muted']}
 							>
-								{@render description(section)}
-							</div>
-							{#each groups(section) as { file, ids } (file.id)}
-								<FileDiff
-									{file}
-									only={ids}
-									also={also(section, file)}
-									notes={section.notes}
-									anchor="{section.id}-{file.id}"
-									href={fileHref(file)}
-									inSection
-									{layout}
-									{virtualize}
-									{threads}
-									{review}
-									section={section.id}
-									remember="{guideKey}:{section.id}"
-								/>
-							{/each}
+								<!-- back to the top of the step, for the description in place -->
+								<button
+									type="button"
+									class="block max-w-full truncate text-left"
+									title={section.title}
+									onclick={() =>
+										document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
+									>{section.title}</button
+								>
+							</h2>
+							{#if past[section.id]}
+								<!-- the description once it has scrolled away, over the diff rather than pushing it -->
+								<Popover
+									bind:open={
+										() => described === section.id, (open) => (described = open ? section.id : null)
+									}
+									onpointerenter={(e) => hover(e, section.id)}
+									onpointerleave={(e) => hover(e, null)}
+									class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
+								>
+									{#snippet trigger(props)}
+										<button
+											{...props}
+											onpointerenter={(e) => hover(e, section.id)}
+											onpointerleave={(e) => hover(e, null)}
+											onclick={(e) => {
+												// already open from hovering, the click keeps it open rather than closing it
+												if (described === section.id) e.preventDefault();
+											}}
+											class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
+											title="Show what this step is about"
+											aria-label="Show the description of {section.title}"
+										>
+											<svg
+												viewBox="0 0 16 16"
+												class="size-3.5"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.5"
+												stroke-linecap="round"
+												><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+											>
+										</button>
+									{/snippet}
+									{@render description(section)}
+								</Popover>
+							{/if}
+							<span class="flex-1"></span>
+							{@render badges(section)}
+							{@render reviewButton(section, done)}
 						</div>
+					</header>
+					<div class="flex flex-col gap-3 pt-3">
+						<div
+							class={['page-column pr-1 pl-[35px]', layout === 'unified' && 'narrow']}
+							{@attach trackPast(section.id)}
+						>
+							{@render description(section)}
+						</div>
+						{@render diffs(section, true)}
 					</div>
-				{/if}
-			</article>
+				</article>
+			{/if}
 		{/each}
 	</main>
 </SidebarLayout>
+
+{#snippet badges(section: GuideSection)}
+	{#if guide.earlier && section.changed}
+		<span
+			class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
+			title="Its code changed since the guide was written, the description may be out of date"
+			>changed</span
+		>
+	{/if}
+	<span
+		class={[
+			'shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium',
+			section.kind === 'core' && 'bg-accent/10 text-accent',
+			section.kind === 'supporting' && 'bg-subtle text-muted',
+			section.kind === 'chore' && 'text-faint'
+		]}>{section.kind}</span
+	>
+{/snippet}
+
+{#snippet reviewButton(section: GuideSection, done: boolean)}
+	<button
+		type="button"
+		class={[
+			'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
+			done
+				? 'border-add/40 bg-add/10 text-add'
+				: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
+		]}
+		onclick={() => toggleReviewed(section)}
+	>
+		<svg
+			viewBox="0 0 16 16"
+			class="size-3"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
+		>
+		{done ? 'Reviewed' : 'Mark reviewed'}
+	</button>
+{/snippet}
+
+{#snippet diffs(section: GuideSection, inSection: boolean)}
+	{#each groups(section) as group (group.file.id)}
+		<FileDiff
+			file={group.file}
+			only={group.ids}
+			also={also(section, group.file)}
+			reviewed={isFileReviewed(section, group)}
+			onreviewed={(on) => setReviewed(section, [group], on)}
+			notes={section.notes}
+			anchor="{section.id}-{group.file.id}"
+			href={fileHref(group.file)}
+			{inSection}
+			floating={!inSection}
+			{layout}
+			{virtualize}
+			{threads}
+			{review}
+			section={section.id}
+			remember="{guideKey}:{section.id}"
+		/>
+	{/each}
+{/snippet}
+
+<!-- a step's files, to jump to one in it and tick it reviewed -->
+{#snippet fileRows(section: GuideSection)}
+	{#each groups(section) as group (group.file.id)}
+		{@const { file, ids } = group}
+		{@const path = splitPath(displayPath(file))}
+		{@const done = isFileReviewed(section, group)}
+		<div class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11.5px] hover:bg-subtle">
+			<StatusBadge status={file.status} />
+			<a
+				href="#{section.id}-{file.id}"
+				class={[
+					'min-w-0 flex-1 truncate font-mono hover:text-fg',
+					done ? 'text-faint' : 'text-muted'
+				]}
+				title={displayPath(file)}>{path.name}</a
+			>
+			{#if ids.length < file.hunks.length}
+				<span
+					class="shrink-0 font-mono text-[10.5px] text-faint tabular-nums"
+					title="{ids.length} of the file's {file.hunks.length} hunks are in this step"
+					>{ids.length}/{file.hunks.length}</span
+				>
+			{/if}
+			{#each also(section, file) as step (step.n)}<StepChip {...step} />{/each}
+			<button
+				type="button"
+				class={[
+					'grid size-4 shrink-0 place-items-center rounded-sm',
+					done ? 'text-add hover:opacity-80' : 'text-line hover:text-muted'
+				]}
+				aria-pressed={done}
+				aria-label="{done ? 'Mark as not reviewed' : 'Mark reviewed'}: {displayPath(file)}"
+				title={done ? 'Mark as not reviewed' : 'Mark reviewed'}
+				onclick={() => setReviewed(section, [group], !done)}
+			>
+				{@render checkmark('size-3')}
+			</button>
+		</div>
+	{/each}
+{/snippet}
 
 {#snippet checkmark(className: string)}
 	<svg
@@ -675,6 +747,21 @@
 		width: 2px;
 		border-radius: 1px;
 		background: var(--accent);
+	}
+	/* a step's column and its diffs beside it, centred as one. The diffs get their
+	   width first, the step's column what's left of the cap, from 28rem up to 40rem */
+	.two-col {
+		--cap: 104rem;
+		grid-template-columns: minmax(28rem, 1fr) minmax(0, 60rem);
+	}
+	.two-col.split {
+		--cap: 164rem;
+		grid-template-columns: minmax(28rem, 1fr) minmax(0, 120rem);
+	}
+	/* picked in the View settings, the diffs fill the space between the panels */
+	:global(.full-width) .two-col {
+		--cap: 100%;
+		grid-template-columns: 28rem minmax(0, 1fr);
 	}
 	/* a question in the section is being answered */
 	.answering {

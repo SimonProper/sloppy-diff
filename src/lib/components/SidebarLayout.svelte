@@ -1,12 +1,31 @@
 <script module lang="ts">
+	import type { Layout } from '$lib/diff/split';
+
 	/** the right panel's width, saved under this key when dragged */
 	export const PANEL_KEY = 'ask-panel-width';
 	export const PANEL_DEFAULT = 440;
+
+	// what surrounds the code in FileDiff: line number gutters, the left and right
+	// padding, the slot for question markers and the card's border
+	const CHROME: Record<Layout, number> = {
+		unified: 96 + 12 + 32 + 14 + 2,
+		split: 2 * (48 + 12 + 16 + 14) + 2
+	};
+	/** the diffs' column at its widest (see `.page-column`) */
+	const COLUMN: Record<Layout, number> = { unified: 60 * 16, split: 120 * 16 };
+
+	/**
+	 * How wide the diffs need to be for lines of `chars` columns, per side when split, at
+	 * `char` pixels a character. No wider than their column, more room than that goes
+	 * beside it, not to their lines.
+	 */
+	export function diffWidth(layout: Layout, chars: number, char = 7.5) {
+		return Math.min(char * chars * (layout === 'split' ? 2 : 1) + CHROME[layout], COLUMN[layout]);
+	}
 </script>
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { Layout } from '$lib/diff/split';
 	import { typing } from '$lib/keys';
 	import { readText, writeText } from '$lib/storage';
 	import ResizeHandle, { storedSize } from './ResizeHandle.svelte';
@@ -16,6 +35,8 @@
 		stickyTop?: number;
 		/** how diffs are shown, split needs room for two sides */
 		layout: Layout;
+		/** columns of code the diffs always have room for, per side when split */
+		chars?: number;
 		/** the sidebar, without one its column is gone */
 		aside?: Snippet;
 		/** where the sidebar's width is remembered, one per kind of sidebar */
@@ -33,11 +54,14 @@
 		panel?: Snippet;
 		/** its width as dragged, null for the default */
 		panelWidth?: number | null;
+		/** closes the panel, for the sidebar kept open where there's no room for both */
+		onpanelclose?: () => void;
 	}
 
 	let {
 		stickyTop = 48,
 		layout,
+		chars = 100,
 		aside,
 		sizeKey = 'sidebar-width',
 		defaultWidth = 272,
@@ -45,25 +69,26 @@
 		children,
 		asideClass = '',
 		panel: panelContent,
-		panelWidth = $bindable(null)
+		panelWidth = $bindable(null),
+		onpanelclose
 	}: Props = $props();
 
 	const MIN = 200;
-	/** characters of code a diff always has room for, per side when split */
-	const CHARS = 80;
-	// what surrounds the code in FileDiff: line number gutters, the left and right
-	// padding, the slot for question markers, the card's border, and the page's
-	// padding around the cards
-	const CHROME: Record<Layout, number> = {
-		unified: 96 + 12 + 32 + 14 + 2 + 32,
-		split: 2 * (48 + 12 + 16 + 14) + 2 + 32
-	};
+	/** characters the font is measured over */
+	const PROBE = 100;
 
 	let total = $state(0);
 	let rightPanel = $state<HTMLElement>();
 	const PANEL_MIN = 360;
-	/** the widest the right panel gets, the diffs keep this much */
-	const PANEL_MAX = $derived(Math.max(PANEL_MIN, total - 480));
+	/**
+	 * The widest the right panel gets: the diffs keep room for their lines beside
+	 * it, so dragging it wider stops there rather than the code scrolling. The sidebar
+	 * narrows and then folds into its rail to make room, only the rail is kept, or
+	 * kept open, its narrowest.
+	 */
+	const PANEL_MAX = $derived.by(() =>
+		Math.max(PANEL_MIN, total - diffMin - (aside ? (keepOpen ? MIN : RAIL) : 0))
+	);
 	const panelSize = $derived(Math.min(Math.max(panelWidth ?? PANEL_DEFAULT, PANEL_MIN), PANEL_MAX));
 	/** the right column, 0 while the panel is closed so opening it can ease */
 	const right = $derived(panelContent ? panelSize : 0);
@@ -77,17 +102,18 @@
 	/** width of a character of code, measured since it depends on the font */
 	let char = $state(7.5);
 
-	const diffMin = $derived(char * CHARS * (layout === 'split' ? 2 : 1) + CHROME[layout]);
+	/** the diffs and the page's padding around them */
+	const diffMin = $derived(diffWidth(layout, chars, char) + 32);
 	/** no room for even the narrowest sidebar beside the diff */
 	const narrow = $derived(total > 0 && room - diffMin < MIN);
 
 	const DOCKED_KEY = 'sidebar-docked';
-	/** kept beside the diffs when they're narrow, their long lines wrapping instead */
+	/** kept beside the diffs when they're narrow, the question panel giving way to it */
 	let docked = $state(readText(DOCKED_KEY) === 'true');
 
 	// the diff's minimum wins over a wide sidebar, in a narrow window or when switching to
-	// split. Docked, lines wrap anyway, so the diff only keeps three quarters of it
-	const max = $derived(Math.max(MIN, room - (narrow && docked ? diffMin * 0.75 : diffMin)));
+	// split. Only a window too small for both panels' narrowest takes from it
+	const max = $derived(Math.max(MIN, room - diffMin));
 	const width = $derived(Math.min(Math.max(stored ?? defaultWidth, MIN), max));
 
 	/** the rail's width */
@@ -97,7 +123,12 @@
 	let folded = $state(readText(FOLDED_KEY) === 'true');
 
 	// otherwise it folds into a rail, opening over the diffs at the width it would have had
-	const rail = $derived(narrow ? !docked : folded);
+	// the sidebar kept open and the panel are pinned, where there's no room for both at
+	// their narrowest the one pinned last stays: opening the panel folds the sidebar for
+	// as long as it's open, keeping the sidebar open closes the panel
+	const crowded = $derived(total > 0 && total - diffMin - PANEL_MIN < MIN);
+	const keepOpen = $derived(docked && !(panelContent && crowded));
+	const rail = $derived(narrow ? !keepOpen : folded);
 	const expanded = $derived(Math.min(Math.max(stored ?? defaultWidth, MIN), room - RAIL));
 
 	let opened = $state(false);
@@ -130,6 +161,12 @@
 		if (narrow) {
 			docked = next;
 			writeText(DOCKED_KEY, next ? 'true' : null);
+			// kept open, it stays open once there's room again too, as when it closes the panel
+			if (next) {
+				folded = false;
+				writeText(FOLDED_KEY, null);
+			}
+			if (next && panelContent && crowded) onpanelclose?.();
 		} else {
 			folded = !next;
 			writeText(FOLDED_KEY, next ? null : 'true');
@@ -214,7 +251,7 @@
 	$effect(() => () => (clearTimeout(tipTimer), clearTimeout(moveTimer), clearTimeout(panelTimer)));
 
 	$effect(() => {
-		const measure = () => (char = probe.getBoundingClientRect().width / CHARS || char);
+		const measure = () => (char = probe.getBoundingClientRect().width / PROBE || char);
 		measure();
 		// the code font may still be loading
 		document.fonts?.ready.then(measure);
@@ -296,7 +333,9 @@
 							class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
 							title={rail
 								? narrow
-									? 'Keep the sidebar open, long lines wrap'
+									? panelContent && crowded
+										? 'Keep the sidebar open, closing the question panel'
+										: 'Keep the sidebar open, long lines wrap'
 									: 'Keep the sidebar open'
 								: 'Fold into a rail'}
 							onclick={() => dock(rail)}
@@ -395,7 +434,7 @@
 		bind:this={probe}
 		aria-hidden="true"
 		class="pointer-events-none invisible absolute font-mono text-[12.5px] whitespace-pre"
-		>{'0'.repeat(CHARS)}</span
+		>{'0'.repeat(PROBE)}</span
 	>
 </div>
 

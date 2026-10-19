@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { spanAt } from './hunks';
+import { columnsOf, spanAt } from './hunks';
 import { parseDiff } from './parse';
 
 // old: 1 a, 2 b, 3 c, 4 d   new: 1 a, 2 B, 3 c, 4 x, 5 d
@@ -25,5 +25,19 @@ describe('spanAt', () => {
 		expect(spanAt(files, 'f.ts', 'new', 9)).toBeNull();
 		expect(spanAt(files, 'g.ts', 'new', 2)).toBeNull();
 		expect(spanAt(files, 'f.ts', 'new', 2, 4)).toBeNull();
+	});
+});
+
+describe('columnsOf', () => {
+	const line = (text: string) =>
+		parseDiff(`diff --git a/g.ts b/g.ts\n--- a/g.ts\n+++ b/g.ts\n@@ -1,0 +1,1 @@\n+${text}\n`);
+
+	test('room for the longest line, tabs counted at 8', () => {
+		expect(columnsOf(line('\t'.repeat(11) + 'x'))).toBe(89);
+	});
+
+	test('at least 80 columns, at most 120', () => {
+		expect(columnsOf(files)).toBe(80);
+		expect(columnsOf(line('x'.repeat(300)))).toBe(120);
 	});
 });

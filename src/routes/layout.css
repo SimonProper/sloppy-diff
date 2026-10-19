@@ -349,16 +349,21 @@ html:has(dialog:modal) {
 }
 
 /* a column centred on the page, not between the panels (SidebarLayout's --left and --right),
-   unless that pushes it into one. As wide as a 100-column line and its gutter, per side of a
-   split diff, so on a wide screen a diff's header stays near its code */
+   unless that brings it within 8rem of one: with less room than that it's centred between
+   them, rather than up against one with all the room on the other side. As wide as a
+   100-column line and its gutter, per side of a split diff, so on a wide screen a diff's
+   header stays near its code */
 .page-column {
 	--cap: 120rem;
+	/* unregistered, so they're substituted as written and the 100% is the margin's */
+	--slack: max(0px, 100% - var(--cap));
+	--gutter: min(8rem, var(--slack) / 2);
 	width: 100%;
 	max-width: var(--cap);
 	margin-left: clamp(
-		0px,
-		calc((max(0px, 100% - var(--cap)) + var(--right, 0px) - var(--left, 0px)) / 2),
-		max(0px, 100% - var(--cap))
+		var(--gutter),
+		calc((var(--slack) + var(--right, 0px) - var(--left, 0px)) / 2),
+		calc(var(--slack) - var(--gutter))
 	);
 }
 .page-column.narrow {

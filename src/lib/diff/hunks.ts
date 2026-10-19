@@ -1,6 +1,21 @@
 import type { LineSpan, Side } from '$lib/ask/types';
 import type { DiffFile, DiffLine, Hunk } from './types';
 
+/** The longest of `lines` in columns, tabs at their default width of 8. */
+export const widest = (lines: DiffLine[]) =>
+	lines.reduce((w, l) => Math.max(w, l.text.replace(/\t/g, '        ').length), 0);
+
+/**
+ * The columns a diff's code gets room for beside the panels: its longest line, from 80
+ * columns, up to 120. A line longer than that scrolls rather than holding the panels back.
+ */
+export function columnsOf(files: DiffFile[]) {
+	let longest = 0;
+	for (const file of files)
+		for (const hunk of file.hunks) longest = Math.max(longest, widest(hunk.lines));
+	return Math.min(120, Math.max(80, longest));
+}
+
 /** the file and hunk with this id, null once it's gone from the diff */
 export function findHunk(files: DiffFile[], id: string): { file: DiffFile; hunk: Hunk } | null {
 	for (const file of files) {

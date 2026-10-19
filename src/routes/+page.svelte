@@ -7,6 +7,7 @@
 	import { remember } from '$lib/prefs';
 	import { typing } from '$lib/keys';
 	import { sameSha } from '$lib/refs';
+	import { columnsOf } from '$lib/diff/hunks';
 	import { repoName } from '$lib/repos';
 	import { Threads } from '$lib/ask/threads.svelte';
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
@@ -910,6 +911,7 @@
 			threads={asking}
 			review={pr?.threads}
 			panel={docked ? askPanel : undefined}
+			onpanelclose={() => asking?.close()}
 			bind:panelWidth
 			onregenerate={guideHere}
 		/>
@@ -1005,12 +1007,14 @@
 		{/snippet}
 		<SidebarLayout
 			layout={shownLayout}
+			chars={columnsOf(diff.files)}
 			{stickyTop}
 			aside={view === 'overview' ? prSidebar : fileSidebar}
 			rail={view === 'overview' ? undefined : fileRail}
 			sizeKey={view === 'overview' ? 'pr-sidebar-width' : undefined}
 			defaultWidth={view === 'overview' ? 340 : undefined}
 			panel={docked ? askPanel : undefined}
+			onpanelclose={() => asking?.close()}
 			bind:panelWidth
 		>
 			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
@@ -1038,6 +1042,7 @@
 							threads={asking}
 							review={pr?.threads}
 							remember={data.repo}
+							floating
 							source={diff.selection
 								? { repo: data.repo, rev: diff.selection.range?.to ?? '' }
 								: undefined}
