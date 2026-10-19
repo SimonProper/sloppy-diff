@@ -7,23 +7,19 @@
 		steps: Step[];
 		/** the answer being written, when it still is */
 		live?: Live;
-		/** the parent's ticking clock, for the elapsed time of `live` */
-		now?: number;
 		thinkingMs?: number;
 		thinkingTokens?: number;
 		/** answered trails start open or folded, the reader's preference */
 		preferOpen: boolean;
 	}
 
-	let { steps, live, now = 0, thinkingMs, thinkingTokens = 0, preferOpen }: Props = $props();
+	let { steps, live, thinkingMs, thinkingTokens = 0, preferOpen }: Props = $props();
 
 	/** set once the reader opens or folds this trail themselves */
 	let chosen = $state<boolean | null>(null);
 	// while the agent works the trail is the thing to watch, once the answer starts it folds away
 	const working = $derived(live !== undefined && !live.text);
 	const open = $derived(working || (chosen ?? preferOpen));
-
-	const elapsed = $derived(live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0);
 
 	// The agent's own, a blast radius's analysis steps carry what they found and aren't counted
 	const reads = $derived(
@@ -86,9 +82,6 @@
 				>
 			{/if}
 			<ToolText text={current} />
-			{#if working}
-				<span class="text-faint tabular-nums">· {elapsed}s</span>
-			{/if}
 		</button>
 
 		{#if open}

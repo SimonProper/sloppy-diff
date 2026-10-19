@@ -1,10 +1,11 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { tick, untrack, type Snippet } from 'svelte';
 	import { providerLabel } from '$lib/agent';
-	import type { Threads } from '$lib/ask/threads.svelte';
+	import type { Live, Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
 	import AskField from './AskField.svelte';
+	import ToolText from '../ToolText.svelte';
 	import StreamText from './StreamText.svelte';
 	import Trail from './Trail.svelte';
 
@@ -44,6 +45,7 @@
 		const timer = setInterval(() => (now = Date.now()), 500);
 		return () => clearInterval(timer);
 	});
+	const elapsed = $derived(live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0);
 
 	async function send(text: string) {
 		sending = true;
@@ -119,17 +121,49 @@
 		return suggestion.side === 'old' ? `${lines}, old side` : lines;
 	}
 
-	// follow the answer as it streams, unless the reader scrolled up to read. The lens
-	// makes a new one of these for each question, so it starts at the bottom
+	/** The answer being written, in the place its message will take, so it stays the same element. */
+	type Item = Message & { live?: Live };
+	const items = $derived<Item[]>(
+		live && thread.messages.at(-1)?.role === 'user'
+			? [...thread.messages, { role: 'assistant', text: live.text, createdAt: '', live }]
+			: thread.messages
+	);
+	/** questions and the answers to them, by the index of their first message */
+	const turns = $derived.by(() => {
+		const out: { start: number; items: Item[] }[] = [];
+		items.forEach((item, i) => {
+			if (item.role === 'user' || !out.length) out.push({ start: i, items: [] });
+			out.at(-1)!.items.push(item);
+		});
+		return out;
+	});
+
+	// A question sent here goes to the top, its answer growing under it while the view
+	// stays still, its turn tall enough for that. The view follows the answer only once it
+	// outgrows the view and the reader is at the bottom, scrolling up stops that until they're
+	// back. It starts at the bottom, the lens makes a new one of these for each question
 	let body = $state<HTMLElement>();
-	let pinned = true;
-	let shown = $state(0);
+	let viewport = $state(0);
+	/** the body's padding, above and below */
+	let pad = $state({ top: 0, bottom: 0 });
+	let following = true;
+	/** the question sent last while this was open */
+	let sent = $state<number | null>(null);
+	let count = untrack(() => thread.messages.length);
 	$effect(() => {
-		void thread.messages.length;
-		void shown;
-		void live?.steps.length;
-		void live?.steps.at(-1)?.text.length;
-		if (body && pinned) body.scrollTop = body.scrollHeight;
+		const n = thread.messages.length;
+		if (n > count && thread.messages[n - 1].role === 'user') {
+			sent = n - 1;
+			tick().then(() => {
+				const turn = body?.querySelector(`[data-turn="${n - 1}"]`);
+				if (!body || !turn) return;
+				const top =
+					turn.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+				const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+				body.scrollTo({ top: top - pad.top, behavior: reduced ? 'instant' : 'smooth' });
+			});
+		}
+		count = n;
 	});
 </script>
 
@@ -192,131 +226,171 @@
 
 	<div
 		bind:this={body}
+		bind:clientHeight={viewport}
 		class="min-h-0 flex-1 overflow-y-auto px-5 pt-[18px] pb-6"
 		onscroll={(e) => {
 			const el = e.currentTarget;
-			pinned = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+			following = el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+		}}
+		{@attach (el) => {
+			const style = getComputedStyle(el);
+			pad = { top: parseFloat(style.paddingTop), bottom: parseFloat(style.paddingBottom) };
 		}}
 	>
-		{#each thread.messages as message, i (i)}
-			{@const last = i === thread.messages.length - 1}
-			{#if message.role === 'user'}
-				<p
-					class={[
-						'ml-auto w-fit max-w-[85%] rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
-						i > 0 && 'mt-[26px]'
-					]}
+		<div
+			{@attach (el) => {
+				const observer = new ResizeObserver(() => {
+					if (following && body) body.scrollTop = body.scrollHeight;
+				});
+				observer.observe(el);
+				return () => observer.disconnect();
+			}}
+		>
+			{#each turns as turn, t (turn.start)}
+				<div
+					data-turn={turn.start}
+					style:min-height={t === turns.length - 1 && sent === turn.start
+						? `${viewport - pad.top - pad.bottom}px`
+						: undefined}
 				>
-					{message.text}
-				</p>
-			{:else}
-				<div class="mt-3.5">
-					<Trail
-						steps={message.steps ?? []}
-						thinkingMs={message.thinkingMs}
-						thinkingTokens={message.thinkingTokens}
-						preferOpen={threads.trailOpen}
-					/>
-					{#if message.error}
-						<p class="flex items-center gap-2.5 text-[12px]">
-							{#if message.error === 'Cancelled'}
-								<span class="text-muted">Stopped after {seconds(message.durationMs)}</span>
-							{:else}
-								<span class="text-del">Couldn't answer: {message.error}</span>
-							{/if}
-							{#if last && !live}
-								<button
-									type="button"
-									class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-									onclick={retry}>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</button
-								>
-							{/if}
-							{#if i === firstAnswer}<span class="text-[11px] text-faint">{@render deleting()}</span
-								>{/if}
-						</p>
-					{:else}
-						<div class="answer prose text-[13.5px] leading-relaxed">{@html message.html}</div>
-						{#if message.suggestions}
-							<ol class="mt-3 flex flex-col gap-2">
-								{#each message.suggestions as suggestion, n (n)}
-									{@const key = `${i}.${n}`}
-									<li
-										class="rounded-[calc(var(--radius)*1.25)] border border-line px-3 pt-2 pb-2.5"
-									>
-										<p class="flex items-center gap-2 text-[11px] text-faint">
-											<span class="tabular-nums">#{n + 1}</span>
-											{#if suggestion.kind === 'review'}
-												<span class="min-w-0 truncate font-medium text-fg" title={suggestion.path}
-													>{suggestion.path}</span
-												>
-											{/if}
-											<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
-											<span class="flex-1"></span>
-											{#if suggestion.kind === 'review' && onjump}
-												<button
-													type="button"
-													class="shrink-0 hover:text-fg"
-													onclick={() =>
-														onjump({
-															path: suggestion.path,
-															label: where(suggestion),
-															code: '',
-															...suggestion.span
-														})}>{suggestion.span ? 'Jump to lines' : 'Jump to file'}</button
-												>
-											{/if}
+					{#each turn.items as message, j (j)}
+						{@const i = turn.start + j}
+						{@const last = i === thread.messages.length - 1}
+						{#if message.role === 'user'}
+							<p
+								class={[
+									'ml-auto w-fit max-w-[85%] rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
+									i > 0 && 'mt-[26px]'
+								]}
+							>
+								{message.text}
+							</p>
+						{:else}
+							<div class="mt-3.5">
+								<Trail
+									steps={message.live?.steps ?? message.steps ?? []}
+									live={message.live}
+									thinkingMs={message.thinkingMs}
+									thinkingTokens={message.thinkingTokens}
+									preferOpen={threads.trailOpen}
+								/>
+								{#if message.error}
+									<p class="flex items-center gap-2.5 text-[12px]">
+										{#if message.error === 'Cancelled'}
+											<span class="text-muted">Stopped after {seconds(message.durationMs)}</span>
+										{:else}
+											<span class="text-del">Couldn't answer: {message.error}</span>
+										{/if}
+										{#if last && !live}
 											<button
 												type="button"
-												class="shrink-0 hover:text-fg"
-												onclick={() => copy(suggestion.body, key)}
-												>{copied === key ? 'Copied' : 'Copy'}</button
+												class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
+												onclick={retry}
+												>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</button
 											>
-											{#if threads.review}
-												{@const drafting = drafted[key]}
-												<button
-													type="button"
-													class="shrink-0 hover:text-fg disabled:hover:text-faint"
-													disabled={drafting === 'adding' || drafting === 'added'}
-													title="Adds it to your pending review, finish the review on GitHub"
-													onclick={() => draft(suggestion, key)}
-													>{drafting === 'adding'
-														? 'Adding…'
-														: drafting === 'added'
-															? 'In draft'
-															: 'Add to draft'}</button
-												>
-											{/if}
-										</p>
-										{#if typeof drafted[key] === 'object'}
-											<p class="mt-1 text-[11px] text-del">{drafted[key].error}</p>
 										{/if}
-										<div class="prose mt-1.5 text-[13px] leading-relaxed">
-											{@html suggestion.html}
-										</div>
-									</li>
-								{/each}
-							</ol>
+										{#if i === firstAnswer}<span class="text-[11px] text-faint"
+												>{@render deleting()}</span
+											>{/if}
+									</p>
+								{:else}
+									<!-- the answer being written stays this element when its message comes in -->
+									<StreamText text={message.text} streaming={!!message.live} html={message.html}>
+										{#snippet after(settled: boolean)}
+											{#if settled}
+												{#if message.suggestions}
+													<ol class="mt-3 flex flex-col gap-2">
+														{#each message.suggestions as suggestion, n (n)}
+															{@const key = `${i}.${n}`}
+															<li
+																class="rounded-[calc(var(--radius)*1.25)] border border-line px-3 pt-2 pb-2.5"
+															>
+																<p class="flex items-center gap-2 text-[11px] text-faint">
+																	<span class="tabular-nums">#{n + 1}</span>
+																	{#if suggestion.kind === 'review'}
+																		<span
+																			class="min-w-0 truncate font-medium text-fg"
+																			title={suggestion.path}>{suggestion.path}</span
+																		>
+																	{/if}
+																	<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
+																	<span class="flex-1"></span>
+																	{#if suggestion.kind === 'review' && onjump}
+																		<button
+																			type="button"
+																			class="shrink-0 hover:text-fg"
+																			onclick={() =>
+																				onjump({
+																					path: suggestion.path,
+																					label: where(suggestion),
+																					code: '',
+																					...suggestion.span
+																				})}
+																			>{suggestion.span ? 'Jump to lines' : 'Jump to file'}</button
+																		>
+																	{/if}
+																	<button
+																		type="button"
+																		class="shrink-0 hover:text-fg"
+																		onclick={() => copy(suggestion.body, key)}
+																		>{copied === key ? 'Copied' : 'Copy'}</button
+																	>
+																	{#if threads.review}
+																		{@const drafting = drafted[key]}
+																		<button
+																			type="button"
+																			class="shrink-0 hover:text-fg disabled:hover:text-faint"
+																			disabled={drafting === 'adding' || drafting === 'added'}
+																			title="Adds it to your pending review, finish the review on GitHub"
+																			onclick={() => draft(suggestion, key)}
+																			>{drafting === 'adding'
+																				? 'Adding…'
+																				: drafting === 'added'
+																					? 'In draft'
+																					: 'Add to draft'}</button
+																		>
+																	{/if}
+																</p>
+																{#if typeof drafted[key] === 'object'}
+																	<p class="mt-1 text-[11px] text-del">{drafted[key].error}</p>
+																{/if}
+																<div class="prose mt-1.5 text-[13px] leading-relaxed">
+																	{@html suggestion.html}
+																</div>
+															</li>
+														{/each}
+													</ol>
+												{/if}
+												<p class="mt-2.5 flex h-4 items-center gap-2 text-[11px] text-faint">
+													{meta(message)}
+													<button
+														type="button"
+														class="hover:text-fg"
+														onclick={() => copy(message.text, `${i}`)}
+														>{copied === `${i}` ? 'Copied' : 'Copy'}</button
+													>
+													{#if i === firstAnswer}{@render deleting()}{/if}
+												</p>
+											{:else}
+												<!-- the meta line's place, what it's doing until the answer is in, so nothing moves -->
+												<p class="mt-2.5 flex h-4 items-center gap-1.5 text-[11px] text-faint">
+													{#if live}
+														<ToolText text="{live.status}…" />
+														<span class="shrink-0 tabular-nums">· {elapsed}s</span>
+													{/if}
+												</p>
+											{/if}
+										{/snippet}
+									</StreamText>
+								{/if}
+							</div>
 						{/if}
-						<p class="mt-2.5 flex items-center gap-2 text-[11px] text-faint">
-							{meta(message)}
-							<button type="button" class="hover:text-fg" onclick={() => copy(message.text, `${i}`)}
-								>{copied === `${i}` ? 'Copied' : 'Copy'}</button
-							>
-							{#if i === firstAnswer}{@render deleting()}{/if}
-						</p>
-					{/if}
+					{/each}
 				</div>
-			{/if}
-		{/each}
+			{/each}
+		</div>
 
-		{#if live}
-			<div class="mt-3.5">
-				<Trail steps={live.steps} {live} {now} preferOpen={threads.trailOpen} />
-				{#if live.text}
-					<StreamText text={live.text} bind:shown />
-				{/if}
-			</div>
-		{:else if lost && thread.messages.at(-1)?.role === 'user'}
+		{#if !live && lost && thread.messages.at(-1)?.role === 'user'}
 			<p class="mt-3.5 flex items-center gap-2.5 text-[12px] text-muted">
 				This answer was interrupted.
 				<button
