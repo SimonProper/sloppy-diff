@@ -461,9 +461,22 @@
 			{#if href}
 				<a
 					{href}
-					class="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
-					>View file</a
+					class="grid size-6 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+					aria-label="View file"
+					title="View the file in the diff"
 				>
+					<!-- arrows out to the corners, the file opened up in the full diff -->
+					<svg
+						viewBox="0 0 16 16"
+						class="size-3.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" /></svg
+					>
+				</a>
 			{/if}
 		</span>
 	</header>

@@ -86,7 +86,7 @@
 
 	function fileHref(file: DiffFile) {
 		const params = new URLSearchParams(page.url.searchParams);
-		params.delete('view');
+		params.set('view', 'files'); // not dropped: a pull request's default tab is its overview
 		return `?${params}#${file.id}`;
 	}
 
