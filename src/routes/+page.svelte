@@ -121,8 +121,10 @@
 	// Beyond, only lines near the viewport exist
 	const VIRTUALIZE_LINES = 4000;
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
-	// the file on screen, for the sidebar. The guide follows its own steps
-	const reading = scrollSpy(() => (view === 'files' ? diff.files.map((f) => f.id) : []));
+	// the file on screen, for the sidebar. The guide follows its own steps. Read from
+	// a little below where a file jumped to lands (scroll-mt-32 in FileDiff, its header
+	// stuck a gap below the bars), so the one jumped to is the one marked
+	const reading = scrollSpy(() => (view === 'files' ? diff.files.map((f) => f.id) : []), 136);
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
