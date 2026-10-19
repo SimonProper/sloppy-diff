@@ -124,6 +124,28 @@
 	const wholeHere = $derived(showWhole && canShowWhole && whole?.file === file ? whole : null);
 	const gaps = $derived(wholeHere?.gaps ?? null);
 
+	// folding the whole file back to its hunks takes out the lines above where it's
+	// read, which would leave the page a few files further on. With the header stuck,
+	// the changed line under it stays put, or from between hunks the next one comes up
+	async function toggleWhole() {
+		const line = header.getBoundingClientRect().bottom;
+		const stuck = header.getBoundingClientRect().top > root.getBoundingClientRect().top + 1;
+		const rows = [...root.querySelectorAll<HTMLElement>('[data-index]')];
+		const below = rows.find((r) => r.getBoundingClientRect().bottom > line);
+		// past the last hunk, it comes back up rather than the next file
+		const row = below ?? rows.at(-1);
+		showWhole = !showWhole;
+		if (showWhole || !stuck || !row) return;
+		const between = !below || row.getBoundingClientRect().top > line;
+		const offset = row.getBoundingClientRect().top - line;
+		await tick();
+		const moved = between
+			? root.querySelector(`[data-hunk-top="${row.dataset.hunk}"]`)!.getBoundingClientRect().top -
+				line
+			: row.getBoundingClientRect().top - line - offset;
+		if (moved) window.scrollBy({ top: moved, behavior: 'instant' });
+	}
+
 	$effect(() => {
 		if (!showWhole || !canShowWhole || !source || whole?.file === file) return;
 		const read = file;
@@ -431,7 +453,7 @@
 					aria-busy={reading}
 					aria-label="Show the whole file"
 					title={showWhole ? 'Show only the changed lines' : 'Show the whole file'}
-					onclick={() => (showWhole = !showWhole)}
+					onclick={toggleWhole}
 				>
 					<!-- arrows apart to unfold the unchanged lines, together to fold them away -->
 					<svg
