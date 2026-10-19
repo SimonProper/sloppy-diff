@@ -131,8 +131,8 @@
 	const pr = $derived(diff.selection?.pr ?? null);
 
 	const tabs = $derived<{ value: View; label: string }[]>([
-		{ value: 'files', label: 'Diff' },
 		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
+		{ value: 'files', label: 'Diff' },
 		...(range
 			? [
 					{ value: 'guide' as const, label: 'Guide' },
