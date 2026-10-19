@@ -347,3 +347,24 @@ html:has(dialog:modal) {
 		animation: none;
 	}
 }
+
+/* a column centred on the page, not between the panels (SidebarLayout's --left and --right),
+   unless that pushes it into one. As wide as a 100-column line and its gutter, per side of a
+   split diff, so on a wide screen a diff's header stays near its code */
+.page-column {
+	--cap: 120rem;
+	width: 100%;
+	max-width: var(--cap);
+	margin-left: clamp(
+		0px,
+		calc((max(0px, 100% - var(--cap)) + var(--right, 0px) - var(--left, 0px)) / 2),
+		max(0px, 100% - var(--cap))
+	);
+}
+.page-column.narrow {
+	--cap: 60rem;
+}
+/* picked in the View settings, the column fills the space between the panels */
+.full-width .page-column {
+	--cap: 100%;
+}

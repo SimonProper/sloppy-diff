@@ -126,6 +126,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 		? (requested as ChangeMode)
 		: 'tokens';
 	const layout: Layout = cookies.get('layout') === 'unified' ? 'unified' : 'split';
+	const width = cookies.get('width') === 'full' ? ('full' as const) : ('max' as const);
 	const prView = (PR_VIEWS as readonly string[]).includes(cookies.get('prs') ?? '')
 		? (cookies.get('prs') as PrView)
 		: 'all';
@@ -133,7 +134,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
 	const guides = await timing.measure('guides', listGuides());
 	// the tab (`view`) is never read here: switching tabs changes nothing loaded, so it
 	// doesn't run this again
-	const base = { repo, mode, inputs, changeMode, layout, prView, guides };
+	const base = { repo, mode, inputs, changeMode, layout, width, prView, guides };
 
 	let root: string;
 	let version: string;

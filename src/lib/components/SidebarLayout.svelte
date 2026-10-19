@@ -225,8 +225,9 @@
 
 <!-- resizing live is cheap, diffs off screen aren't laid out (see LazyBlock) -->
 <div
-	class={['relative grid', (moving || panelMoving) && 'moving-column']}
-	style:grid-template-columns="{aside ? (rail ? RAIL : width) : 0}px minmax(0, 1fr) {right}px"
+	class={['columns relative grid', (moving || panelMoving) && 'moving-column']}
+	style:--left="{aside ? (rail ? RAIL : width) : 0}px"
+	style:--right="{right}px"
 	bind:clientWidth={total}
 >
 	<!-- holds the sidebar's column, as a rail the sidebar floats over the diffs from here,
@@ -411,9 +412,25 @@
 	.rail.instant {
 		transition: none;
 	}
+	/* registered so they ease, the diffs centre on the page with them (see FileDiff) */
+	@property --left {
+		syntax: '<length>';
+		inherits: true;
+		initial-value: 0px;
+	}
+	@property --right {
+		syntax: '<length>';
+		inherits: true;
+		initial-value: 0px;
+	}
+	.columns {
+		grid-template-columns: var(--left) minmax(0, 1fr) var(--right);
+	}
 	/* docking and folding: the column moves the diffs along with the panel's edge */
 	.moving-column {
-		transition: grid-template-columns 200ms cubic-bezier(0.23, 1, 0.32, 1);
+		transition:
+			--left 200ms cubic-bezier(0.23, 1, 0.32, 1),
+			--right 200ms cubic-bezier(0.23, 1, 0.32, 1);
 	}
 	.rail.moving {
 		transition-duration: 200ms, 150ms;

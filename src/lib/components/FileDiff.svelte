@@ -352,6 +352,8 @@
 	bind:this={root}
 	class={[
 		'relative overflow-clip rounded-xl border border-line bg-surface shadow-card',
+		'page-column',
+		layout === 'unified' && 'narrow',
 		inSection ? 'scroll-mt-38' : 'scroll-mt-28',
 		threads && 'ask',
 		threads && !picked && 'unpicked'

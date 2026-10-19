@@ -366,7 +366,12 @@
 
 	<main class="flex min-w-0 flex-col gap-10 p-4 pb-40">
 		<!-- clipped to its corners, so a header band can run edge to edge -->
-		<div class="overflow-clip rounded-xl border border-line bg-surface">
+		<div
+			class={[
+				'page-column overflow-clip rounded-xl border border-line bg-surface',
+				layout === 'unified' && 'narrow'
+			]}
+		>
 			{#if guide.earlier}
 				<!-- a band across the top of the card, set apart by its surface: hues mean the diff -->
 				<div
@@ -421,105 +426,111 @@
 			<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
 			<article id={section.id} class="flex scroll-mt-23 flex-col">
 				<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
-				<header
-					class="sticky top-23 z-[12] -mx-4 flex h-11 items-center gap-2.5 border-b border-line bg-canvas px-5"
-				>
-					<span
-						class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
-						>{number.get(section.id)}</span
+				<header class="sticky top-23 z-[12] -mx-4 border-b border-line bg-canvas px-5">
+					<!-- the line runs across the page, what's on it stays in the step's column -->
+					<div
+						class={['page-column flex h-11 items-center gap-2.5', layout === 'unified' && 'narrow']}
 					>
-					<h2 class={['min-w-0 text-[15px] font-semibold tracking-tight', done && 'text-muted']}>
-						<!-- back to the top of the step, for the description in place -->
+						<span
+							class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
+							>{number.get(section.id)}</span
+						>
+						<h2 class={['min-w-0 text-[15px] font-semibold tracking-tight', done && 'text-muted']}>
+							<!-- back to the top of the step, for the description in place -->
+							<button
+								type="button"
+								class="block max-w-full truncate text-left"
+								title={section.title}
+								onclick={() =>
+									document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
+								>{section.title}</button
+							>
+						</h2>
+						{#if past[section.id] && !done}
+							<!-- the description once it has scrolled away, over the diff rather than pushing it -->
+							<Popover
+								bind:open={
+									() => described === section.id, (open) => (described = open ? section.id : null)
+								}
+								onpointerenter={(e) => hover(e, section.id)}
+								onpointerleave={(e) => hover(e, null)}
+								class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
+							>
+								{#snippet trigger(props)}
+									<button
+										{...props}
+										onpointerenter={(e) => hover(e, section.id)}
+										onpointerleave={(e) => hover(e, null)}
+										onclick={(e) => {
+											// already open from hovering, the click keeps it open rather than closing it
+											if (described === section.id) e.preventDefault();
+										}}
+										class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
+										title="Show what this step is about"
+										aria-label="Show the description of {section.title}"
+									>
+										<svg
+											viewBox="0 0 16 16"
+											class="size-3.5"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="round"
+											><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+										>
+									</button>
+								{/snippet}
+								{@render description(section)}
+							</Popover>
+						{/if}
+						<span class="flex-1"></span>
+						{#if guide.earlier && section.changed}
+							<span
+								class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
+								title="Its code changed since the guide was written, the description may be out of date"
+								>changed</span
+							>
+						{/if}
+						<span
+							class={[
+								'shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium',
+								section.kind === 'core' && 'bg-accent/10 text-accent',
+								section.kind === 'supporting' && 'bg-subtle text-muted',
+								section.kind === 'chore' && 'text-faint'
+							]}>{section.kind}</span
+						>
 						<button
 							type="button"
-							class="block max-w-full truncate text-left"
-							title={section.title}
-							onclick={() =>
-								document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
-							>{section.title}</button
+							class={[
+								'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
+								done
+									? 'border-add/40 bg-add/10 text-add'
+									: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
+							]}
+							onclick={() => toggleReviewed(section)}
 						>
-					</h2>
-					{#if past[section.id] && !done}
-						<!-- the description once it has scrolled away, over the diff rather than pushing it -->
-						<Popover
-							bind:open={
-								() => described === section.id, (open) => (described = open ? section.id : null)
-							}
-							onpointerenter={(e) => hover(e, section.id)}
-							onpointerleave={(e) => hover(e, null)}
-							class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
-						>
-							{#snippet trigger(props)}
-								<button
-									{...props}
-									onpointerenter={(e) => hover(e, section.id)}
-									onpointerleave={(e) => hover(e, null)}
-									onclick={(e) => {
-										// already open from hovering, the click keeps it open rather than closing it
-										if (described === section.id) e.preventDefault();
-									}}
-									class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
-									title="Show what this step is about"
-									aria-label="Show the description of {section.title}"
-								>
-									<svg
-										viewBox="0 0 16 16"
-										class="size-3.5"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="1.5"
-										stroke-linecap="round"
-										><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
-									>
-								</button>
-							{/snippet}
-							{@render description(section)}
-						</Popover>
-					{/if}
-					<span class="flex-1"></span>
-					{#if guide.earlier && section.changed}
-						<span
-							class="shrink-0 rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
-							title="Its code changed since the guide was written, the description may be out of date"
-							>changed</span
-						>
-					{/if}
-					<span
-						class={[
-							'shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium',
-							section.kind === 'core' && 'bg-accent/10 text-accent',
-							section.kind === 'supporting' && 'bg-subtle text-muted',
-							section.kind === 'chore' && 'text-faint'
-						]}>{section.kind}</span
-					>
-					<button
-						type="button"
-						class={[
-							'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
-							done
-								? 'border-add/40 bg-add/10 text-add'
-								: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
-						]}
-						onclick={() => toggleReviewed(section)}
-					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
-						>
-						{done ? 'Reviewed' : 'Mark reviewed'}
-					</button>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7" /></svg
+							>
+							{done ? 'Reviewed' : 'Mark reviewed'}
+						</button>
+					</div>
 				</header>
 
 				{#if !done}
 					<!-- right after the title, which the fold measures against -->
 					<div in:unfold out:fold>
 						<div class="flex flex-col gap-3 pt-3">
-							<div class="pr-1 pl-[35px]" {@attach trackPast(section.id)}>
+							<div
+								class={['page-column pr-1 pl-[35px]', layout === 'unified' && 'narrow']}
+								{@attach trackPast(section.id)}
+							>
 								{@render description(section)}
 							</div>
 							{#each groups(section) as { file, ids } (file.id)}

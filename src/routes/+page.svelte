@@ -289,6 +289,8 @@
 	// svelte-ignore state_referenced_locally
 	let layout = $state(data.layout);
 	// svelte-ignore state_referenced_locally
+	let width = $state(data.width);
+	// svelte-ignore state_referenced_locally
 	let prView = $state(data.prView);
 	// the sidebar beside a pull request shows all of them, whatever the picker was left on
 	let sideView = $state<PrView>('all');
@@ -447,7 +449,7 @@
 
 <svelte:window {onkeydown} bind:innerWidth />
 
-<div class="min-h-screen font-sans">
+<div class={['min-h-screen font-sans', width === 'full' && 'full-width']}>
 	<header
 		class="sticky top-0 z-20 flex h-12 items-center gap-1.5 border-b border-line bg-canvas px-3 shadow-strip min-[1351px]:gap-2 min-[1351px]:px-4"
 	>
@@ -751,6 +753,7 @@
 								splitAnyway = next === 'split';
 							}
 						}
+						bind:width
 					/>
 				{/if}
 			</div>
