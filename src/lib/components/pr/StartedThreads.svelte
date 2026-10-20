@@ -88,6 +88,12 @@
 		<span class="flex items-center gap-2 text-[11px] text-faint">
 			<Avatar src={comment.avatar} />
 			<span class="text-[11.5px] font-medium text-fg">{comment.author}</span>
+			{#if comment.pending}
+				<span
+					class="rounded-sm border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
+					title="In your pending review, not posted yet">Pending</span
+				>
+			{/if}
 			{timeAgo(comment.createdAt)} ago
 			{#if comment.deletable}<CommentMenu {comment} />{/if}
 		</span>

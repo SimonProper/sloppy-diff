@@ -198,28 +198,27 @@ describe('draftStep', () => {
 		line: 2,
 		body: 'Rename this'
 	} as const;
-	const pending = (comments: { path: string; body: string }[] = []) => ({
-		id: 'PRR_1',
-		commit: head,
-		comments
-	});
+	const pending = (comments: { path: string; body: string }[] = []) => ({ id: 'PRR_1', comments });
 
-	test('starts a review without one, adds to the pending one on the same head', () => {
-		expect(draftStep(null, head.slice(0, 12), review)).toBe('start');
-		expect(draftStep(pending(), head.slice(0, 12), review)).toBe('add');
+	test('starts a review without one, adds to the pending one', () => {
+		expect(draftStep(null, head, head.slice(0, 12), review)).toBe('start');
+		expect(draftStep(pending(), head, head.slice(0, 12), review)).toBe('add');
 	});
 
 	test('skips a comment already in the review, on that file or as a reply', () => {
 		const there = pending([{ path: 'a.ts', body: 'Rename this\n' }]);
-		expect(draftStep(there, head, review)).toBe('skip');
-		expect(draftStep(there, head, { ...review, path: 'b.ts' })).toBe('add');
-		expect(draftStep(there, head, { kind: 'reply', thread: 'PRRT_1', body: 'Rename this' })).toBe(
-			'skip'
-		);
+		expect(draftStep(there, head, head, review)).toBe('skip');
+		expect(draftStep(there, head, head, { ...review, path: 'b.ts' })).toBe('add');
+		expect(
+			draftStep(there, head, head, { kind: 'reply', thread: 'PRRT_1', body: 'Rename this' })
+		).toBe('skip');
 	});
 
-	test('turns down lines numbered on another head than the pending review', () => {
-		expect(() => draftStep(pending(), '1962666bb7fa', review)).toThrow(/older version/);
+	test('turns down lines numbered on a commit that is no longer the head, not a reply', () => {
+		expect(() => draftStep(pending(), head, '1962666bb7fa', review)).toThrow(/new commits/);
+		expect(
+			draftStep(pending(), head, '1962666bb7fa', { kind: 'reply', thread: 'PRRT_1', body: 'Yes' })
+		).toBe('add');
 	});
 });
 

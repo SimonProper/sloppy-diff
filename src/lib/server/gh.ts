@@ -478,8 +478,9 @@ async function graphql(root: string, query: string, variables: Record<string, un
 const PENDING = `query($pr: ID!) {
   node(id: $pr) {
     ... on PullRequest {
+      headRefOid
       reviews(states: PENDING, first: 1) {
-        nodes { id commit { oid } comments(first: 100) { nodes { path body } } }
+        nodes { id comments(first: 100) { nodes { path body } } }
       }
     }
   }
@@ -542,28 +543,28 @@ export function threadInput(review: string, s: Extract<Suggestion, { kind: 'revi
 /** Your pending review on a pull request, as GitHub has it. */
 export interface PendingReview {
 	id: string;
-	/** the head it was started at, its comments are numbered on that */
-	commit: string;
 	comments: { path: string; body: string }[];
 }
 
 /**
  * What adding a comment takes: starting a review, adding it to the pending one, or
  * nothing when it's in there already, so a second click or a card offered again after a
- * reload doesn't post it twice. Lines numbered on another head than the pending review's
- * would land on the wrong ones, so that's turned down.
+ * reload doesn't post it twice. GitHub numbers a new thread's lines on the pull request's
+ * head `head`, whichever commit the review was started at, so lines numbered on the
+ * `commit` the page shows are turned down once that's no longer the head. A reply has no lines.
  */
 export function draftStep(
 	pending: PendingReview | null,
+	head: string,
 	commit: string,
 	s: Suggestion
 ): 'start' | 'add' | 'skip' {
-	if (!pending) return 'start';
-	if (!sameSha(pending.commit, commit)) {
+	if (s.kind === 'review' && !sameSha(head, commit)) {
 		throw new Error(
-			`Your pending review is on an older version of this pull request (${pending.commit.slice(0, 7)}), finish or discard it on GitHub first`
+			`The pull request has new commits since this page loaded (now at ${head.slice(0, 7)}), reload to comment on them`
 		);
 	}
+	if (!pending) return 'start';
 	const body = s.body.trim();
 	const there = pending.comments.some(
 		(c) => c.body.trim() === body && (s.kind === 'reply' || c.path === s.path)
@@ -599,11 +600,12 @@ export function addToDraft(
 
 async function draft(root: string, pr: string, commit: string, s: Suggestion) {
 	// asked every time, a review finished on GitHub since the page loaded is gone
-	const found = (await graphql(root, PENDING, { pr })).node?.reviews?.nodes[0];
+	const node = (await graphql(root, PENDING, { pr })).node;
+	const found = node?.reviews?.nodes[0];
 	const pending: PendingReview | null = found
-		? { id: found.id, commit: found.commit?.oid ?? '', comments: found.comments.nodes }
+		? { id: found.id, comments: found.comments.nodes }
 		: null;
-	const step = draftStep(pending, commit, s);
+	const step = draftStep(pending, node?.headRefOid ?? '', commit, s);
 	if (step === 'skip') return 'already';
 	const review: string =
 		pending?.id ??
