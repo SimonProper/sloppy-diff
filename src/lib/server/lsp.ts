@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { log, logged } from './log';
 
 /**
  * Just enough of a language server client to ask one where a symbol is used:
@@ -31,6 +32,8 @@ export function startLsp(options: {
 	root: string;
 	onProgress?: (progress: Progress) => void;
 }): Lsp {
+	const name = options.command.split('/').pop()!;
+	log('lsp', `starting ${[options.command, ...options.args].join(' ')} in ${options.cwd}`);
 	const child = spawn(options.command, options.args, {
 		cwd: options.cwd,
 		stdio: ['pipe', 'pipe', 'pipe']
@@ -69,9 +72,13 @@ export function startLsp(options: {
 				token: string | number;
 				value: { kind: string; title?: string; message?: string; percentage?: number };
 			};
-			if (value.kind === 'begin') working.set(token, value.title ?? '');
+			if (value.kind === 'begin') {
+				working.set(token, value.title ?? '');
+				log('lsp', `${name}: ${value.title ?? 'working'}…`);
+			}
 			const title = working.get(token) ?? '';
 			if (value.kind === 'end') {
+				log('lsp', `${name}: ${title || 'work'} done`);
 				working.delete(token);
 				if (working.size === 0) idle?.();
 			} else {
@@ -120,19 +127,25 @@ export function startLsp(options: {
 	child.on('error', (error) =>
 		fail(new Error(`Couldn't start ${options.command}: ${error.message}`))
 	);
-	child.on('close', (code) =>
-		fail(new Error(`${options.command} exited with code ${code}${stderr && `: ${stderr.trim()}`}`))
-	);
+	child.on('close', (code) => {
+		log('lsp', `${name} exited with code ${code}`);
+		fail(new Error(`${options.command} exited with code ${code}${stderr && `: ${stderr.trim()}`}`));
+	});
 
 	return {
 		child,
 		request<T>(method: string, params: unknown) {
 			if (exited) return Promise.reject(exited);
 			const id = nextId++;
-			return new Promise<T>((resolve, reject) => {
-				pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-				send({ id, method, params });
-			});
+			const where = (params as { textDocument?: { uri?: string } })?.textDocument?.uri;
+			return logged(
+				'lsp',
+				`${name}: ${method}${where ? ` ${where.split('/').pop()}` : ''}`,
+				new Promise<T>((resolve, reject) => {
+					pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+					send({ id, method, params });
+				})
+			);
 		},
 		notify(method, params) {
 			if (!exited) send({ method, params });

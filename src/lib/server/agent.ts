@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { env } from '$env/dynamic/private';
 import type { AgentProvider } from '$lib/agent';
 import { describeTool, runClaude, type ClaudeMessage } from './claude';
+import { log } from './log';
 
 type ContentBlock = { type: 'thinking' | 'text' | 'tool'; text: string };
 
@@ -64,7 +65,33 @@ function cancelOnAbort(child: ChildProcess, signal?: AbortSignal) {
 /** Start a read-only CLI run. Codex's temporary cwd also isolates project configuration. */
 export async function runAgent(options: AgentOptions): Promise<AgentRun> {
 	checkCancelled(options.signal);
-	if (options.provider === 'codex') return runCodex(options);
+	const scope = options.provider;
+	const since = performance.now();
+	log(
+		scope,
+		`starting${options.model ? ` ${options.model}` : ''}${options.resume ? ', resumed,' : ''} in ${options.root}`
+	);
+	const run = await (options.provider === 'codex' ? runCodex(options) : runClaudeAgent(options));
+	void run.exited.then((code) =>
+		log(scope, `exited with code ${code} after ${((performance.now() - since) / 1000).toFixed(1)}s`)
+	);
+	return { ...run, events: logEvents(scope, run.events) };
+}
+
+/** Passes the events through, logging the tools the agent calls and how it ends. */
+async function* logEvents(scope: string, events: AsyncIterable<AgentEvent>) {
+	for await (const event of events) {
+		if (event.type === 'content') {
+			for (const block of event.blocks) if (block.type === 'tool') log(scope, block.text);
+		} else if (event.type === 'result') {
+			const cost = event.sessionCost === undefined ? '' : ` $${event.sessionCost.toFixed(3)}`;
+			log(scope, event.error ? `failed: ${event.error}` : `done${cost}`);
+		}
+		yield event;
+	}
+}
+
+function runClaudeAgent(options: AgentOptions): AgentRun {
 	const tools = 'Read,Grep,Glob';
 	const args = [
 		'-p',

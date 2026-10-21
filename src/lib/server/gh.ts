@@ -14,6 +14,7 @@ import type {
 import { sameSha } from '$lib/refs';
 import { mergeBase, resolveCommit } from './git';
 import { cleanGithubHtml } from './github-html';
+import { logged } from './log';
 
 const exec = promisify(execFile);
 
@@ -22,7 +23,7 @@ async function gh(root: string, args: string[], input?: string): Promise<string>
 	try {
 		const run = exec('gh', args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
 		run.child.stdin?.end(input);
-		const { stdout } = await run;
+		const { stdout } = await logged('gh', args.join(' '), run);
 		return stdout;
 	} catch (error) {
 		if ((error as { code?: string }).code === 'ENOENT') {
@@ -33,7 +34,11 @@ async function gh(root: string, args: string[], input?: string): Promise<string>
 }
 
 async function git(root: string, args: string[]): Promise<string> {
-	const { stdout } = await exec('git', ['-C', root, ...args]);
+	const { stdout } = await logged(
+		'git',
+		`${args.join(' ')} in ${root}`,
+		exec('git', ['-C', root, ...args])
+	);
 	return stdout;
 }
 
