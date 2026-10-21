@@ -99,14 +99,18 @@
 		setTimeout(() => (copied = null), 1200);
 	}
 
-	/** suggestions on their way to the pending review, in it, or turned down, by key */
-	let drafted = $state<Record<string, 'adding' | 'added' | { error: string }>>({});
-	async function draft({ html: _, span: __, ...suggestion }: ShownSuggestion, key: string) {
-		if (drafted[key] === 'adding' || drafted[key] === 'added') return;
-		drafted[key] = 'adding';
+	/** suggestions on their way to GitHub, posted, in your pending review, or turned down, by key */
+	let drafted = $state<Record<string, 'sending' | 'posted' | 'added' | { error: string }>>({});
+	async function draft(
+		{ html: _, span: __, ...suggestion }: ShownSuggestion,
+		key: string,
+		post: boolean
+	) {
+		if (typeof drafted[key] === 'string') return;
+		drafted[key] = 'sending';
 		try {
-			await threads.addToReview(suggestion);
-			drafted[key] = 'added';
+			await threads.comment(suggestion, post);
+			drafted[key] = post ? 'posted' : 'added';
 		} catch (e) {
 			drafted[key] = { error: errorText(e) };
 		}
@@ -337,18 +341,34 @@
 																	>
 																	{#if threads.review}
 																		{@const drafting = drafted[key]}
-																		<button
-																			type="button"
-																			class="shrink-0 hover:text-fg disabled:hover:text-faint"
-																			disabled={drafting === 'adding' || drafting === 'added'}
-																			title="Adds it to your pending review, finish the review on GitHub"
-																			onclick={() => draft(suggestion, key)}
-																			>{drafting === 'adding'
-																				? 'Adding…'
-																				: drafting === 'added'
-																					? 'In draft'
-																					: 'Add to draft'}</button
-																		>
+																		{#if typeof drafting === 'string'}
+																			<span class="shrink-0"
+																				>{drafting === 'sending'
+																					? 'Sending…'
+																					: drafting === 'posted'
+																						? 'Posted'
+																						: 'In your review'}</span
+																			>
+																		{:else}
+																			{#if !threads.review.pending}
+																				<button
+																					type="button"
+																					class="shrink-0 hover:text-fg"
+																					title="Posts it on GitHub now"
+																					onclick={() => draft(suggestion, key, true)}
+																					>Comment</button
+																				>
+																			{/if}
+																			<button
+																				type="button"
+																				class="shrink-0 hover:text-fg"
+																				title="Adds it to your pending review, only you see it until you finish the review"
+																				onclick={() => draft(suggestion, key, false)}
+																				>{threads.review.pending
+																					? 'Add to review'
+																					: 'Start a review'}</button
+																			>
+																		{/if}
 																	{/if}
 																</p>
 																{#if typeof drafted[key] === 'object'}

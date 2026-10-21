@@ -2,7 +2,14 @@
 	import { page } from '$app/state';
 	import { addComment } from '$lib/pr/pr.remote';
 	import { refresh } from '$lib/pr/refresh';
-	import type { Check, CheckOutcome, PrComment, PullRequest, ReviewThread } from '$lib/pr/types';
+	import type {
+		Check,
+		CheckOutcome,
+		PrComment,
+		PullRequest,
+		ReviewThread,
+		Replying
+	} from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
 	import Comment from './Comment.svelte';
 	import CommentField from './CommentField.svelte';
@@ -12,11 +19,11 @@
 		pr: PullRequest;
 		/** goes to a review comment's thread in the diff */
 		onjump: (thread: ReviewThread) => void;
-		/** adds a reply to a review thread to your pending review */
-		onreply?: (thread: string, body: string) => Promise<unknown>;
+		/** replying to review threads, without it they're read-only */
+		reply?: Replying;
 	}
 
-	let { pr, onjump, onreply }: Props = $props();
+	let { pr, onjump, reply }: Props = $props();
 
 	async function post(body: string) {
 		await addComment({ repo: page.data.repo, pr: pr.id, body });
@@ -254,7 +261,7 @@
 								ids={comment.threads}
 								{threads}
 								{onjump}
-								{onreply}
+								{reply}
 								avatar={pr.viewerAvatar}
 							/>
 						</div>

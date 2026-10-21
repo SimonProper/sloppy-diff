@@ -220,6 +220,11 @@ describe('draftStep', () => {
 			draftStep(pending(), head, '1962666bb7fa', { kind: 'reply', thread: 'PRRT_1', body: 'Yes' })
 		).toBe('add');
 	});
+
+	test('posts at once only without a review in progress', () => {
+		expect(draftStep(null, head, head, review, true)).toBe('start');
+		expect(() => draftStep(pending(), head, head, review, true)).toThrow(/review in progress/);
+	});
 });
 
 test('turns down a reply without a thread, and a body longer than GitHub takes', () => {

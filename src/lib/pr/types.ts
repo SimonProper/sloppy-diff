@@ -44,6 +44,13 @@ export interface PullRequest {
 	viewerAvatar: string;
 }
 
+/** Replying to review threads: at once, or in your pending review */
+export interface Replying {
+	/** you have a review in progress, a reply only goes in there */
+	pending: boolean;
+	send: (thread: string, body: string, post: boolean) => Promise<unknown>;
+}
+
 export interface PrComment {
 	id: string;
 	author: string;

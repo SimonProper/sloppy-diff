@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { ReviewThread } from '$lib/pr/types';
+	import type { ReviewThread, Replying } from '$lib/pr/types';
 	import ReviewComments from './ReviewComments.svelte';
 
 	interface Props {
@@ -9,10 +9,10 @@
 		/** the marker it opened from */
 		at: DOMRect;
 		onclose: () => void;
-		onreply?: (thread: string, body: string) => Promise<unknown>;
+		reply?: Replying;
 	}
 
-	let { threads, at, onclose, onreply }: Props = $props();
+	let { threads, at, onclose, reply }: Props = $props();
 
 	let card: HTMLDivElement;
 	let placed = $state<{ top: number; left: number } | null>(null);
@@ -64,7 +64,7 @@
 			{#if thread.isResolved}
 				<p class="mb-2 text-[11px] text-faint">Resolved</p>
 			{/if}
-			<ReviewComments {thread} {onreply} />
+			<ReviewComments {thread} {reply} />
 		</div>
 	{/each}
 </div>

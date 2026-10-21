@@ -2,7 +2,7 @@
 	import { where } from '$lib/pr/jump';
 	import { glance } from '$lib/pr/text';
 	import { timeAgo } from '$lib/refs';
-	import type { PrComment, ReviewThread } from '$lib/pr/types';
+	import type { PrComment, ReviewThread, Replying } from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
 	import CommentMenu from './CommentMenu.svelte';
 	import CommentField from './CommentField.svelte';
@@ -12,13 +12,13 @@
 		ids: string[];
 		threads: Map<string, ReviewThread>;
 		onjump: (thread: ReviewThread) => void;
-		/** adds a reply to your pending review, without it the threads are read-only */
-		onreply?: (thread: string, body: string) => Promise<unknown>;
+		/** replying to the threads, without it they're read-only */
+		reply?: Replying;
 		/** yours, beside the reply field */
 		avatar?: string;
 	}
 
-	let { ids, threads, onjump, onreply, avatar = '' }: Props = $props();
+	let { ids, threads, onjump, reply, avatar = '' }: Props = $props();
 
 	// the first few, the rest a click away. Hiding two or fewer isn't worth a button
 	const FIRST = 5;
@@ -66,8 +66,13 @@
 					<p class="py-1.5 pl-9 text-[11px] text-faint">{skipped} more replies</p>
 				{/if}
 				{#each last as comment (comment.id)}{@render said(comment)}{/each}
-				{#if onreply}
-					<CommentField onsend={(body) => onreply(thread.id, body)} keep={thread.id} {avatar} />
+				{#if reply}
+					<CommentField
+						onsend={(body) => reply.send(thread.id, body, !reply.pending)}
+						onreview={reply.pending ? undefined : (body) => reply.send(thread.id, body, false)}
+						keep={thread.id}
+						{avatar}
+					/>
 				{/if}
 			</div>
 		</li>

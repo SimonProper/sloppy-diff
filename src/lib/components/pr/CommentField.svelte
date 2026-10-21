@@ -8,6 +8,8 @@
 	interface Props {
 		/** a reply to a thread or a comment on the pull request, done once it's in the page */
 		onsend: (body: string) => Promise<unknown>;
+		/** given, sending can start a pending review instead, beside sending it at once */
+		onreview?: (body: string) => Promise<unknown>;
 		/** where what's typed is kept until it's sent, and a send that failed, through a reload */
 		keep: string;
 		/** yours: given, the field is a row among the thread's comments, one line until it wraps */
@@ -23,18 +25,25 @@
 
 	let {
 		onsend,
+		onreview,
 		keep,
 		avatar,
 		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
-		action = 'Add to your review',
-		hint = '⌘↵ to add to your review',
+		action: given,
+		hint: givenHint,
 		card
 	}: Props = $props();
+
+	// without a choice, a reply goes to the review in progress
+	const action = $derived(given ?? (onreview ? 'Reply' : 'Add to your review'));
+	const hint = $derived(givenHint ?? (onreview ? '⌘↵ to reply' : '⌘↵ to add to your review'));
 
 	/** sent, shown under the comments until it's in them; one that failed is open to edit */
 	interface Sent {
 		id: string;
 		body: string;
+		/** to your pending review, not at once */
+		review?: boolean;
 		failure?: string;
 	}
 
@@ -50,9 +59,9 @@
 	const typed = $derived(reply.trim().length > 0);
 
 	// the field is free again at once, for the next one
-	function send(body: string) {
+	function send(body: string, review = false) {
 		reply = '';
-		post({ id: crypto.randomUUID(), body });
+		post({ id: crypto.randomUUID(), body, review });
 	}
 
 	async function post(item: Sent) {
@@ -60,7 +69,7 @@
 			? sent.map((s) => (s.id === item.id ? item : s))
 			: [...sent, item];
 		try {
-			await onsend(item.body);
+			await (item.review && onreview ? onreview : onsend)(item.body);
 			sent = sent.filter((s) => s.id !== item.id);
 		} catch (e) {
 			sent = sent.map((s) => (s.id === item.id ? { ...s, failure: errorText(e) } : s));
@@ -82,6 +91,15 @@
 		}
 	}
 </script>
+
+{#snippet startReview()}
+	<button
+		type="button"
+		class="shrink-0 self-end rounded-md px-1.5 text-[11px] leading-5 text-muted hover:bg-subtle hover:text-fg"
+		title="Adds it to a new pending review, only you see it until you finish the review"
+		onclick={() => send(reply.trim(), true)}>Start a review</button
+	>
+{/snippet}
 
 <div class={card ? 'flex flex-col gap-3' : [avatar !== undefined && 'divide-y divide-line']}>
 	{#each sent as item (item.id)}
@@ -111,7 +129,14 @@
 		</div>
 	{/each}
 	{#if avatar === undefined}
-		<AskField bind:value={reply} {placeholder} hints={['', hint]} onsend={send} />
+		<AskField
+			bind:value={reply}
+			{placeholder}
+			hints={['', hint]}
+			{action}
+			onsend={send}
+			trailing={onreview && typed ? startReview : undefined}
+		/>
 	{:else}
 		<div class={['flex items-start gap-2 px-3 py-2', card]}>
 			<Avatar src={avatar} class="mt-0.5 size-4" />
@@ -123,6 +148,7 @@
 				class="h-5 min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-[12px] leading-5 text-fg outline-none placeholder:text-faint"
 				{onkeydown}
 				{@attach grow}></textarea>
+			{#if onreview && typed}{@render startReview()}{/if}
 			<button
 				type="button"
 				class={[

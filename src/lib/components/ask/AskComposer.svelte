@@ -102,18 +102,19 @@
 	let sending = $state(false);
 	let failure = $state('');
 
-	/** on a pull request, what's typed goes to the agent or to your pending review, as picked */
+	/** on a pull request, what's typed goes to the agent or on GitHub, as picked */
 	const choosing = $derived(!!threads.review && !!draft && !!(draft.span || draft.path));
 	const commenting = $derived(choosing && threads.intent === 'comment');
 	const what = $derived(draft?.span ? 'these lines' : 'this file');
 
-	async function comment(text: string) {
+	/** at once with `post`, otherwise in your review, the only place it goes while one's in progress */
+	async function comment(text: string, post = !threads.review?.pending) {
 		const suggestion = draft && commentOn(files, draft, text);
 		if (!suggestion) return;
 		sending = true;
 		failure = '';
 		try {
-			await threads.addToReview(suggestion);
+			await threads.comment(suggestion, post);
 			threads.draft = null;
 			threads.composing = false;
 		} catch (e) {
@@ -139,7 +140,16 @@
 	}
 </script>
 
-{#snippet blastButton()}
+{#snippet extra()}
+	{#if commenting && !threads.review?.pending && draft?.text.trim()}
+		<button
+			type="button"
+			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
+			title="Adds it to a new pending review, only you see it until you finish the review"
+			disabled={sending}
+			onclick={() => comment(draft?.text.trim() ?? '', false)}>Start a review</button
+		>
+	{/if}
 	<!-- for the lines alone, a typed question is asked with Ask -->
 	{#if draft?.span && !commenting && !draft.text.trim()}
 		<button
@@ -208,11 +218,15 @@
 			hints={choosing
 				? [
 						commenting ? 'tab to ask AI' : 'tab to comment',
-						commenting ? '⌘↵ adds it to your review' : '⌘↵ to ask'
+						commenting
+							? threads.review?.pending
+								? '⌘↵ adds it to your review'
+								: '⌘↵ to comment'
+							: '⌘↵ to ask'
 					]
 				: ['esc', '⌘↵ to ask']}
 			busy={sending}
-			trailing={blastButton}
+			trailing={extra}
 			action={commenting ? 'Comment' : 'Ask'}
 			onsend={send}
 			ontab={choosing ? () => threads.setIntent(commenting ? 'ask' : 'comment') : undefined}

@@ -1,6 +1,7 @@
 import { isHttpError } from '@sveltejs/kit';
 import { errorText } from '$lib/errors';
-import { addDraft } from '$lib/pr/pr.remote';
+import { commentOnReview } from '$lib/pr/pr.remote';
+import type { Replying } from '$lib/pr/types';
 import { refresh } from '$lib/pr/refresh';
 import { readJson, writeJson, writeText } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
@@ -53,8 +54,10 @@ interface Config {
 	threads: Thread[];
 	/** the GitHub pull request the range is, for Claude to know about */
 	pr?: number;
-	/** its node id, suggested comments are added to your pending review on it */
+	/** its node id, comments go on it */
 	prId?: string;
+	/** you have a review in progress on it, comments go in there */
+	pending?: boolean;
 }
 
 /**
@@ -139,22 +142,35 @@ export class Threads {
 		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk ?? ''));
 	}
 
-	/** where Add to draft puts a suggested comment, null outside a pull request */
-	get review(): { repo: string; pr: string; commit: string } | null {
-		const { repo, prId, to } = this.#config();
-		return prId ? { repo, pr: prId, commit: to } : null;
+	/** where a comment goes, null outside a pull request */
+	get review(): { repo: string; pr: string; commit: string; pending: boolean } | null {
+		const { repo, prId, to, pending = false } = this.#config();
+		return prId ? { repo, pr: prId, commit: to, pending } : null;
 	}
 
 	/**
-	 * Adds a comment to your pending review on the pull request, then loads the page again
-	 * so it shows on its lines. Says whether it was added or was in the review already.
+	 * Comments on the pull request, with `post` at once, otherwise in your pending review,
+	 * then loads the page again so it shows on its lines. Says whether it was added or was
+	 * in the review already.
 	 */
-	async addToReview(suggestion: Suggestion) {
+	async comment(suggestion: Suggestion, post = false) {
 		const review = this.review;
 		if (!review) throw new Error('Comments go on a pull request');
-		const result = await addDraft({ ...review, suggestion });
+		const { pending: _, ...at } = review;
+		const result = await commentOnReview({ ...at, suggestion, post });
 		await refresh();
 		return result;
+	}
+
+	/** replying to review threads, undefined outside a pull request */
+	get replying(): Replying | undefined {
+		const review = this.review;
+		return review
+			? {
+					pending: review.pending,
+					send: (thread, body, post) => this.comment({ kind: 'reply', thread, body }, post)
+				}
+			: undefined;
 	}
 
 	get(id: string | null): Thread | undefined {

@@ -254,7 +254,8 @@
 		scope: diff.scope ?? 'worktree',
 		threads: diff.threads,
 		pr: diff.selection?.pr?.number,
-		prId: diff.selection?.pr?.id
+		prId: diff.selection?.pr?.id,
+		pending: !!diff.selection?.pr?.pendingReviewId
 	}));
 	const asking = $derived(diff.scope !== null && diff.selection !== null ? threads : undefined);
 	/** the agent panel docked at the right, beside the diff */
@@ -1045,13 +1046,7 @@
 					{#if loading.current}
 						<PrSkeleton />
 					{:else}
-						<PrOverview
-							{pr}
-							onjump={jump}
-							onreply={threads.review
-								? (thread, body) => threads.addToReview({ kind: 'reply', thread, body })
-								: undefined}
-						/>
+						<PrOverview {pr} onjump={jump} reply={threads.replying} />
 					{/if}
 				{:else}
 					{#if commit}

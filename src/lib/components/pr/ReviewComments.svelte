@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type { ReviewThread } from '$lib/pr/types';
+	import type { ReviewThread, Replying } from '$lib/pr/types';
 	import Comment from './Comment.svelte';
 	import CommentField from './CommentField.svelte';
 
 	interface Props {
 		thread: ReviewThread;
-		/** adds a reply to your pending review, without it the thread is read-only */
-		onreply?: (thread: string, body: string) => Promise<unknown>;
+		/** replying to the thread, without it it's read-only */
+		reply?: Replying;
 	}
 
-	let { thread, onreply }: Props = $props();
+	let { thread, reply }: Props = $props();
 </script>
 
 <ul class="flex flex-col gap-3">
@@ -18,8 +18,12 @@
 	{/each}
 </ul>
 
-{#if onreply}
+{#if reply}
 	<div class="mt-3">
-		<CommentField onsend={(body) => onreply(thread.id, body)} keep={thread.id} />
+		<CommentField
+			onsend={(body) => reply.send(thread.id, body, !reply.pending)}
+			onreview={reply.pending ? undefined : (body) => reply.send(thread.id, body, false)}
+			keep={thread.id}
+		/>
 	</div>
 {/if}

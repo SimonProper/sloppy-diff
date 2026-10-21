@@ -465,7 +465,7 @@ function viewer(root: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// drafts: comments added to your pending review, finished and submitted on GitHub
+// review comments: posted at once, or added to your pending review, finished and submitted on GitHub
 
 /** A GraphQL request with its variables as the request body, nothing in them needs escaping. */
 async function graphql(root: string, query: string, variables: Record<string, unknown>) {
@@ -492,6 +492,9 @@ const PENDING = `query($pr: ID!) {
 }`;
 const START = `mutation($pr: ID!, $commit: GitObjectID) {
   addPullRequestReview(input: { pullRequestId: $pr, commitOID: $commit }) { pullRequestReview { id } }
+}`;
+const SUBMIT = `mutation($review: ID!) {
+  submitPullRequestReview(input: { pullRequestReviewId: $review, event: COMMENT }) { clientMutationId }
 }`;
 const THREAD = `mutation($input: AddPullRequestReviewThreadInput!) {
   addPullRequestReviewThread(input: $input) { thread { id } }
@@ -557,17 +560,23 @@ export interface PendingReview {
  * reload doesn't post it twice. GitHub numbers a new thread's lines on the pull request's
  * head `head`, whichever commit the review was started at, so lines numbered on the
  * `commit` the page shows are turned down once that's no longer the head. A reply has no lines.
+ * Posting at once is a review of its own, submitted at once, so not beside a pending one:
+ * GitHub only has Add review comment then.
  */
 export function draftStep(
 	pending: PendingReview | null,
 	head: string,
 	commit: string,
-	s: Suggestion
+	s: Suggestion,
+	post = false
 ): 'start' | 'add' | 'skip' {
 	if (s.kind === 'review' && !sameSha(head, commit)) {
 		throw new Error(
 			`The pull request has new commits since this page loaded (now at ${head.slice(0, 7)}), reload to comment on them`
 		);
+	}
+	if (post && pending) {
+		throw new Error('You have a review in progress, add this to it or finish it on GitHub first');
 	}
 	if (!pending) return 'start';
 	const body = s.body.trim();
@@ -582,20 +591,21 @@ export function draftStep(
 const drafting = new Map<string, Promise<unknown>>();
 
 /**
- * Adds a comment to your pending review on the pull request, starting one at `commit`
- * (the head the diff shows) when there's none. Only you see it until you finish the
- * review on GitHub. Returns whether it was added or was there already.
+ * Comments on the pull request: with `post` at once, otherwise in your pending review,
+ * starting one at `commit` (the head the diff shows) when there's none, which only you see
+ * until you finish it on GitHub. Returns whether it was added or was there already.
  */
-export function addToDraft(
+export function addReviewComment(
 	root: string,
 	pr: string,
 	commit: string,
-	suggestion: Suggestion
+	suggestion: Suggestion,
+	post = false
 ): Promise<'added' | 'already'> {
 	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
 	if (!SHA.test(commit)) throw new Error(`Invalid commit: ${commit}`);
 	const s = checkSuggestion(suggestion);
-	const next = (drafting.get(pr) ?? Promise.resolve()).then(() => draft(root, pr, commit, s));
+	const next = (drafting.get(pr) ?? Promise.resolve()).then(() => draft(root, pr, commit, s, post));
 	drafting.set(
 		pr,
 		next.catch(() => {})
@@ -603,14 +613,14 @@ export function addToDraft(
 	return next;
 }
 
-async function draft(root: string, pr: string, commit: string, s: Suggestion) {
+async function draft(root: string, pr: string, commit: string, s: Suggestion, post: boolean) {
 	// asked every time, a review finished on GitHub since the page loaded is gone
 	const node = (await graphql(root, PENDING, { pr })).node;
 	const found = node?.reviews?.nodes[0];
 	const pending: PendingReview | null = found
 		? { id: found.id, comments: found.comments.nodes }
 		: null;
-	const step = draftStep(pending, node?.headRefOid ?? '', commit, s);
+	const step = draftStep(pending, node?.headRefOid ?? '', commit, s, post);
 	if (step === 'skip') return 'already';
 	const review: string =
 		pending?.id ??
@@ -627,6 +637,7 @@ async function draft(root: string, pr: string, commit: string, s: Suggestion) {
 	} else {
 		await graphql(root, THREAD, { input: threadInput(review, s) });
 	}
+	if (post) await graphql(root, SUBMIT, { review });
 	return 'added';
 }
 

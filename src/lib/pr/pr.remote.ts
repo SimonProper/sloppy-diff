@@ -2,7 +2,7 @@ import { command, query } from '$app/server';
 import type { Suggestion } from '$lib/ask/types';
 import {
 	addPrComment,
-	addToDraft,
+	addReviewComment,
 	deleteComment,
 	editComment,
 	listPullRequests
@@ -16,22 +16,31 @@ export const getPullRequests = query('unchecked', async (repo: string) =>
 	listPullRequests(await repoRoot(repo)).catch(() => null)
 );
 
-/** Adds a suggested comment to your pending review on the pull request `pr` (its node id). */
-export const addDraft = command(
+/** Comments on lines or replies on the pull request `pr` (its node id): with `post` at once,
+ * otherwise in your pending review. */
+export const commentOnReview = command(
 	'unchecked',
 	({
 		repo,
 		pr,
 		commit,
-		suggestion
+		suggestion,
+		post
 	}: {
 		repo: string;
 		pr: string;
 		commit: string;
 		suggestion: Suggestion;
+		post?: boolean;
 	}) =>
 		badRequestOnError(async () => {
-			const added = await addToDraft(await repoRoot(repo), pr, commit, suggestion);
+			const added = await addReviewComment(
+				await repoRoot(repo),
+				pr,
+				commit,
+				suggestion,
+				post === true
+			);
 			forgetPrs();
 			return added;
 		})

@@ -263,12 +263,7 @@
 	const reviewMarks = $derived(placed.marks);
 	const unplaced = $derived(placed.unplaced);
 
-	/** on a pull request, a reply to a review thread goes to your pending review */
-	const onreply = $derived(
-		threads?.review
-			? (thread: string, body: string) => threads.addToReview({ kind: 'reply', thread, body })
-			: undefined
-	);
+	const reply = $derived(threads?.replying);
 
 	/** the review threads open in their card, and the marker it opened from */
 	let reviewOpen = $state<{ threads: ReviewThread[]; at: DOMRect } | null>(null);
@@ -693,7 +688,7 @@
 				{@render gap(gaps?.after ?? [])}
 			{/if}
 			{#if unplaced.length && !only}
-				<UnplacedThreads threads={unplaced} {onreply} />
+				<UnplacedThreads threads={unplaced} {reply} />
 			{/if}
 		</div>
 	{/if}
@@ -703,7 +698,7 @@
 			threads={reviewOpen.threads.map((t) => review.find((r) => r.id === t.id) ?? t)}
 			at={reviewOpen.at}
 			onclose={() => (reviewOpen = null)}
-			{onreply}
+			{reply}
 		/>
 	{/if}
 
