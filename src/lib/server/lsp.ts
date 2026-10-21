@@ -19,6 +19,13 @@ export interface Lsp {
 	close(): Promise<void>;
 }
 
+/** Something a server finds wrong with a file; severity 1 is an error. */
+export interface Diagnostic {
+	range: { start: { line: number; character: number }; end: { line: number; character: number } };
+	severity?: number;
+	message: string;
+}
+
 /** What the server says it's working on: a title, and how far along it is. */
 export type Progress = { title: string; message?: string; percentage?: number };
 
@@ -31,6 +38,8 @@ export function startLsp(options: {
 	/** the workspace folder, for servers that ask for it */
 	root: string;
 	onProgress?: (progress: Progress) => void;
+	/** what the server finds wrong in a file, each time it checks it again */
+	onDiagnostics?: (uri: string, diagnostics: Diagnostic[]) => void;
 }): Lsp {
 	const name = options.command.split('/').pop()!;
 	log('lsp', `starting ${[options.command, ...options.args].join(' ')} in ${options.cwd}`);
@@ -67,6 +76,12 @@ export function startLsp(options: {
 		if (message.method && message.id !== undefined) {
 			// requests from the server: answered as plainly as possible
 			send({ id: message.id, result: answerServer(message.method, message.params, options.root) });
+		} else if (message.method === 'textDocument/publishDiagnostics') {
+			const { uri, diagnostics } = message.params as unknown as {
+				uri: string;
+				diagnostics: Diagnostic[];
+			};
+			options.onDiagnostics?.(uri, diagnostics ?? []);
 		} else if (message.method === '$/progress' && message.params?.value) {
 			const { token, value } = message.params as {
 				token: string | number;

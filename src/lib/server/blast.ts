@@ -19,7 +19,7 @@ import { findHunk } from '$lib/diff/hunks';
 import type { DiffFile } from '$lib/diff/types';
 import { git } from './git';
 import { repoDir } from './guides';
-import { startLsp } from './lsp';
+import { startLsp, type Diagnostic } from './lsp';
 
 /**
  * The blast radius of selected lines: where what they declare is used, found by the
@@ -33,6 +33,10 @@ const INDEX_TIMEOUT_MS = 10 * 60_000;
 const INDEX_GRACE_MS = 1500;
 /** one question to the server, a whole-repo search included */
 const REQUEST_TIMEOUT_MS = 2 * 60_000;
+/** how long a file's first check may take before it's taken as having no errors */
+const DIAGNOSTICS_MS = 8000;
+/** a server may report a file in parts, its syntax then its types: what follows this soon counts */
+const DIAGNOSTICS_SETTLE_MS = 300;
 /** declarations looked up from one selection, a selection across a whole class has many */
 const MAX_SYMBOLS = 5;
 /** uses listed for each, and the callers whose own callers are looked up */
@@ -139,94 +143,21 @@ async function uses(
 		);
 	}
 
-	const launch = await launchFor(server, root, dir);
-	if ('missing' in launch) return nothing(launch.missing);
-
-	// stopped while another analysis of the repo ran
-	signal.throwIfAborted();
-	let since = Date.now();
-	report.status(`Starting ${NAMES[server]}`);
-	const lsp = startLsp({
-		command: launch.command,
-		args: launch.args,
-		cwd: dir,
-		root: dir,
-		onProgress: ({ title, message, percentage }) =>
-			report.status(
-				[title || 'Working', message ?? (percentage === undefined ? '' : `${percentage}%`)]
-					.filter(Boolean)
-					.join(' ')
-			)
-	});
-	const kill = () => lsp.child.kill();
-	signal.addEventListener('abort', kill, { once: true });
+	const session = await startSession(server, root, dir, anchor.path, report, signal);
+	if ('missing' in session) return nothing(session.missing);
+	const { ask, indexed } = session;
 	try {
-		// once one question goes unanswered the server is busy with it, the rest would wait too
-		let stalled: Late | undefined;
-		const ask = <T>(method: string, params: unknown) =>
-			stalled
-				? Promise.reject(stalled)
-				: within(lsp.request<T>(method, params)).catch((error: Error) => {
-						if (error instanceof Late) stalled = error;
-						throw error;
-					});
-		await ask('initialize', {
-			processId: process.pid,
-			rootUri: pathToFileURL(dir).href,
-			workspaceFolders: [{ uri: pathToFileURL(dir).href, name: 'root' }],
-			initializationOptions: launch.init,
-			capabilities: {
-				window: { workDoneProgress: true },
-				workspace: { configuration: true, workspaceFolders: true },
-				textDocument: {
-					references: {},
-					callHierarchy: {},
-					documentSymbol: { hierarchicalDocumentSymbolSupport: true }
-				}
-			}
-		});
-		lsp.notify('initialized', {});
-		const path = join(dir, anchor.path);
-		const uri = pathToFileURL(path).href;
-		lsp.notify('textDocument/didOpen', {
-			textDocument: {
-				uri,
-				languageId: languageId(path),
-				version: 1,
-				text: await readFile(path, 'utf8')
-			}
-		});
-		const indexed = await lsp.settled(INDEX_GRACE_MS, INDEX_TIMEOUT_MS);
-		report.step(
-			`Started ${NAMES[server]} · ${indexed ? `ready in ${seconds(since)}` : `still indexing after ${INDEX_TIMEOUT_MS / 60_000} minutes`}`,
-			[`${launch.command} ${launch.args.join(' ')}`, ...launch.notes].join('\n')
-		);
-
 		report.status('Finding what the lines declare');
-		const tree =
-			(await ask<DocumentSymbol[] | null>('textDocument/documentSymbol', {
-				textDocument: { uri }
-			})) ?? [];
-		// ponytail: the Svelte server wraps a component's script in a symbol named after its
-		// tag, and lists its markup's elements. What's in the script is looked into, and a line
-		// in the markup stands for the component, whose uses are the wrapper's
-		const scripts = server === 'svelte' ? tree.filter((s) => s.name === 'script') : [];
-		const script = scripts[0];
-		const inScript = (s: DocumentSymbol) =>
-			scripts.some(
-				(t) => t.range.start.line <= s.range.start.line && s.range.end.line <= t.range.end.line
-			);
+		const uri = await session.open(anchor.path);
+		const tree = await session.symbols(anchor.path);
 		const trace: string[] = [];
-		let symbols = symbolsAt(
+		const symbols = declarationsAt(
 			tree,
 			lines.map((n) => n - 1),
-			(s) => script !== undefined && (scripts.includes(s) || !inScript(s)),
+			server,
+			anchor.path,
 			trace
 		);
-		if (script && symbols.length === 0) {
-			symbols = [{ ...script, name: basename(anchor.path), kind: COMPONENT }];
-			trace.push('none of them in the script: the component itself');
-		}
 		const removed = selected.length - lines.length;
 		if (removed) trace.push(`${removed} removed ${removed === 1 ? 'line' : 'lines'} left out`);
 		report.step(
@@ -247,7 +178,7 @@ async function uses(
 			);
 		}
 		for (const symbol of symbols.slice(0, MAX_SYMBOLS)) {
-			since = Date.now();
+			const since = Date.now();
 			report.status(`Finding uses of ${symbol.name} with ${NAMES[server]}`);
 			let found: Awaited<ReturnType<typeof usesOf>>;
 			try {
@@ -280,12 +211,183 @@ async function uses(
 		}
 		return `<static-analysis>\n${sections.join('\n\n')}\n</static-analysis>`;
 	} finally {
-		signal.removeEventListener('abort', kill);
-		await lsp.close();
+		await session.close();
 	}
 }
 
 type Ask = <T>(method: string, params: unknown) => Promise<T>;
+
+/** A language server started on the checkout, its files opened as they're asked about. */
+export interface Session {
+	ask: Ask;
+	/** it had finished indexing when it was started */
+	indexed: boolean;
+	/** opens the file, once, and gives its uri */
+	open(path: string): Promise<string>;
+	/** the file's declarations, nested */
+	symbols(path: string): Promise<DocumentSymbol[]>;
+	/** the errors the server finds in the file, as the commit has it */
+	errors(path: string): Promise<Diagnostic[]>;
+	close(): Promise<void>;
+}
+
+/**
+ * Starts `server` on `dir`, the repo at the commit being read, and waits for it to index
+ * with `first` open, the file that tells it which project to load.
+ */
+export async function startSession(
+	server: Server,
+	root: string,
+	dir: string,
+	first: string,
+	report: Reporter,
+	signal: AbortSignal
+): Promise<Session | { missing: string }> {
+	const launch = await launchFor(server, root, dir);
+	if ('missing' in launch) return launch;
+
+	// stopped while another analysis of the repo ran
+	signal.throwIfAborted();
+	const since = Date.now();
+	report.status(`Starting ${NAMES[server]}`);
+	// what the server last found wrong in each file, and who's waiting for it to say
+	const found = new Map<string, Diagnostic[]>();
+	const waiting = new Map<string, (() => void)[]>();
+	const lsp = startLsp({
+		command: launch.command,
+		args: launch.args,
+		cwd: dir,
+		root: dir,
+		onDiagnostics: (uri, list) => {
+			found.set(uri, list);
+			for (const wake of waiting.get(uri) ?? []) wake();
+			waiting.delete(uri);
+		},
+		onProgress: ({ title, message, percentage }) =>
+			report.status(
+				[title || 'Working', message ?? (percentage === undefined ? '' : `${percentage}%`)]
+					.filter(Boolean)
+					.join(' ')
+			)
+	});
+	const kill = () => lsp.child.kill();
+	signal.addEventListener('abort', kill, { once: true });
+	const close = async () => {
+		signal.removeEventListener('abort', kill);
+		await lsp.close();
+	};
+	// once one question goes unanswered the server is busy with it, the rest would wait too
+	let stalled: Late | undefined;
+	const ask = <T>(method: string, params: unknown) =>
+		stalled
+			? Promise.reject(stalled)
+			: within(lsp.request<T>(method, params)).catch((error: Error) => {
+					if (error instanceof Late) stalled = error;
+					throw error;
+				});
+	const opened = new Map<string, Promise<string>>();
+	const open = (path: string) => {
+		let uri = opened.get(path);
+		if (!uri) {
+			const file = join(dir, path);
+			uri = readFile(file, 'utf8').then((text) => {
+				const uri = pathToFileURL(file).href;
+				lsp.notify('textDocument/didOpen', {
+					textDocument: { uri, languageId: languageId(file), version: 1, text }
+				});
+				return uri;
+			});
+			opened.set(path, uri);
+		}
+		return uri;
+	};
+	try {
+		await ask('initialize', {
+			processId: process.pid,
+			rootUri: pathToFileURL(dir).href,
+			workspaceFolders: [{ uri: pathToFileURL(dir).href, name: 'root' }],
+			initializationOptions: launch.init,
+			capabilities: {
+				window: { workDoneProgress: true },
+				workspace: { configuration: true, workspaceFolders: true },
+				textDocument: {
+					references: {},
+					callHierarchy: {},
+					publishDiagnostics: {},
+					documentSymbol: { hierarchicalDocumentSymbolSupport: true }
+				}
+			}
+		});
+		lsp.notify('initialized', {});
+		await open(first);
+		const indexed = await lsp.settled(INDEX_GRACE_MS, INDEX_TIMEOUT_MS);
+		report.step(
+			`Started ${NAMES[server]} · ${indexed ? `ready in ${seconds(since)}` : `still indexing after ${INDEX_TIMEOUT_MS / 60_000} minutes`}`,
+			[`${launch.command} ${launch.args.join(' ')}`, ...launch.notes].join('\n')
+		);
+		return {
+			ask,
+			indexed,
+			open,
+			symbols: async (path) =>
+				(await ask<DocumentSymbol[] | null>('textDocument/documentSymbol', {
+					textDocument: { uri: await open(path) }
+				})) ?? [],
+			errors: async (path) => {
+				const uri = await open(path);
+				if (!found.has(uri)) {
+					await new Promise<void>((resolve) => {
+						const timer = setTimeout(resolve, DIAGNOSTICS_MS);
+						const wake = () => {
+							clearTimeout(timer);
+							resolve();
+						};
+						(waiting.get(uri) ?? waiting.set(uri, []).get(uri)!).push(wake);
+					});
+					await new Promise((resolve) => setTimeout(resolve, DIAGNOSTICS_SETTLE_MS));
+				}
+				return (found.get(uri) ?? []).filter((d) => (d.severity ?? 1) === 1);
+			},
+			close
+		};
+	} catch (error) {
+		await close();
+		throw error;
+	}
+}
+
+/**
+ * The declarations the lines (0-based) of `path` are in, as `symbolsAt` picks them, and
+ * for a Svelte component the component itself when they're in none of its script's.
+ */
+export function declarationsAt(
+	tree: DocumentSymbol[],
+	lines: number[],
+	server: Server,
+	path: string,
+	trace?: string[]
+): DocumentSymbol[] {
+	// ponytail: the Svelte server wraps a component's script in a symbol named after its
+	// tag, and lists its markup's elements. What's in the script is looked into, and a line
+	// in the markup stands for the component, whose uses are the wrapper's
+	const scripts = server === 'svelte' ? tree.filter((s) => s.name === 'script') : [];
+	const script = scripts[0];
+	const inScript = (s: DocumentSymbol) =>
+		scripts.some(
+			(t) => t.range.start.line <= s.range.start.line && s.range.end.line <= t.range.end.line
+		);
+	const symbols = symbolsAt(
+		tree,
+		lines,
+		(s) => script !== undefined && (scripts.includes(s) || !inScript(s)),
+		trace
+	);
+	if (script && symbols.length === 0) {
+		trace?.push('none of them in the script: the component itself');
+		return [{ ...script, name: basename(path), kind: COMPONENT }];
+	}
+	return symbols;
+}
 
 interface Position {
 	line: number;
@@ -327,8 +429,8 @@ const CONTAINERS = new Set([1, 2, 3, 4, 5, 10, 11, 19, 23]);
  */
 const SCOPES = new Set([1, 2, 3, 4, 15]);
 /** not a SymbolKind: a Svelte component, its script standing for it */
-const COMPONENT = -1;
-const KINDS: Record<number, string> = {
+export const COMPONENT = -1;
+export const KINDS: Record<number, string> = {
 	[COMPONENT]: 'component',
 	1: 'file',
 	2: 'module',
@@ -354,14 +456,16 @@ const KINDS: Record<number, string> = {
  * The declarations the lines (0-based) are in: for each, the outermost one that isn't a
  * container like a class or namespace, so a line in a method is the method, not a local
  * in it, and one between a class's methods is the class. A namespace is never one, and
- * `wrapper` says which symbols only wrap others, to look into like containers.
+ * `wrapper` says which symbols only wrap others, to look into like containers. `outermost`
+ * takes the class itself for a line in its method.
  */
 export function symbolsAt(
 	found: DocumentSymbol[],
 	lines: number[],
 	wrapper: (symbol: DocumentSymbol) => boolean = () => false,
 	/** for each line, the declarations around it and which was taken */
-	trace?: string[]
+	trace?: string[],
+	outermost = false
 ): DocumentSymbol[] {
 	const flat: DocumentSymbol[] = [];
 	const walk = (list: DocumentSymbol[]) => {
@@ -385,7 +489,7 @@ export function symbolsAt(
 		for (const s of around) {
 			if (wrapper(s) || SCOPES.has(s.kind)) continue;
 			pick = s;
-			if (!CONTAINERS.has(s.kind)) break;
+			if (outermost || !CONTAINERS.has(s.kind)) break;
 		}
 		if (pick) picked.set(`${pick.name}:${pick.selectionRange.start.line}`, pick);
 		trace?.push(
@@ -400,10 +504,10 @@ export function symbolsAt(
 }
 
 /** Paths and lines as the prompt shows them, relative to the checkout, and what the diff changed. */
-class Where {
+export class Where {
 	#texts = new Map<string, Promise<string[]>>();
 	#added: Set<string>;
-	#ignored = new Map<string, Promise<boolean>>();
+	#kept: Promise<Set<string> | null> | undefined;
 
 	constructor(
 		readonly dir: string,
@@ -423,16 +527,26 @@ class Where {
 		if (!uri.startsWith('file:')) return null;
 		const path = relative(this.dir, fileURLToPath(uri));
 		if (path.startsWith('..') || path.startsWith(sep)) return null;
-		let ignored = this.#ignored.get(path);
-		if (!ignored) {
-			// check-ignore exits with 1 when the path isn't ignored
-			ignored = git(this.dir, ['check-ignore', '-q', '--', path]).then(
-				() => true,
-				() => false
-			);
-			this.#ignored.set(path, ignored);
-		}
-		return (await ignored) ? null : path;
+		const kept = await this.#files();
+		return !kept || kept.has(path) ? path : null;
+	}
+
+	/**
+	 * The files git keeps, or would: tracked, or new and not ignored. Listed once, rather
+	 * than a check-ignore for each file a use is in. Null when git can't say, all count then
+	 */
+	#files() {
+		this.#kept ??= git(this.dir, [
+			'ls-files',
+			'-z',
+			'--cached',
+			'--others',
+			'--exclude-standard'
+		]).then(
+			(out) => new Set(out.split('\0').filter(Boolean)),
+			() => null
+		);
+		return this.#kept;
 	}
 
 	/** One use: where, the line itself, and whether the diff changed it. */
@@ -640,6 +754,13 @@ const store = globalThis as {
 const { holds, queues } = (store.__blast ??= { holds: new Map(), queues: new Map() });
 
 /**
+ * Holders that let go when asked, like a change map keeping its language servers warm:
+ * called when an analysis waits for the repo at another commit.
+ */
+export const yielders = ((store.__blast as { yielders?: Map<string, () => void> }).yielders ??=
+	new Map());
+
+/**
  * The repo at `to` for a blast radius thread, kept there until it's released: threads
  * at the same commit share it, one at another commit waits for them to finish. The
  * working tree for uncommitted changes, held by no one.
@@ -657,6 +778,7 @@ export async function holdCheckout(
 		const held = holds.get(root);
 		if (held && held.to !== to) {
 			report.status(`Waiting for a blast radius at ${held.to.slice(0, 7)} to finish`);
+			yielders.get(root)?.();
 			await unlessAborted(held.freed, signal);
 			continue;
 		}

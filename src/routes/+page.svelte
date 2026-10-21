@@ -7,7 +7,8 @@
 	import { remember } from '$lib/prefs';
 	import { typing } from '$lib/keys';
 	import { sameSha } from '$lib/refs';
-	import { columnsOf } from '$lib/diff/hunks';
+	import { columnsOf, findHunk } from '$lib/diff/hunks';
+	import { reveal, span as hunkSpan } from '$lib/ask/rows';
 	import { repoName } from '$lib/repos';
 	import { Threads } from '$lib/ask/threads.svelte';
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
@@ -24,6 +25,7 @@
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
 	import GuideView from '$lib/components/GuideView.svelte';
 	import ExplainerView from '$lib/components/ExplainerView.svelte';
+	import ChangeMapView from '$lib/components/ChangeMapView.svelte';
 	import RefPicker from '$lib/components/RefPicker.svelte';
 	import RepoButton from '$lib/components/RepoButton.svelte';
 	import RepoList from '$lib/components/RepoList.svelte';
@@ -53,7 +55,7 @@
 	let ready = $state(false);
 	let pending = $state(true);
 	// the tab is only in the url, switching it loads nothing: what was loaded is reused
-	type View = 'overview' | 'guide' | 'explainer' | 'files';
+	type View = 'overview' | 'guide' | 'explainer' | 'map' | 'files';
 	// a pull request opens on its overview, anything else on its diff: the one with no
 	// `view` in the url
 	const defaultView = $derived<View>(data.mode === 'pr' ? 'overview' : 'files');
@@ -61,6 +63,7 @@
 	const urlView = $derived<View>(
 		asked === 'guide' ||
 			asked === 'explainer' ||
+			asked === 'map' ||
 			asked === 'files' ||
 			(asked === 'overview' && data.mode === 'pr')
 			? asked
@@ -139,6 +142,7 @@
 		...(range
 			? [
 					{ value: 'guide' as const, label: 'Guide' },
+					{ value: 'map' as const, label: 'Map' },
 					{ value: 'explainer' as const, label: 'Visual explainer' }
 				]
 			: [])
@@ -159,6 +163,12 @@
 		afterSwitch = null;
 		tick().then(next.then);
 	});
+
+	/** Shows a hunk in the diff, from the map. */
+	function jumpToHunk(id: string) {
+		const found = findHunk(diff.files, id);
+		if (found) switchView('files', () => reveal(hunkSpan(id, 0, found.hunk.lines.length - 1)));
+	}
 
 	/** Goes to a review comment's thread, in the diff where every thread has its lines. */
 	function jump(thread: ReviewThread) {
@@ -903,6 +913,17 @@
 				</p>
 			</div>
 		{/if}
+	{:else if view === 'map' && range}
+		{#key JSON.stringify([data.repo, range.from, range.to])}
+			<ChangeMapView
+				repo={data.repo}
+				start={range.from}
+				stop={range.to}
+				files={diff.files}
+				layout={shownLayout}
+				onjump={jumpToHunk}
+			/>
+		{/key}
 	{:else if view === 'guide' && diff.guide}
 		<GuideView
 			guide={diff.guide}

@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
 import { createFixture } from './testing/fixture';
 
 vi.mock('$env/dynamic/private', () => ({ env: process.env }));
-const { holdCheckout, moveCompileCommands, serverFor, symbolsAt } = await import('./blast');
+const { holdCheckout, moveCompileCommands, serverFor, symbolsAt, Where } = await import('./blast');
 const { resolveCommit } = await import('./git');
 
 const range = (start: number, end: number) => ({
@@ -181,5 +182,30 @@ test('threads at one commit share the checkout, one at another waits for them', 
 		delete process.env.GUIDES_DIR;
 		rmSync(guides, { recursive: true, force: true });
 		fixture.cleanup();
+	}
+});
+
+test("a use counts in the repo's own files, not in generated ones or outside it", async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'sloppy-diff-where-'));
+	try {
+		const git = (...args: string[]) => execFileSync('git', args, { cwd: dir });
+		git('init', '-q');
+		writeFileSync(join(dir, '.gitignore'), 'build/\n');
+		writeFileSync(join(dir, 'kept.ts'), '');
+		git('add', '.');
+		git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'one');
+		// new and not ignored, as an uncommitted change has it, and generated
+		writeFileSync(join(dir, 'new.ts'), '');
+		mkdirSync(join(dir, 'build'));
+		writeFileSync(join(dir, 'build', 'out.js'), '');
+
+		const where = new Where(dir, []);
+		const at = (path: string) => where.path(pathToFileURL(join(dir, path)).href);
+		expect(await at('kept.ts')).toBe('kept.ts');
+		expect(await at('new.ts')).toBe('new.ts');
+		expect(await at('build/out.js')).toBeNull();
+		expect(await where.path(pathToFileURL('/elsewhere/x.ts').href)).toBeNull();
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
 	}
 });
