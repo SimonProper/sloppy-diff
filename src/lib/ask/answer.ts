@@ -62,8 +62,8 @@ export function applyAskEvent(answer: Answer, event: AskEvent): Answer {
 
 /**
  * An answer's straight answer, what the peek shows, the explanation after it left
- * for the panel. Claude is asked to put a `---` line between them. Without one, the
- * first paragraph is the straight answer.
+ * for the panel. A blast radius is asked to put a `---` line between them. Without one,
+ * the first paragraph is the straight answer.
  */
 export function straightAnswer(text: string): string {
 	const trimmed = text.trim();

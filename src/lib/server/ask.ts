@@ -578,7 +578,7 @@ async function firstPrompt(
 	parts.push(`<question>\n${question}\n</question>`);
 	parts.push(suggesting(source.pr !== undefined));
 	parts.push(
-		`Answer the question${lines ? ' about the selected lines' : ''}. You may read and search files in the repository for context, paths are under ${root}. Start with the straight answer in one or two sentences, on its own, then a line with only \`---\`, then the explanation: why, and where in the code it shows. When the straight answer says it all, leave out the \`---\` and the explanation. Be concise, in markdown, and quote code only where it helps. Don't modify anything.`
+		`Answer the question${lines ? ' about the selected lines' : ''}. You may read and search files in the repository for context, paths are under ${root}. Open with a sentence or two that answer it on their own, the page shows them as a preview. Then give as much as the question needs, in the shape that fits it: nothing more when that says it all, a few sentences for a why, steps for a flow, a short list for several places. Headers only when the answer is long enough to need them. Point to code as \`path:line\`, and quote it only where it shows the point. Say what you're not sure of instead of guessing, and don't say the change breaks something unless you found the code it breaks. Be concise, in markdown. Don't modify anything.`
 	);
 	return parts.join('\n\n');
 }
@@ -590,7 +590,7 @@ function blastInstructions(dir: string): string {
 
 Start with the straight answer, on its own: in one or two sentences, how the contract of what the lines declare changed (signature, return values, errors thrown, side effects, timing), or that only its internals changed and nothing outside it is affected. Then a line with only \`---\`, then, leaving out what's empty:
 
-- **Affected**: each use the change breaks or changes the behaviour of, as \`path:line\` and why, the ones this change didn't update first. They're what the reviewer has to check.
+- **Affected**: each use the change breaks or changes the behaviour of, as \`path:line\` and why, the ones this change didn't update first. They're what the reviewer has to check. Only list a use when you read it and found how it's affected, not one that merely might be.
 - **Fine**: the uses that aren't affected, together in a line or two.
 - **Reaches**: the ways in that lead to it, like routes, commands, exported API or jobs, from the callers' callers.
 - **Tests**: the tests that exercise it, and whether any test the changed behaviour.
@@ -693,6 +693,7 @@ function suggesting(pr: boolean): string {
 The comment, in markdown, to the author of the change.
 \`\`\`
 \`path\` is the file as the diff names it. \`line\` is one line or a first-last range, all in one hunk of the diff, numbered as in the file on \`side\`: \`new\` for added and unchanged lines, \`old\` for removed ones, \`new\` when left out. Leave out \`line\` for a comment about the whole file. A path with spaces goes in double quotes. When the comment quotes code in a fence, open and close the block with four backticks.
+A comment is worth writing when the author would want to fix what it points out: something this change introduced, not what was there before, and not what's clearly intended. Name the code that's affected instead of speculating that something might break, and say the inputs or circumstances it takes. Keep each to a paragraph, with at most three lines of quoted code, matter-of-fact, without overstating how severe it is or praising the change. No comment is better than a weak one.
 ${pr ? replying : ''}The page shows these blocks as numbered cards after your answer, so don't repeat a comment in the text around it. The reviewer may ask to change one by its number: write the changed block again in full. Nothing is posted, the reviewer decides what to use. Don't write these blocks just to explain code.`;
 }
 

@@ -180,7 +180,7 @@ Split the change into sections a reviewer should read in order.
 - Order sections so the core of the change comes first (the hunks that implement the new behaviour), then supporting changes (types, plumbing, call sites, tests), then chores (formatting, renames, config, dependency and lockfile updates, generated files). Set \`kind\` to core, supporting or chore to match.
 - Give each section a short title and a rationale in markdown, one to four sentences, explaining why this part exists and what a reviewer should pay attention to. Don't narrate the diff line by line.
 - Every hunk id must appear in exactly one section. Use only ids that appear in the diff. Within a section, list hunks in the order they should be read.
-- \`notes\` are optional callouts on specific hunks: something subtle, risky, or worth a closer look. Use them sparingly and leave the array empty when there is nothing to flag.
+- \`notes\` are optional callouts on specific hunks: something subtle, risky, or worth a closer look, what the code alone doesn't say. Never restate what the lines plainly do, and don't invent concerns. Use them sparingly and leave the array empty when there is nothing to flag.
 - \`commits\` lists the short shas of the commits that contributed to each section.
 - \`title\` names the whole change; \`summary\` is two to four sentences of markdown on what it does and why.
 
