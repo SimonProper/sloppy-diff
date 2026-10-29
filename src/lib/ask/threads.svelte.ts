@@ -83,6 +83,8 @@ interface Config {
 	files: DiffFile[];
 	/** the GitHub pull request the range is, for Claude to know about */
 	pr?: number;
+	/** the branch the range is the whole of, its threads are saved under its name */
+	branch?: string;
 	/** its node id, comments go on it */
 	prId?: string;
 	/** you have a review in progress on it, comments go in there */
@@ -119,6 +121,8 @@ export class Threads {
 	newChat = $state('');
 	/** the lens over the whole page, instead of docked beside the diff */
 	expanded = $state(false);
+	/** a chat asked about another diff, to open once the page has loaded that diff */
+	opening = $state<string | null>(null);
 	/** a marker being hovered, and where to show its peek */
 	peek = $state<{ id: string; x: number; y: number } | null>(null);
 
@@ -168,12 +172,24 @@ export class Threads {
 			if (typed.draft || typed.replies || typed.newChat || typed.attached) writeJson(key, typed);
 			else writeText(key, null);
 		});
+		$effect(() => {
+			if (this.opening && this.get(this.opening)) {
+				this.openLens(this.opening);
+				this.opening = null;
+			}
+		});
 	}
 
 	/** Threads anchored to lines in any of these hunks. */
 	in(hunks: string[]): Thread[] {
 		const ids = new Set(hunks);
 		return this.list.filter((t) => !t.outdated && ids.has(t.anchor.hunk ?? ''));
+	}
+
+	/** the repo and the diff the threads are saved under */
+	get where(): { repo: string; scope: Scope } {
+		const { repo, scope } = this.#config();
+		return { repo, scope };
 	}
 
 	/** where a comment goes, null outside a pull request */
@@ -350,7 +366,7 @@ export class Threads {
 		thread?: string,
 		options: { retry?: boolean; blast?: boolean } = {}
 	): Promise<string> {
-		const { repo, from, to, pr } = this.#config();
+		const { repo, from, to, pr, branch } = this.#config();
 		const added = this.attached[thread ?? ''] ?? [];
 		const [first, ...rest] = added;
 		const lines = first && linesOf(first);
@@ -359,6 +375,7 @@ export class Threads {
 			from,
 			to,
 			pr,
+			branch,
 			text,
 			...(thread
 				? {

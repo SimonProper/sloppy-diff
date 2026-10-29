@@ -84,8 +84,32 @@ export interface Thread {
 	blast?: true;
 }
 
-/** Which diff a thread belongs to: a commit range, or the uncommitted changes. */
-export type Scope = 'worktree' | `${string}..${string}`;
+/**
+ * Which diff a thread belongs to: a pull request or a whole branch, whatever their commits
+ * are now, a commit range, or the uncommitted changes.
+ */
+export type Scope = 'worktree' | `pr-${number}` | `branch-${string}` | `${string}..${string}`;
+
+/** A branch's scope, its name made safe for a file name. */
+export const branchScope = (name: string): Scope => `branch-${encodeURIComponent(name)}`;
+
+/** Threads saved about another diff of the repo, and the page params that open it. */
+export interface Elsewhere {
+	scope: Scope;
+	kind: 'pr' | 'branch' | 'commit' | 'range' | 'worktree';
+	/** the branch, the commit's subject, the pull request's number */
+	label: string;
+	params: Record<string, string>;
+	/** newest first */
+	threads: {
+		id: string;
+		question: string;
+		/** its lines and file, see Anchor */
+		anchor: Pick<Anchor, 'path' | 'label'>;
+		/** its last message */
+		at: string;
+	}[];
+}
 
 /** What happens while the agent answers, folded into an Answer for the page. */
 export type AskEvent =

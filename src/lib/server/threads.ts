@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
 	linesOf,
 	type Anchor,
+	type Elsewhere,
 	type LineSpan,
 	type Message,
 	type Scope,
@@ -15,16 +16,19 @@ import { spanLabel, spanLines } from '$lib/ask/span';
 import { suggestionBlocks } from '$lib/ask/suggest';
 import { findHunk, spanAt } from '$lib/diff/hunks';
 import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
+import { git } from './git';
 import { repoDir } from './guides';
 import { markdown } from './markdown';
 
 /**
- * Questions asked about a diff, saved next to the guides: one file per commit
- * range, and one for the uncommitted changes. Threads are anchored to hunk
- * ids, which hash the content, so they stay put while the code does.
+ * Questions asked about a diff, saved next to the guides: one file per pull
+ * request, one per whole branch, by name, one per other commit range, and one
+ * for the uncommitted changes. Threads are anchored to hunk ids, which hash the
+ * content, so they stay put while the code does, through a rebase too.
  */
 
-const SCOPE = /^(worktree|[0-9a-f]{4,64}\.\.[0-9a-f]{4,64})$/;
+const SCOPE =
+	/^(worktree|pr-[1-9][0-9]{0,9}|branch-[\w.~!'()*%-]{1,240}|[0-9a-f]{4,64}\.\.[0-9a-f]{4,64})$/;
 const THREAD_ID = /^[0-9a-f]{12}$/;
 
 export function checkScope(scope: string): Scope {
@@ -90,6 +94,102 @@ export function saveThread(root: string, scope: Scope, thread: Thread) {
 			? threads.map((t) => (t.id === thread.id ? thread : t))
 			: [...threads, thread]
 	);
+}
+
+/**
+ * Moves the threads saved under `from` to `to` when `to` has none yet: a pull request's
+ * and a branch's threads were once saved under their commit range.
+ */
+export async function adoptThreads(root: string, from: Scope, to: Scope) {
+	const target = threadsPath(root, to);
+	if (
+		await access(target).then(
+			() => true,
+			() => false
+		)
+	)
+		return;
+	await rename(threadsPath(root, from), target).catch(() => {});
+}
+
+/**
+ * The threads saved about the repo's other diffs, newest first: a branch since renamed, a
+ * range a rebase left behind, or just another pull request. None of them gets lost.
+ */
+export async function threadsElsewhere(root: string, here: Scope): Promise<Elsewhere[]> {
+	const files = await readdir(join(repoDir(root), 'threads')).catch(() => []);
+	const scopes = files
+		.filter((f) => f.endsWith('.json'))
+		.map((f) => f.slice(0, -'.json'.length))
+		.filter((s) => s !== here && SCOPE.test(s)) as Scope[];
+	const [found, commits] = await Promise.all([
+		Promise.all(
+			scopes.map(async (scope) => {
+				const threads = (await loadThreads(root, scope))
+					.map((t) => ({
+						id: t.id,
+						question: t.messages[0].text.split('\n')[0],
+						anchor: { path: t.anchor.path, label: t.anchor.label },
+						at: t.messages.at(-1)?.createdAt ?? t.createdAt
+					}))
+					.sort((a, b) => b.at.localeCompare(a.at));
+				return { scope, threads };
+			})
+		),
+		subjects(
+			root,
+			scopes.filter((s) => s.includes('..')).map((s) => s.split('..')[1])
+		)
+	]);
+	return found
+		.filter((e) => e.threads.length)
+		.map((e) => ({ ...e, ...whereIs(e.scope, commits) }))
+		.sort((a, b) => b.threads[0].at.localeCompare(a.threads[0].at));
+}
+
+/** Each commit's subject and first parent, by full sha. Commits gone since are left out. */
+async function subjects(root: string, shas: string[]) {
+	if (!shas.length) return [];
+	const out = await git(root, [
+		'log',
+		'--no-walk=unsorted',
+		'--ignore-missing',
+		'--format=%H%x00%P%x00%s',
+		...shas,
+		'--'
+	]).catch(() => '');
+	return out
+		.split('\n')
+		.filter(Boolean)
+		.map((line) => {
+			const [sha, parents, subject] = line.split('\0');
+			return { sha, parent: parents.split(' ')[0] ?? '', subject };
+		});
+}
+
+/** How a scope reads, and the page params that show its diff. */
+function whereIs(
+	scope: Scope,
+	commits: { sha: string; parent: string; subject: string }[]
+): Pick<Elsewhere, 'kind' | 'label' | 'params'> {
+	if (scope === 'worktree') return { kind: 'worktree', label: 'Uncommitted changes', params: {} };
+	if (scope.startsWith('pr-')) {
+		const pr = scope.slice('pr-'.length);
+		return { kind: 'pr', label: `#${pr}`, params: { pr } };
+	}
+	if (scope.startsWith('branch-')) {
+		const branch = decodeURIComponent(scope.slice('branch-'.length));
+		return { kind: 'branch', label: branch, params: { branch } };
+	}
+	const [from, to] = scope.split('..');
+	const commit = commits.find((c) => c.sha.startsWith(to));
+	// one commit against its parent, otherwise a range named after its last commit
+	const kind = commit?.parent.startsWith(from) ? 'commit' : 'range';
+	return {
+		kind,
+		label: commit?.subject ?? `${from.slice(0, 7)}..${to.slice(0, 7)}`,
+		params: { from, to }
+	};
 }
 
 export async function deleteThread(root: string, scope: Scope, id: string) {

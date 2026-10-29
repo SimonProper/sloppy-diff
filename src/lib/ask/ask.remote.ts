@@ -4,7 +4,8 @@ import { ask, cancelAsk, getAskJob, sourceFor, type Question } from '$lib/server
 import { watchJob } from '$lib/server/jobs';
 import { requestProvider } from '$lib/server/provider-request';
 import { badRequestOnError } from '$lib/server/requests';
-import { checkScope, checkThreadId, deleteThread } from '$lib/server/threads';
+import { repoRoot } from '$lib/server/git';
+import { checkScope, checkThreadId, deleteThread, threadsElsewhere } from '$lib/server/threads';
 import { applyAskEvent, startAnswer } from './answer';
 
 type ThreadRef = { repo: string; scope: string; thread: string };
@@ -20,10 +21,11 @@ export const askClaude = command(
 		from,
 		to,
 		pr,
+		branch,
 		...question
-	}: { repo: string; from: string; to: string; pr?: number } & Question) =>
+	}: { repo: string; from: string; to: string; pr?: number; branch?: string } & Question) =>
 		badRequestOnError(async () => {
-			const source = await sourceFor(repo, from, to, pr);
+			const source = await sourceFor(repo, from, to, pr, branch);
 			const thread = await ask(source, question, requestProvider());
 			return { scope: source.scope, thread };
 		})
@@ -41,6 +43,11 @@ export const followAnswer = query.live(
 		if (!job) error(404, 'The agent is not answering in this thread');
 		yield* watchJob(job, applyAskEvent, startAnswer(), getRequestEvent().request.signal);
 	}
+);
+
+/** The threads saved about the repo's other diffs, see threadsElsewhere. */
+export const otherThreads = query('unchecked', ({ repo, scope }: { repo: string; scope: string }) =>
+	badRequestOnError(async () => threadsElsewhere(await repoRoot(repo), checkScope(scope)))
 );
 
 /** Stops the agent answering. */

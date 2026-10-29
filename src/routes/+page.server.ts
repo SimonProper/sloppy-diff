@@ -4,7 +4,7 @@ import { parseDiff } from '$lib/diff/parse';
 import { lineStats } from '$lib/diff/hunks';
 import type { Layout } from '$lib/diff/split';
 import type { ChangeMode, ChangeSummary, DiffFile } from '$lib/diff/types';
-import type { Scope, Thread } from '$lib/ask/types';
+import { branchScope, type Scope, type Thread } from '$lib/ask/types';
 import type { Guide } from '$lib/guide/types';
 import { PR_VIEWS, type PrSummary, type PrView, type PullRequest } from '$lib/pr/types';
 import type { Branch, Commit, CommitInfo } from '$lib/refs';
@@ -42,7 +42,7 @@ import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { checkPrNumber, readPullRequest, recentPullRequests } from '$lib/server/gh';
 import { highlightFiles } from '$lib/server/highlight';
-import { loadThreads, prepareThreads } from '$lib/server/threads';
+import { adoptThreads, loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
 import type { PageServerLoad } from './$types';
 import { noDiff } from './no-diff';
@@ -242,10 +242,17 @@ export const load: PageServerLoad = async ({
 		files,
 		changes
 	}: Awaited<ReturnType<typeof work>>) => {
-		// questions asked about this diff: the range's, or the working tree's
-		const scope: Scope = selection.range
+		// questions asked about this diff: the pull request's or the whole branch's, through
+		// new commits and rebases, the range's, or the working tree's
+		const range: Scope | null = selection.range
 			? `${selection.range.from}..${selection.range.to}`
-			: 'worktree';
+			: null;
+		const scope: Scope = selection.pr
+			? `pr-${selection.pr.number}`
+			: selection.branch && !selection.branch.first
+				? branchScope(selection.branch.name)
+				: (range ?? 'worktree');
+		if (range && scope !== range) await adoptThreads(root, range, scope);
 		const [guide, threads] = await Promise.all([
 			timing.measure(
 				'guide',

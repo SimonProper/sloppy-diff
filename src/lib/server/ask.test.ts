@@ -101,8 +101,8 @@ vi.mock('$env/dynamic/private', () => ({
 }));
 
 const { ask, cancelAsk, cut, getAskJob, sourceFor } = await import('./ask');
-const { deleteThread, loadThreads, prepareThreads } = await import('./threads');
-const { readDiff, resolveCommit } = await import('./git');
+const { deleteThread, loadThreads, prepareThreads, threadsElsewhere } = await import('./threads');
+const { git, readDiff, resolveCommit } = await import('./git');
 const { holdCheckout } = await import('./blast');
 
 const fixture = createFixture();
@@ -380,6 +380,52 @@ describe('asking about lines', () => {
 		const now = parseDiff(await readDiff(fixture.root, 'HEAD', ''));
 		expect(prepareThreads(saved, now).map((t) => t.outdated)).toEqual([true]);
 		expect(prepareThreads(saved, diff).map((t) => t.outdated)).toEqual([false]);
+	});
+
+	test("a pull request's threads outlive a rebase", async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to, 7);
+		expect(source.scope).toBe('pr-7');
+		const thread = await ask(source, { text: 'Why the rename?', span });
+		await finished(thread, 'pr-7');
+
+		// rebased and force pushed: other shas, the same pull request
+		const rebased = await sourceFor(fixture.root, to, to, 7);
+		const again = await ask(rebased, { text: 'And now?', thread: thread.id });
+		expect(again.messages.map((m) => m.text)).toEqual([
+			'Why the rename?',
+			'It is **fine**.',
+			'And now?'
+		]);
+		await finished(again, 'pr-7');
+	});
+
+	test("a branch's threads go by its name, and show from every other diff", async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to, undefined, 'feat/x');
+		expect(source.scope).toBe('branch-feat%2Fx');
+		const thread = await ask(source, { text: 'Why the rename?\nAnd more', span });
+		await finished(thread, source.scope);
+
+		const there = (await threadsElsewhere(fixture.root, 'worktree')).find(
+			(e) => e.scope === source.scope
+		);
+		expect(there).toMatchObject({
+			kind: 'branch',
+			label: 'feat/x',
+			params: { branch: 'feat/x' },
+			threads: [{ id: thread.id, question: 'Why the rename?', anchor: { path: 'src/cart.ts' } }]
+		});
+		const here = await threadsElsewhere(fixture.root, source.scope);
+		expect(here.some((e) => e.scope === source.scope)).toBe(false);
+
+		// a range goes by its last commit's subject
+		const range = await sourceFor(fixture.root, from, to);
+		await finished(await ask(range, { text: 'And here?', span }));
+		const [named] = (await threadsElsewhere(fixture.root, 'worktree')).filter(
+			(e) => e.scope === range.scope
+		);
+		expect(named.label).toBe((await git(fixture.root, ['log', '-1', '--format=%s', to])).trim());
 	});
 });
 

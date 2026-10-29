@@ -254,6 +254,7 @@
 		threads: diff.threads,
 		files: diff.files,
 		pr: diff.selection?.pr?.number,
+		branch: diff.selection?.branch?.first ? undefined : diff.selection?.branch?.name,
 		prId: diff.selection?.pr?.id,
 		pending: !!diff.selection?.pr?.pendingReviewId
 	}));

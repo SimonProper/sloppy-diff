@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { providerLabel, type AgentProvider } from '$lib/agent';
 import {
+	branchScope,
 	linesOf,
 	type Anchor,
 	type AskEvent,
@@ -756,11 +757,17 @@ export async function sourceFor(
 	from: string,
 	to: string,
 	/** the pull request the range is */
-	pr?: number
+	pr?: number,
+	/** the branch the range is the whole of */
+	branch?: string
 ): Promise<Source> {
 	const root = await repoRoot(repo);
 	if (!to) return { root, scope: 'worktree', from: from || 'HEAD', to: '' };
 	await Promise.all([resolveStart(root, from), resolveCommit(root, to)]);
-	const scope = checkScope(`${from}..${to}`);
-	return { root, scope, from, to, ...(pr !== undefined && { pr: checkPrNumber(pr) }) };
+	if (pr !== undefined) {
+		const number = checkPrNumber(pr);
+		return { root, scope: checkScope(`pr-${number}`), from, to, pr: number };
+	}
+	const scope = checkScope(branch ? branchScope(branch) : `${from}..${to}`);
+	return { root, scope, from, to };
 }
