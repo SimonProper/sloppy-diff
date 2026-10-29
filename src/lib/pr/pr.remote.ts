@@ -5,7 +5,7 @@ import {
 	addReviewComment,
 	deleteComment,
 	editComment,
-	listPullRequests
+	recentPullRequests
 } from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
 import { forgetPrs } from '$lib/server/cache';
@@ -13,7 +13,7 @@ import { badRequestOnError } from '$lib/server/requests';
 
 /** The repo's open pull requests, null without gh or GitHub. */
 export const getPullRequests = query('unchecked', async (repo: string) =>
-	listPullRequests(await repoRoot(repo)).catch(() => null)
+	recentPullRequests(await repoRoot(repo)).catch(() => null)
 );
 
 /** Comments on lines or replies on the pull request `pr` (its node id): with `post` at once,

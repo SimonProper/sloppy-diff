@@ -1,5 +1,13 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { cachedDiff, clearDiffs, forgetPrs, remember, revalidatePr, storeDiff } from './cache';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+	cachedDiff,
+	clearDiffs,
+	forgetPrs,
+	recentRead,
+	remember,
+	revalidatePr,
+	storeDiff
+} from './cache';
 
 describe('diff cache', () => {
 	beforeEach(clearDiffs);
@@ -47,7 +55,7 @@ describe('remember', () => {
 describe('revalidatePr', () => {
 	it('serves the last read while reading again, not past a write', async () => {
 		let calls = 0;
-		const read = () => revalidatePr('pr-test', async () => ++calls);
+		const read = () => revalidatePr('pr-test', async () => ++calls, true);
 
 		const first = read();
 		expect(first.fresh).toBeNull();
@@ -66,9 +74,51 @@ describe('revalidatePr', () => {
 
 	it('keeps the last read when reading again fails', async () => {
 		await revalidatePr('pr-fail', async () => 'kept').now;
-		await revalidatePr('pr-fail', () => Promise.reject(new Error('offline'))).fresh?.catch(
+		await revalidatePr('pr-fail', () => Promise.reject(new Error('offline')), true).fresh?.catch(
 			() => {}
 		);
-		expect(await revalidatePr('pr-fail', async () => 'next').now).toBe('kept');
+		expect(await revalidatePr('pr-fail', async () => 'next', true).now).toBe('kept');
+	});
+
+	it('serves a read under 10s old without asking again, unless forced', async () => {
+		vi.useFakeTimers();
+		try {
+			let calls = 0;
+			const read = (force = false) => revalidatePr('pr-recent', async () => ++calls, force);
+			await read().now;
+			const shared = read();
+			expect(shared.fresh).toBeNull();
+			expect(await shared.now).toBe(1);
+			expect(await read(true).fresh).toBe(2);
+			vi.advanceTimersByTime(10_001);
+			expect(await read().fresh).toBe(3);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
+describe('recentRead', () => {
+	it('shares a read under 10s old, the one going included, not past a write or force', async () => {
+		vi.useFakeTimers();
+		try {
+			let calls = 0;
+			const read = (force = false) => recentRead('recent-test', async () => ++calls, force);
+			const [a, b] = [read(), read()];
+			expect([await a, await b]).toEqual([1, 1]);
+			expect(await read(true)).toBe(2);
+			forgetPrs();
+			expect(await read()).toBe(3);
+			vi.advanceTimersByTime(10_001);
+			expect(await read()).toBe(4);
+			expect(await read()).toBe(4);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('forgets failures', async () => {
+		await recentRead('recent-fail', () => Promise.reject(new Error('offline'))).catch(() => {});
+		expect(await recentRead('recent-fail', async () => 'next')).toBe('next');
 	});
 });

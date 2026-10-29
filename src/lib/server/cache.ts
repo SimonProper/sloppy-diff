@@ -52,7 +52,7 @@ const DIFF_LIMIT = 40;
 const DIFF_LINES = 300_000;
 
 const store = globalThis as {
-	__memoLru?: ReturnType<typeof lru<{ version: string; value: Promise<unknown> }>>;
+	__memoLru?: ReturnType<typeof lru<{ version: string; value: Promise<unknown>; at?: number }>>;
 	__diffLru?: ReturnType<typeof lru<unknown>>;
 };
 // on globalThis so a dev server module reload keeps them
@@ -99,24 +99,52 @@ export function storeDiff(key: string, value: unknown, weight: number) {
 let prWrites = 0;
 
 /**
+ * How long a read of GitHub stands in for asking again: tabs that each read again in the
+ * background, at about the same time, share one. A page opened or reloaded asks anyway
+ */
+const FRESH_FOR = 10_000;
+
+const recent = (hit: { at?: number } | undefined) =>
+	hit?.at !== undefined && Date.now() - hit.at < FRESH_FOR;
+
+/**
  * A pull request as it was read last, served while GitHub is asked again: its comments,
  * checks and head move without any ref here moving. `fresh` is that new read, null when
- * nothing was kept and `now` is the read itself. A failed read keeps what was there.
+ * nothing was kept and `now` is the read itself, or when the one kept was read under 10s
+ * ago and isn't `force`d past. A failed read keeps what was there.
  */
 export function revalidatePr<T>(
 	key: string,
-	compute: () => Promise<T>
+	compute: () => Promise<T>,
+	force = false
 ): { now: Promise<T>; fresh: Promise<T> | null } {
 	const hit = memo.get(key);
 	const writes = String(prWrites);
+	const kept = hit?.version === writes ? hit : undefined;
+	if (kept && !force && recent(kept)) return { now: kept.value as Promise<T>, fresh: null };
+	// from when it was asked, what it brings is at least that recent
+	const at = Date.now();
 	const value = compute();
 	value.then(
-		() => memo.set(key, { version: writes, value }),
+		() => memo.set(key, { version: writes, value, at }),
 		() => {}
 	);
-	return hit?.version === writes
-		? { now: hit.value as Promise<T>, fresh: value }
-		: { now: value, fresh: null };
+	return kept ? { now: kept.value as Promise<T>, fresh: value } : { now: value, fresh: null };
+}
+
+/**
+ * `compute` once for `key` while it's under 10s old, unless `force`d: a read of GitHub
+ * the tabs asking at about the same time share, the one still going included. Not past a
+ * write, failures aren't kept.
+ */
+export function recentRead<T>(key: string, compute: () => Promise<T>, force = false): Promise<T> {
+	const hit = memo.get(key);
+	const writes = String(prWrites);
+	if (hit?.version === writes && !force && recent(hit)) return hit.value as Promise<T>;
+	const value = compute();
+	memo.set(key, { version: writes, value, at: Date.now() });
+	value.catch(() => memo.get(key)?.value === value && memo.delete(key));
+	return value;
 }
 
 /** After a comment was added or deleted, every kept pull request is behind GitHub. */

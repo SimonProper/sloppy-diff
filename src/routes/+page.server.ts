@@ -40,7 +40,7 @@ import {
 } from '$lib/server/cache';
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
-import { checkPrNumber, listPullRequests, readPullRequest } from '$lib/server/gh';
+import { checkPrNumber, readPullRequest, recentPullRequests } from '$lib/server/gh';
 import { highlightFiles } from '$lib/server/highlight';
 import { loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
@@ -96,9 +96,18 @@ interface Selection {
 
 const CHANGE_MODES: ChangeMode[] = ['lines', 'tokens'];
 
-export const load: PageServerLoad = async ({ url, cookies, setHeaders, depends }) => {
+export const load: PageServerLoad = async ({
+	url,
+	cookies,
+	setHeaders,
+	depends,
+	isDataRequest
+}) => {
 	// read again in the background on coming back to the page, see keepFresh
 	depends('app:page');
+	// a page opened or reloaded asks GitHub, whatever another tab read a moment ago. Only
+	// what's read in the background, or on moving within the page, shares that
+	const force = !isDataRequest;
 	const timing = new Timing();
 	const report = () => setHeaders({ 'server-timing': timing.header() });
 
@@ -258,15 +267,21 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders, depends }
 		head.then(async ([, defaultBase]) => described(await work(await selection, defaultBase)));
 
 	// a PR's comments and head move without any ref here moving, it's asked of GitHub
-	// every time. The one read last is served meanwhile, the page swaps the new one in
+	// unless another tab just did. The one read last is served meanwhile, the page swaps
+	// the new one in
 	const pr =
 		mode === 'pr' && inputs.pr
 			? head.then(([current, defaultBase]) =>
-					revalidatePr(`${root}\0pr\0${inputs.pr}`, () =>
-						select(root, mode, inputs, current, defaultBase)
+					revalidatePr(
+						`${root}\0pr\0${inputs.pr}`,
+						() => select(root, mode, inputs, current, defaultBase),
+						force
 					)
 				)
 			: null;
+	// the open ones beside it are asked for by the page once it's up, as it loads again
+	// in the background. Reloaded, they're read again too, ready by the time it asks
+	if (force && mode === 'pr' && inputs.pr) void recentPullRequests(root, true);
 	const selection = () =>
 		pr
 			? pr.then(({ now }) => timing.measure('pr', now))
@@ -285,7 +300,7 @@ export const load: PageServerLoad = async ({ url, cookies, setHeaders, depends }
 	// to pick from instead
 	const diff = (
 		mode === 'pr' && !inputs.pr
-			? timing.measure('prs', listPullRequests(root)).then((prs) => ({ ...noDiff(), prs }))
+			? timing.measure('prs', recentPullRequests(root, force)).then((prs) => ({ ...noDiff(), prs }))
 			: read(selection())
 	)
 		.catch((error) => noDiff(errorMessage(error)))

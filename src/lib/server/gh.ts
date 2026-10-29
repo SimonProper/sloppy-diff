@@ -12,6 +12,7 @@ import type {
 	ReviewThread
 } from '$lib/pr/types';
 import { sameSha } from '$lib/refs';
+import { recentRead } from './cache';
 import { mergeBase, resolveCommit } from './git';
 import { cleanGithubHtml } from './github-html';
 import { logged } from './log';
@@ -402,6 +403,11 @@ export async function readPullRequest(
 	// the commits on the base since the PR split off it
 	pr.behind = Number(await git(root, ['rev-list', '--count', `${from}..${pr.baseRefOid}`]));
 	return { pr, from, to };
+}
+
+/** The open pull requests as read under 10s ago, `force` asks GitHub anyway. */
+export function recentPullRequests(root: string, force = false) {
+	return recentRead(`${root}\0prs`, () => listPullRequests(root), force);
 }
 
 /** Open pull requests, null when gh isn't installed or signed in, or the repo isn't on GitHub. */
