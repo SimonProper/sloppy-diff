@@ -1,4 +1,7 @@
 import { isHttpError } from '@sveltejs/kit';
+import { tick } from 'svelte';
+import { findHunk } from '$lib/diff/hunks';
+import type { DiffFile } from '$lib/diff/types';
 import { errorText } from '$lib/errors';
 import { commentOnReview } from '$lib/pr/pr.remote';
 import type { Replying } from '$lib/pr/types';
@@ -6,17 +9,40 @@ import { refresh } from '$lib/pr/refresh';
 import { readJson, writeJson, writeText } from '$lib/storage';
 import { startAnswer, type Answer } from './answer';
 import { askClaude, followAnswer, removeThread, stopAnswer } from './ask.remote';
-import type { LineSpan, Scope, Side, Suggestion, Thread } from './types';
+import { spanLabel } from './span';
+import {
+	linesOf,
+	type Anchor,
+	type LineSpan,
+	type Scope,
+	type Side,
+	type Suggestion,
+	type Thread
+} from './types';
+
+/** Just the lines of a span, without what else an anchor carries. */
+const spanOf = ({ hunk, start, end, side }: LineSpan): LineSpan => ({
+	hunk,
+	start,
+	end,
+	...(side && { side })
+});
+
+/** What the server is sent of lines added to a chat. */
+const ref = (a: Added) => {
+	const lines = linesOf(a);
+	return lines ? spanOf(lines) : { path: a.path };
+};
 
 /** An answer on its way, as the server last sent it. */
 export interface Live extends Answer {
 	startedAt: number;
 }
 
-/**
- * What a new question is about, and what's been typed: lines, a whole file without them,
- * or the whole change without a path either.
- */
+/** Lines, or a whole file, added to a chat from the diff, and the guide section they were picked in. */
+export type Added = Anchor & { section?: string };
+
+/** A comment on a pull request being written: on lines, or a whole file without them. */
 export interface Draft {
 	span?: LineSpan;
 	path?: string;
@@ -40,6 +66,7 @@ interface Typed {
 	draft?: Draft;
 	replies?: Record<string, string>;
 	newChat?: string;
+	attached?: Record<string, Added[]>;
 }
 
 /** How a question reads at a glance, on its marker and in the list. */
@@ -52,6 +79,8 @@ interface Config {
 	to: string;
 	scope: Scope;
 	threads: Thread[];
+	/** the diff's files, to label the lines added to a chat */
+	files: DiffFile[];
 	/** the GitHub pull request the range is, for Claude to know about */
 	pr?: number;
 	/** its node id, comments go on it */
@@ -77,6 +106,8 @@ export class Threads {
 	cursor = $state<Cursor | null>(null);
 	/** follow-ups being typed, by thread */
 	replies = $state<Record<string, string>>({});
+	/** lines added to a chat from the diff, by thread, sent with its next question. '' the new chat's */
+	attached = $state<Record<string, Added[]>>({});
 	/** threads whose answer was running when the page loaded, and has gone since */
 	lost = $state<Record<string, boolean>>({});
 
@@ -124,14 +155,17 @@ export class Threads {
 				this.composing = !!typed.draft;
 				this.replies = typed.replies ?? {};
 				this.newChat = typed.newChat ?? '';
+				this.attached = typed.attached ?? {};
 			}
 			const replies = Object.entries(this.replies).filter(([, text]) => text.trim());
+			const attached = Object.entries(this.attached).filter(([, added]) => added.length);
 			const typed: Typed = {
 				draft: this.draft?.text.trim() ? this.draft : undefined,
 				replies: replies.length ? Object.fromEntries(replies) : undefined,
-				newChat: this.newChat.trim() || undefined
+				newChat: this.newChat.trim() || undefined,
+				attached: attached.length ? Object.fromEntries(attached) : undefined
 			};
-			if (typed.draft || typed.replies || typed.newChat) writeJson(key, typed);
+			if (typed.draft || typed.replies || typed.newChat || typed.attached) writeJson(key, typed);
 			else writeText(key, null);
 		});
 	}
@@ -201,13 +235,77 @@ export class Threads {
 		writeJson('sloppy-diff:ask-trail', this.trailOpen);
 	}
 
-	select(span: LineSpan, section?: string) {
-		this.#compose({ span, section });
+	/**
+	 * Lines picked in the diff: to the agent panel, or on a pull request to comment on, as picked.
+	 * `fresh`: to a new chat, not the one open in the panel.
+	 */
+	select(span: LineSpan, section?: string, fresh = false) {
+		if (this.review && this.intent === 'comment') this.#compose({ span, section });
+		else this.add({ span, section, fresh });
 	}
 
-	/** A new question about a whole file, its composer under the button `at`. */
+	/** what the panel's chat, or the new one under its list, will be sent with its next question */
+	get adding(): Added[] {
+		return this.attached[this.get(this.open) ? this.open! : ''] ?? [];
+	}
+
+	/** A whole file, to the agent panel or to comment on, its comment under the button `at`. */
 	selectWhole(path: string, section: string | undefined, at: string) {
-		this.#compose({ path, section, at });
+		if (this.review && this.intent === 'comment') this.#compose({ path, section, at });
+		else this.add({ path, section });
+	}
+
+	/**
+	 * Adds lines, or a whole file, to the chat open in the panel for its next follow-up, or with
+	 * the list open or `fresh` to the new chat under it, and opens the panel on its field.
+	 * `text`: what was typed about them already, added to the field.
+	 */
+	add({
+		span,
+		path,
+		section,
+		text = '',
+		fresh = false
+	}: Omit<Draft, 'at' | 'text'> & { text?: string; fresh?: boolean }) {
+		let added: Added;
+		if (span) {
+			const found = findHunk(this.#config().files, span.hunk);
+			if (!found) return;
+			const label = spanLabel(found.hunk, span);
+			added = { ...span, path: found.file.newPath, label, code: '', section };
+		} else if (path) added = { path, label: 'whole file', code: '', section };
+		else return;
+
+		if (fresh || !this.get(this.open)) this.back();
+		const id = this.open ?? '';
+		const before = this.attached[id] ?? [];
+		const same = (a: Added) =>
+			a.path === added.path &&
+			a.hunk === added.hunk &&
+			a.start === added.start &&
+			a.end === added.end &&
+			a.side === added.side;
+		if (!before.some(same)) this.attached[id] = [...before, added];
+		const typed = text.trim();
+		if (typed) {
+			const field = id ? (this.replies[id] ?? '') : this.newChat;
+			const value = [field.trim(), typed].filter(Boolean).join('\n');
+			if (id) this.replies[id] = value;
+			else this.newChat = value;
+		}
+
+		this.draft = null;
+		this.composing = false;
+		this.cursor = null;
+		this.peek = null;
+		this.panel = true;
+		// straight to asking about them, in whichever field the panel shows
+		// a frame on, after a field that has just opened has taken the focus itself
+		tick().then(() =>
+			requestAnimationFrame(() =>
+				document.querySelector<HTMLElement>('[data-ask-field] textarea')?.focus()
+			)
+		);
 	}
 
 	#compose(about: Omit<Draft, 'text'>) {
@@ -243,17 +341,19 @@ export class Threads {
 	}
 
 	/**
-	 * Asks in a new thread about the draft's lines, or with `change` about the whole change,
-	 * or as a follow-up in `thread`. With `blast`, the new thread asks for the blast radius of
-	 * the draft's lines instead of `text`. Returns the thread's id.
+	 * Asks as a follow-up in `thread`, or in a new chat about the lines added to it, the first
+	 * of them where it sits in the diff, or about the whole change without any. With `blast`,
+	 * the new chat asks for the blast radius of its lines instead of `text`. Returns its id.
 	 */
 	async ask(
 		text: string,
 		thread?: string,
-		options: { retry?: boolean; change?: boolean; blast?: boolean } = {}
+		options: { retry?: boolean; blast?: boolean } = {}
 	): Promise<string> {
 		const { repo, from, to, pr } = this.#config();
-		const draft = this.draft;
+		const added = this.attached[thread ?? ''] ?? [];
+		const [first, ...rest] = added;
+		const lines = first && linesOf(first);
 		const { scope, thread: saved } = await askClaude({
 			repo,
 			from,
@@ -261,24 +361,30 @@ export class Threads {
 			pr,
 			text,
 			...(thread
-				? { thread, retry: options.retry === true }
-				: options.change
-					? {}
-					: {
-							span: draft?.span,
-							path: draft?.path,
-							section: draft?.section,
-							blast: options.blast === true
-						})
+				? {
+						thread,
+						retry: options.retry === true,
+						context: options.retry ? undefined : added.map(ref)
+					}
+				: first
+					? {
+							...(lines ? { span: spanOf(lines) } : { path: first.path }),
+							section: first.section,
+							blast: options.blast === true,
+							context: rest.map(ref)
+						}
+					: {})
 		});
 
 		this.#upsert(saved);
 		delete this.lost[saved.id];
-		if (thread) delete this.replies[thread];
-		else if (options.change) this.newChat = '';
-		else {
-			this.draft = null;
-			this.composing = false;
+		if (thread) {
+			delete this.replies[thread];
+			// a retry asks the last question again, the lines added since wait for the next one
+			if (!options.retry) delete this.attached[thread];
+		} else {
+			this.newChat = '';
+			delete this.attached[''];
 		}
 		this.follow(saved.id, scope);
 		return saved.id;
@@ -330,6 +436,7 @@ export class Threads {
 		await removeThread({ repo, scope, thread: id });
 		this.list = this.list.filter((t) => t.id !== id);
 		delete this.replies[id];
+		delete this.attached[id];
 		if (this.open === id) this.back();
 	}
 

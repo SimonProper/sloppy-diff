@@ -219,6 +219,45 @@ describe('asking about lines', () => {
 		await deleteThread(fixture.root, source.scope, thread.id);
 	});
 
+	test("a follow-up's added lines are saved with it and read by the agent", async () => {
+		stub('answer');
+		const source = await sourceFor(fixture.root, from, to);
+		const thread = await ask(source, { text: 'First?', path: 'src/cart.ts' });
+		await finished(thread);
+
+		const asked = await ask(source, { text: 'And these?', thread: thread.id, context: [span] });
+		const context = asked.messages.at(-1)?.context;
+		expect(context).toMatchObject([{ path: 'src/cart.ts', hunk: hunk.id, start: added }]);
+		await finished(thread);
+		expect(run(1).prompt).toContain(context![0].code);
+		expect(run(1).prompt).toContain('And these?');
+
+		// a new chat, about the first of them, and whole files
+		await expect(ask(source, { text: '', span, context: [span] })).rejects.toThrow(
+			'Ask a question first'
+		);
+		const fresh = await ask(source, {
+			text: 'Why async?',
+			span,
+			context: [span, { path: 'src/cart.ts' }]
+		});
+		expect(fresh.anchor).toMatchObject({ hunk: hunk.id, start: added });
+		expect(fresh.messages[0].context).toEqual([
+			context![0],
+			{ path: 'src/cart.ts', label: 'whole file', code: '' }
+		]);
+		await finished(fresh);
+		const prompt = run(2).prompt;
+		// its lines once, not again as a selection of their own
+		expect(prompt).toContain(context![0].code);
+		expect(prompt).not.toContain('The selected lines');
+		expect(prompt).toContain('Why async?');
+		expect(prompt).toContain('the whole of src/cart.ts');
+
+		await deleteThread(fixture.root, source.scope, thread.id);
+		await deleteThread(fixture.root, source.scope, fresh.id);
+	});
+
 	test('a session that is gone starts a new one with the conversation so far', async () => {
 		stub('answer');
 		const source = await sourceFor(fixture.root, from, to);

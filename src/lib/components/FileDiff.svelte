@@ -207,6 +207,12 @@
 		return picked?.hunk === hunk && inSpan(picked, index, line, side);
 	}
 
+	/** lines added to the panel's chat, waiting for its next question */
+	const added = $derived((threads?.adding ?? []).map(linesOf).filter((lines) => lines !== null));
+	function isAdded(hunk: string, index: number, line: DiffLine, side?: Side) {
+		return added.some((lines) => lines.hunk === hunk && inSpan(lines, index, line, side));
+	}
+
 	/** One line's piece of a question's marker. */
 	interface Mark {
 		status: Status;
@@ -340,11 +346,11 @@
 	/** on a pull request the lines can be commented on too */
 	const offers = $derived<('ask' | 'comment')[]>(threads?.review ? ['ask', 'comment'] : ['ask']);
 
-	/** with `intent`, what the composer sends switches to it first */
-	function acceptOffer(intent?: 'ask' | 'comment') {
+	/** with `intent`, what the composer sends switches to it first. `fresh`: to a new chat */
+	function acceptOffer(intent?: 'ask' | 'comment', fresh = false) {
 		if (!offer || !threads) return;
 		if (intent) threads.setIntent(intent);
-		threads.select(offer.span, section);
+		threads.select(offer.span, section, fresh);
 		offer = null;
 		window.getSelection()?.removeAllRanges();
 	}
@@ -654,6 +660,7 @@
 													tinted(line) && 'tinted',
 													line.reformatted && 'reformatted',
 													on && 'picked',
+													!on && isAdded(hunk.id, index, line) && 'added',
 													cursor?.hunk === hunk.id && cursor.head === index && 'cursor'
 												]}
 												title={line.reformatted ? REFORMATTED : undefined}
@@ -719,7 +726,8 @@
 					type="button"
 					class="flex h-[26px] items-center gap-1.5 rounded-lg border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
 					onpointerdown={(e) => e.preventDefault()}
-					onclick={() => acceptOffer(threads?.review ? intent : undefined)}
+					title={intent === 'ask' ? '⇧ for a new chat' : undefined}
+					onclick={(e) => acceptOffer(threads?.review ? intent : undefined, e.shiftKey)}
 				>
 					{intent === 'ask' ? 'Ask AI' : 'Comment'}
 					<kbd class="font-mono text-[10.5px] font-normal text-faint"
@@ -863,6 +871,7 @@
 				line.reformatted && 'reformatted',
 				side === 'old' && 'split-old',
 				on && 'picked',
+				!on && isAdded(hunk.id, index, line, side) && 'added',
 				cursor?.hunk === hunk.id &&
 					cursor.head === index &&
 					(cursor.side ?? 'new') === side &&
@@ -992,6 +1001,14 @@
 	}
 	/* a darker shade of its own colour, so added and removed still tell apart */
 	.row.picked:is(.add, .del) .gutter {
+		background: color-mix(in oklab, var(--fg) 8%, var(--gutter-bg));
+	}
+	/* in the panel's chat, waiting to be asked about: the pick's gutter without its wash */
+	.row.added .gutter {
+		background: color-mix(in oklab, var(--fg) 10%, var(--surface));
+		color: var(--fg);
+	}
+	.row.added:is(.add, .del) .gutter {
 		background: color-mix(in oklab, var(--fg) 8%, var(--gutter-bg));
 	}
 	/* the keyboard cursor's line, on top of the pick's wash: a darker gutter with a

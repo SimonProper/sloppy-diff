@@ -24,7 +24,9 @@
 	const sectionOf = (hunk: string) => guide?.sections.find((s) => s.hunks.includes(hunk))?.id;
 
 	// a, c, q, and picking lines from the keyboard, also while the panel is docked. The
-	// panel and the lens handle their own keys
+	// panel and the lens handle their own keys. ⇧A and ⇧↵ take the lines to a new chat
+	/** the keyboard pick goes to a new chat, it was started with ⇧A */
+	let fresh = false;
 	function onkeydown(event: KeyboardEvent) {
 		if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
 		if (typing(event)) return;
@@ -38,7 +40,8 @@
 			} else if (event.key === 'Enter') {
 				threads.select(
 					span(cursor.hunk, cursor.anchor, cursor.head, cursor.side),
-					sectionOf(cursor.hunk)
+					sectionOf(cursor.hunk),
+					fresh || event.shiftKey
 				);
 			} else if (event.key === 'Escape') {
 				threads.cursor = null;
@@ -47,12 +50,13 @@
 			return;
 		}
 
-		if (event.key === 'a' || (event.key === 'c' && threads.review)) {
+		if (event.key === 'a' || event.key === 'A' || (event.key === 'c' && threads.review)) {
 			// on a pull request, a asks the agent and c comments
 			if (threads.review) threads.setIntent(event.key === 'c' ? 'comment' : 'ask');
+			fresh = event.key === 'A';
 			const selected = selectedSpan(document.querySelector('main') ?? undefined);
 			if (selected) {
-				threads.select(selected.span, sectionOf(selected.span.hunk));
+				threads.select(selected.span, sectionOf(selected.span.hunk), fresh);
 				window.getSelection()?.removeAllRanges();
 			} else {
 				threads.cursor = startCursor();
@@ -112,6 +116,9 @@
 		<span><kbd>⇧</kbd><kbd>↑</kbd><kbd>↓</kbd> more lines</span>
 		{#if threads.cursor.side}<span><kbd>←</kbd><kbd>→</kbd> other side</span>{/if}
 		<span><kbd>↵</kbd> {threads.review && threads.intent === 'comment' ? 'comment' : 'ask'}</span>
+		{#if !(threads.review && threads.intent === 'comment')}<span
+				><kbd>⇧</kbd><kbd>↵</kbd> new chat</span
+			>{/if}
 		<span><kbd>esc</kbd> cancel</span>
 	</div>
 {/if}

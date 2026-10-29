@@ -20,8 +20,11 @@
 
 	let { threads, files, guide }: Props = $props();
 
+	// a comment on a pull request. Questions to the agent are typed in its panel
 	const draft = $derived(
-		threads.composing && !(threads.open && threads.expanded) ? threads.draft : null
+		threads.composing && threads.review && !(threads.open && threads.expanded)
+			? threads.draft
+			: null
 	);
 
 	const context = $derived.by(() => {
@@ -102,9 +105,6 @@
 	let sending = $state(false);
 	let failure = $state('');
 
-	/** on a pull request, what's typed goes to the agent or on GitHub, as picked */
-	const choosing = $derived(!!threads.review && !!draft && !!(draft.span || draft.path));
-	const commenting = $derived(choosing && threads.intent === 'comment');
 	const what = $derived(draft?.span ? 'these lines' : 'this file');
 
 	/** at once with `post`, otherwise in your review, the only place it goes while one's in progress */
@@ -124,40 +124,22 @@
 		}
 	}
 
-	/** with `blast`, asks for the blast radius of the lines instead of `text` */
-	async function send(text: string, blast = false) {
-		if (commenting) return comment(text);
-		sending = true;
-		failure = '';
-		try {
-			const id = await threads.ask(text, undefined, { blast });
-			threads.openLens(id);
-		} catch (e) {
-			failure = errorText(e);
-		} finally {
-			sending = false;
-		}
+	/** Asks the agent instead: the lines, and what's typed, go to its panel. */
+	function toAgent() {
+		if (!draft) return;
+		threads.setIntent('ask');
+		threads.add(draft);
 	}
 </script>
 
 {#snippet extra()}
-	{#if commenting && !threads.review?.pending && draft?.text.trim()}
+	{#if !threads.review?.pending && draft?.text.trim()}
 		<button
 			type="button"
 			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
 			title="Adds it to a new pending review, only you see it until you finish the review"
 			disabled={sending}
 			onclick={() => comment(draft?.text.trim() ?? '', false)}>Start a review</button
-		>
-	{/if}
-	<!-- for the lines alone, a typed question is asked with Ask -->
-	{#if draft?.span && !commenting && !draft.text.trim()}
-		<button
-			type="button"
-			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
-			title="What else this change affects: where the compiler finds it used, judged by the agent"
-			disabled={sending}
-			onclick={() => send('', true)}>Blast radius</button
 		>
 	{/if}
 {/snippet}
@@ -184,26 +166,20 @@
 		style:left="{place.left}px"
 		style:width="{place.width}px"
 	>
-		{#if choosing}
-			<!-- what ⌘↵ does, Tab switches it. Clicking leaves the focus in the text -->
-			<div class="flex px-2 pt-2">
-				<SegmentedControl
-					options={[
-						{ value: 'ask', label: 'Ask AI' },
-						{ value: 'comment', label: 'Comment' }
-					]}
-					value={threads.intent}
-					onchange={(intent) => {
-						threads.setIntent(intent);
-						// back to the text, also when it had lost the focus before the switch
-						box?.querySelector('textarea')?.focus();
-					}}
-					text="sm"
-					label="Send to"
-					keepFocus
-				/>
-			</div>
-		{/if}
+		<!-- Ask AI, or Tab, takes the lines to the agent's panel. Clicking leaves the focus in the text -->
+		<div class="flex px-2 pt-2">
+			<SegmentedControl
+				options={[
+					{ value: 'ask', label: 'Ask AI' },
+					{ value: 'comment', label: 'Comment' }
+				]}
+				value="comment"
+				onchange={(intent) => intent === 'ask' && toAgent()}
+				text="sm"
+				label="Send to"
+				keepFocus
+			/>
+		</div>
 		<AskField
 			bind:value={
 				() => threads.draft?.text ?? '',
@@ -214,22 +190,16 @@
 			bare
 			autofocus
 			{context}
-			placeholder={commenting ? `Comment on ${what}` : 'Ask about these lines'}
-			hints={choosing
-				? [
-						commenting ? 'tab to ask AI' : 'tab to comment',
-						commenting
-							? threads.review?.pending
-								? '⌘↵ adds it to your review'
-								: '⌘↵ to comment'
-							: '⌘↵ to ask'
-					]
-				: ['esc', '⌘↵ to ask']}
+			placeholder="Comment on {what}"
+			hints={[
+				'tab to ask AI',
+				threads.review?.pending ? '⌘↵ adds it to your review' : '⌘↵ to comment'
+			]}
 			busy={sending}
 			trailing={extra}
-			action={commenting ? 'Comment' : 'Ask'}
-			onsend={send}
-			ontab={choosing ? () => threads.setIntent(commenting ? 'ask' : 'comment') : undefined}
+			action="Comment"
+			onsend={(text) => comment(text)}
+			ontab={toAgent}
 			onescape={() => (threads.composing = false)}
 		/>
 		{#if failure}

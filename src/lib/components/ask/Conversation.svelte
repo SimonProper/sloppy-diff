@@ -4,7 +4,9 @@
 	import type { Live, Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
+	import AddedLines from './AddedLines.svelte';
 	import AskField from './AskField.svelte';
+	import LinesChip from './LinesChip.svelte';
 	import ToolText from '../ToolText.svelte';
 	import StreamText from './StreamText.svelte';
 	import Trail from './Trail.svelte';
@@ -261,14 +263,23 @@
 						{@const i = turn.start + j}
 						{@const last = i === thread.messages.length - 1}
 						{#if message.role === 'user'}
-							<p
+							<div
 								class={[
-									'ml-auto w-fit max-w-[85%] rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap',
+									'ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1.5',
 									i > 0 && 'mt-[26px]'
 								]}
 							>
-								{message.text}
-							</p>
+								{#each message.context ?? [] as anchor, n (n)}
+									<LinesChip {anchor} {onjump} />
+								{/each}
+								{#if message.text}
+									<p
+										class="rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap"
+									>
+										{message.text}
+									</p>
+								{/if}
+							</div>
 						{:else}
 							<div class="mt-3.5">
 								<Trail
@@ -439,7 +450,8 @@
 	</div>
 
 	<!-- the follow-up field, send turns to stop while the agent answers -->
-	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup>
+	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup data-ask-field>
+		<AddedLines {threads} id={thread.id} {onjump} />
 		<AskField
 			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
 			placeholder="Follow up"

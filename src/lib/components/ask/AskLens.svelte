@@ -9,6 +9,7 @@
 	import { errorText } from '$lib/errors';
 	import AskField from './AskField.svelte';
 	import Conversation from './Conversation.svelte';
+	import AddedLines from './AddedLines.svelte';
 	import HunkExcerpt from './HunkExcerpt.svelte';
 	import QuestionList from './QuestionList.svelte';
 
@@ -68,12 +69,15 @@
 	let starting = $state(false);
 	let failure = $state('');
 
-	/** A new chat about the whole change, from under the list. */
-	async function startChat(text: string) {
+	/** the lines and files added to the new chat, it's about the whole change without any */
+	const adding = $derived(threads.attached[''] ?? []);
+
+	/** A new chat from under the list. With `blast`, the blast radius of its lines instead of `text`. */
+	async function startChat(text: string, blast = false) {
 		starting = true;
 		failure = '';
 		try {
-			const id = await threads.ask(text, undefined, { change: true });
+			const id = await threads.ask(text, undefined, { blast });
 			threads.openLens(id);
 		} catch (e) {
 			failure = errorText(e);
@@ -112,6 +116,17 @@
 		event.preventDefault();
 	}
 </script>
+
+<!-- for lines alone, nothing typed: what else they affect -->
+{#snippet blastRadius()}
+	<button
+		type="button"
+		class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
+		title="What else this change affects: where the compiler finds it used, judged by the agent"
+		disabled={starting}
+		onclick={() => startChat('', true)}>Blast radius</button
+	>
+{/snippet}
 
 {#snippet closeButton()}
 	<button
@@ -190,15 +205,19 @@
 			{/key}
 		{:else}
 			<QuestionList {threads} {grouped} actions={closeButton}>
-				<!-- a new chat about the whole change -->
-				<div class="shrink-0 px-3.5 pt-1 pb-3.5">
+				<!-- a new chat, about lines picked in the diff or the whole change -->
+				<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-ask-field>
+					<AddedLines {threads} id="" onjump={jumpTo} />
 					<AskField
 						bind:value={threads.newChat}
-						placeholder="Ask about the whole change"
+						placeholder={adding.length ? 'Ask about these' : 'Ask about the whole change'}
 						hints={['', '⌘↵ to ask']}
 						busy={starting}
 						autofocus
-						onsend={startChat}
+						trailing={adding[0]?.hunk !== undefined && !threads.newChat.trim()
+							? blastRadius
+							: undefined}
+						onsend={(text) => startChat(text)}
 					/>
 					{#if failure}
 						<p class="px-2.5 pt-1.5 text-[12px] text-del">{failure}</p>

@@ -43,6 +43,8 @@ export interface Message {
 	role: 'user' | 'assistant';
 	/** the question, or the answer in markdown */
 	text: string;
+	/** user: lines added to the conversation from the diff, asked about with this question */
+	context?: Anchor[];
 	createdAt: string;
 	/** rendered answer, filled in when the thread is loaded */
 	html?: string;

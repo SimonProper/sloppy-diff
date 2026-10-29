@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { providerLabel, type AgentProvider } from '$lib/agent';
 import {
 	linesOf,
+	type Anchor,
 	type AskEvent,
 	type LineSpan,
 	type Message,
@@ -82,6 +83,8 @@ export interface Question {
 	path?: string;
 	/** a follow-up in this thread */
 	thread?: string;
+	/** lines, or whole files, added to the conversation from the diff, asked about along with the text */
+	context?: (LineSpan | { path: string })[];
 	/** the guide section the lines were read in */
 	section?: string;
 	/** ask the thread's last question again, after it failed or was stopped */
@@ -110,6 +113,7 @@ export async function ask(
 
 	let thread: Thread | undefined;
 	let files: DiffFile[] | undefined;
+	let context: Anchor[] | undefined;
 	if (question.thread) {
 		const id = checkThreadId(question.thread);
 		thread = (await loadThreads(root, scope)).find((t) => t.id === id);
@@ -127,6 +131,7 @@ export async function ask(
 			const last = messages.pop();
 			if (last?.role !== 'user') throw new Error('There is no question to ask again');
 			text = last.text;
+			context = last.context;
 			thread = { ...thread, messages };
 		}
 	} else if (question.retry) {
@@ -145,7 +150,19 @@ export async function ask(
 
 	// for the suggestions in the answers, checked against the diff as it is now
 	const diff = files ?? parseDiff(await readDiff(root, source.from, source.to));
-	const asked: Message = { role: 'user', text, createdAt: new Date().toISOString() };
+	if (!question.retry && question.context?.length) {
+		context = question.context.map((added) => {
+			if ('hunk' in added) return anchorFor(diff, added);
+			if (!added.path) throw new Error('Pick lines or a file to add');
+			return wholeAnchor(diff, added.path);
+		});
+	}
+	const asked: Message = {
+		role: 'user',
+		text,
+		...(context && { context }),
+		createdAt: new Date().toISOString()
+	};
 	const before = thread;
 	thread = { ...thread, messages: [...thread.messages, asked] };
 	await saveThread(root, scope, thread);
@@ -155,6 +172,16 @@ export async function ask(
 		answer(job, source, saved, before, question.section, diff)
 	);
 	return renderThread(thread, diff);
+}
+
+/** A question with the lines added to the conversation for it, as the agent reads it. */
+function withContext(message: Message): string {
+	const added = (message.context ?? []).map((a) =>
+		a.hunk === undefined
+			? `They added the whole of ${a.path} to the conversation, its changes are in the diff file.`
+			: `Lines they added to the conversation, ${a.label} of ${a.path}:\n<selection>\n${a.code}\n</selection>`
+	);
+	return [...added, message.text].join('\n\n');
 }
 
 async function answer(
@@ -169,7 +196,7 @@ async function answer(
 	const { root } = source;
 	const provider = thread.provider ?? 'claude';
 	const started = Date.now();
-	const question = thread.messages.at(-1)!.text;
+	const question = withContext(thread.messages.at(-1)!);
 	const cwd = join(repoDir(root), 'sessions');
 	// the whole change, for the agent to read and search. Written
 	// for each answer, a follow-up sees the diff as it is now, and gone once the answer is in
@@ -205,6 +232,7 @@ async function answer(
 			files,
 			section,
 			diffPath,
+			!!thread.messages[0].context?.length,
 			hold && text !== undefined ? { text, dir: hold.dir } : undefined
 		);
 	};
@@ -488,6 +516,8 @@ async function firstPrompt(
 	section: string | undefined,
 	/** the whole change's diff, while the agent answers */
 	diffPath: string,
+	/** its lines came added to it, they're with the question that opened it */
+	added: boolean,
 	/**
 	 * for a blast radius: the uses the language server found and the files that change along,
 	 * and the checkout it read
@@ -549,7 +579,8 @@ async function firstPrompt(
 		}
 		parts.push(`The files it changes:\n<files>\n${changed.join('\n')}\n</files>`);
 	}
-	if (lines) {
+	// a blast radius asks no question, its lines are here
+	if (lines && (!added || uses)) {
 		parts.push(
 			`The selected lines, ${anchor.label} of ${anchor.path}:\n<selection>\n${anchor.code}\n</selection>`
 		);
@@ -557,7 +588,7 @@ async function firstPrompt(
 
 	const earlier = thread.messages
 		.filter((m) => m.text)
-		.map((m) => `${m.role === 'user' ? 'Reviewer' : 'You'}: ${m.text}`);
+		.map((m) => `${m.role === 'user' ? 'Reviewer' : 'You'}: ${withContext(m)}`);
 	if (earlier.length) {
 		parts.push(`Earlier in this conversation:\n<earlier>\n${earlier.join('\n\n')}\n</earlier>`);
 	}
