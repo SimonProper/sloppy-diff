@@ -95,8 +95,12 @@ export function storeDiff(key: string, value: unknown, weight: number) {
 	diffs.set(key, value, weight);
 }
 
-/** Bumped by every write to GitHub from here, a pull request read before it is behind. */
+/** Bumped by every write to GitHub from here, a read going while it happened is behind. */
 let prWrites = 0;
+
+/** Where a pull request as read last is kept, and the open ones. */
+export const prKey = (root: string, number: number) => `${root}\0pr\0${number}`;
+export const prsKey = (root: string) => `${root}\0prs`;
 
 /**
  * How long a read of GitHub stands in for asking again: tabs that each read again in the
@@ -118,15 +122,15 @@ export function revalidatePr<T>(
 	compute: () => Promise<T>,
 	force = false
 ): { now: Promise<T>; fresh: Promise<T> | null } {
-	const hit = memo.get(key);
-	const writes = String(prWrites);
-	const kept = hit?.version === writes ? hit : undefined;
+	const kept = memo.get(key);
 	if (kept && !force && recent(kept)) return { now: kept.value as Promise<T>, fresh: null };
 	// from when it was asked, what it brings is at least that recent
 	const at = Date.now();
+	const writes = prWrites;
 	const value = compute();
 	value.then(
-		() => memo.set(key, { version: writes, value, at }),
+		// read while a write was made, it may not have it
+		() => writes === prWrites && memo.set(key, { version: '', value, at }),
 		() => {}
 	);
 	return kept ? { now: kept.value as Promise<T>, fresh: value } : { now: value, fresh: null };
@@ -147,7 +151,13 @@ export function recentRead<T>(key: string, compute: () => Promise<T>, force = fa
 	return value;
 }
 
-/** After a comment was added or deleted, every kept pull request is behind GitHub. */
-export function forgetPrs() {
+/**
+ * After a write to pull request `number`: it's read from GitHub again before it's shown,
+ * the open ones are served while they're read again. The other pull requests stay.
+ */
+export function forgetPr(root: string, number: number) {
 	prWrites++;
+	memo.delete(prKey(root, number));
+	const list = memo.get(prsKey(root));
+	if (list) list.at = undefined;
 }

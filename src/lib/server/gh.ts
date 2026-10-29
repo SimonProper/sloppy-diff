@@ -14,7 +14,7 @@ import type {
 	ReviewThread
 } from '$lib/pr/types';
 import { sameSha } from '$lib/refs';
-import { recentRead } from './cache';
+import { prsKey, recentRead, revalidatePr } from './cache';
 import { mergeBase, resolveCommit } from './git';
 import { cleanGithubHtml } from './github-html';
 import { logged } from './log';
@@ -448,9 +448,17 @@ export async function readPullRequest(
 	return { pr, from, to };
 }
 
-/** The open pull requests as read under 10s ago, `force` asks GitHub anyway. */
+/**
+ * The open pull requests as read last, served while GitHub is asked again, see
+ * revalidatePr. The reads asked at about the same time share one, `force` asks anyway.
+ */
 export function recentPullRequests(root: string, force = false) {
-	return recentRead(`${root}\0prs`, () => listPullRequests(root), force);
+	const key = prsKey(root);
+	return revalidatePr(
+		key,
+		() => recentRead(`${key}\0read`, () => listPullRequests(root), force),
+		force
+	);
 }
 
 /** Open pull requests, null when gh isn't installed or signed in, or the repo isn't on GitHub. */

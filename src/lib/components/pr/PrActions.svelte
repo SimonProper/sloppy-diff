@@ -37,9 +37,11 @@
 
 	const repo = () => page.data.repo as string;
 	const change = (doing: string, kind: 'close' | 'reopen' | 'ready' | 'draft') =>
-		run(doing, () => changePr({ repo: repo(), pr: pr.id, change: kind }));
+		run(doing, () => changePr({ repo: repo(), number: pr.number, pr: pr.id, change: kind }));
 	const update = () =>
-		run('Updating…', () => updatePrBranch({ repo: repo(), pr: pr.id, head: pr.headRefOid }));
+		run('Updating…', () =>
+			updatePrBranch({ repo: repo(), number: pr.number, pr: pr.id, head: pr.headRefOid })
+		);
 	const item =
 		'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-subtle';
 	const updatable = $derived(open && pr.canUpdateBranch && !!pr.behind);

@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	cachedDiff,
 	clearDiffs,
-	forgetPrs,
+	forgetPr,
+	prKey,
+	prsKey,
 	recentRead,
 	remember,
 	revalidatePr,
@@ -53,9 +55,9 @@ describe('remember', () => {
 });
 
 describe('revalidatePr', () => {
-	it('serves the last read while reading again, not past a write', async () => {
+	it('serves the last read while reading again, not past a write to it', async () => {
 		let calls = 0;
-		const read = () => revalidatePr('pr-test', async () => ++calls, true);
+		const read = () => revalidatePr(prKey('/repo', 1), async () => ++calls, true);
 
 		const first = read();
 		expect(first.fresh).toBeNull();
@@ -66,10 +68,31 @@ describe('revalidatePr', () => {
 		expect(await second.fresh).toBe(2);
 		expect(await read().now).toBe(2);
 
-		forgetPrs();
+		forgetPr('/repo', 1);
 		const after = read();
 		expect(after.fresh).toBeNull();
 		expect(await after.now).toBe(4);
+	});
+
+	it('keeps the other pull requests past a write, the list read again', async () => {
+		const other = prKey('/repo', 2);
+		await revalidatePr(other, async () => 'other').now;
+		await revalidatePr(prsKey('/repo'), async () => 'list').now;
+		forgetPr('/repo', 1);
+		expect(revalidatePr(other, async () => 'next').fresh).toBeNull();
+		const list = revalidatePr(prsKey('/repo'), async () => 'new list');
+		expect(await list.now).toBe('list');
+		expect(await list.fresh).toBe('new list');
+	});
+
+	it("doesn't keep a read that was going while a write was made", async () => {
+		let finish = (_: string) => {};
+		const key = prKey('/repo', 3);
+		const going = revalidatePr(key, () => new Promise<string>((resolve) => (finish = resolve)));
+		forgetPr('/repo', 3);
+		finish('before');
+		await going.now;
+		expect(await revalidatePr(key, async () => 'after').now).toBe('after');
 	});
 
 	it('keeps the last read when reading again fails', async () => {
@@ -107,7 +130,7 @@ describe('recentRead', () => {
 			const [a, b] = [read(), read()];
 			expect([await a, await b]).toEqual([1, 1]);
 			expect(await read(true)).toBe(2);
-			forgetPrs();
+			forgetPr('/repo', 1);
 			expect(await read()).toBe(3);
 			vi.advanceTimersByTime(10_001);
 			expect(await read()).toBe(4);

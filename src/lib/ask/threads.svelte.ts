@@ -193,9 +193,15 @@ export class Threads {
 	}
 
 	/** where a comment goes, null outside a pull request */
-	get review(): { repo: string; pr: string; commit: string; pending: boolean } | null {
-		const { repo, prId, to, pending = false } = this.#config();
-		return prId ? { repo, pr: prId, commit: to, pending } : null;
+	get review(): {
+		repo: string;
+		number: number;
+		pr: string;
+		commit: string;
+		pending: boolean;
+	} | null {
+		const { repo, pr, prId, to, pending = false } = this.#config();
+		return pr && prId ? { repo, number: pr, pr: prId, commit: to, pending } : null;
 	}
 
 	/**

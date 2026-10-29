@@ -41,7 +41,13 @@
 		if (!kind || body === comment.body.trim()) return;
 		saving = body;
 		try {
-			await updateComment({ repo: page.data.repo, id: comment.id, kind, body });
+			await updateComment({
+				repo: page.data.repo,
+				number: Number(page.data.inputs.pr),
+				id: comment.id,
+				kind,
+				body
+			});
 			await refresh();
 		} catch (e) {
 			editing = { body, failure: errorText(e) };

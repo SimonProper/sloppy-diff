@@ -63,13 +63,16 @@
 
 	const repo = () => page.data.repo as string;
 	const update = () =>
-		run('Updating…', () => updatePrBranch({ repo: repo(), pr: pr.id, head: pr.headRefOid }));
+		run('Updating…', () =>
+			updatePrBranch({ repo: repo(), number: pr.number, pr: pr.id, head: pr.headRefOid })
+		);
 	const merge = () =>
 		run(
 			'Merging…',
 			() =>
 				mergePr({
 					repo: repo(),
+					number: pr.number,
 					pr: pr.id,
 					options: {
 						method,

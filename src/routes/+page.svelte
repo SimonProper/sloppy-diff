@@ -208,6 +208,14 @@
 				]
 			: (prs ?? [])
 	);
+	// the open pull requests as last seen here, the list or the picker, shown while the list
+	// is opened again
+	let seenPrs = $state.raw<{ repo: string; prs: PrSummary[] } | null>(null);
+	$effect(() => {
+		const list = diff.prs ?? prs;
+		// while the next diff streams in, what's shown can be another repo's
+		if (list && !pending) seenPrs = { repo: data.repo, prs: list };
+	});
 
 	const lane = $derived(diff.lane);
 	/** the lane's commits oldest first, what came before it included */
@@ -311,9 +319,19 @@
 	const loading = slow(() => !!navigating.to || pending);
 	// the pull request being opened, while it loads too
 	const headed = $derived(Number((navigating.to?.url ?? page.url).searchParams.get('pr')) || null);
+	// the open pull requests to pick from being opened, or streaming in: the list as last
+	// seen shows at once, not a diff
+	const loadingList = $derived.by(() => {
+		const to = navigating.to?.url ?? page.url;
+		return to.searchParams.get('pr') === '' && (pickingPr ? pending : !!navigating.to);
+	});
 	// from one pull request's overview to another the list beside it stays, only the pull
 	// request shows itself loading
 	const keepPrList = $derived(view === 'overview' && !!pr && headed !== null);
+	// a pull request picked from the list, its skeleton at once instead of the list lingering
+	const openingPr = $derived(
+		headed !== null && diff.mode === 'pr' && !pr && (!!navigating.to || pending)
+	);
 
 	// warm the neighbouring commits so stepping with [ and ] is instant. SvelteKit keeps
 	// one preload at a time, so the next commit is preloaded and the server just warms
@@ -437,7 +455,7 @@
 	];
 	/** PR mode without one picked, the list of open ones to pick from */
 	const pickingPr = $derived(data.mode === 'pr' && !data.inputs.pr);
-	const hasViewNavigation = $derived(ready && !pickingPr && !diff.error);
+	const hasViewNavigation = $derived(ready && !pickingPr && !loadingList && !diff.error);
 	/** 48px page header and, for an open comparison, the 44px shared view strip. */
 	const stickyTop = $derived(hasViewNavigation ? 92 : 48);
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
@@ -897,13 +915,28 @@
 		{/if}
 	{/snippet}
 
-	{#if pickingPr && (pending || !diff.error)}
-		<!-- shows itself loading while gh lists them -->
+	{#if loadingList || (pickingPr && !openingPr && (pending || !diff.error))}
+		<!-- the list as last seen meanwhile, loading while gh lists them the first time -->
 		<PrList
-			prs={pending ? undefined : diff.prs}
+			prs={loadingList
+				? seenPrs?.repo === data.repo
+					? seenPrs.prs
+					: undefined
+				: pending
+					? undefined
+					: diff.prs}
 			bind:view={prView}
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
+	{:else if openingPr}
+		<!-- a pull request picked from the list, what the list knew of it at once -->
+		<div class="p-4">
+			<PrSkeleton
+				summary={seenPrs?.repo === data.repo
+					? seenPrs.prs.find((p) => p.number === headed)
+					: undefined}
+			/>
+		</div>
 	{:else if !ready || (loading.current && !keepPrList)}
 		<!-- the next diff streaming in, once it takes long enough to notice -->
 		<DiffSkeleton layout={shownLayout} />
@@ -933,7 +966,7 @@
 			{@render saved()}
 		</div>
 	{:else if diff.mode === 'pr' && !pr}
-		<!-- a pull request just picked from the list, before the skeleton shows -->
+		<!-- the list left for another comparison, before the skeleton shows -->
 		<PrList
 			prs={diff.prs}
 			bind:view={prView}

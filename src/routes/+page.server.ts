@@ -33,6 +33,7 @@ import { dev } from '$app/environment';
 import {
 	cachedDiff,
 	clearDiffs,
+	prKey,
 	remember,
 	revalidatePr,
 	repoVersion,
@@ -280,7 +281,7 @@ export const load: PageServerLoad = async ({
 		mode === 'pr' && inputs.pr
 			? head.then(([current, defaultBase]) =>
 					revalidatePr(
-						`${root}\0pr\0${inputs.pr}`,
+						prKey(root, Number(inputs.pr)),
 						() => select(root, mode, inputs, current, defaultBase),
 						force
 					)
@@ -302,25 +303,31 @@ export const load: PageServerLoad = async ({
 							)
 				);
 
+	// without a pull request picked, the open ones to pick from, as read last too
+	const listed = mode === 'pr' && !inputs.pr ? recentPullRequests(root, force) : null;
 	// the diff streams in after the page has landed, so picking something moves there at
-	// once and the page shows it loading. Without a pull request picked, the open ones
-	// to pick from instead
+	// once and the page shows it loading
 	const diff = (
-		mode === 'pr' && !inputs.pr
-			? timing.measure('prs', recentPullRequests(root, force)).then((prs) => ({ ...noDiff(), prs }))
+		listed
+			? timing.measure('prs', listed.now).then((prs) => ({ ...noDiff(), prs }))
 			: read(selection())
 	)
 		.catch((error) => noDiff(errorMessage(error)))
 		// the header went out before these steps were done, they come along with the diff
 		.then((loaded) => ({ ...loaded, timing: timing.header() }));
-	// the PR as GitHub has it now, null when it's what was served or it couldn't be read
-	const fresh = (pr ?? Promise.resolve({ now: null, fresh: null }))
-		.then(async ({ now, fresh }) => {
-			const next = await fresh;
-			if (!next || JSON.stringify(next) === JSON.stringify(await now)) return null;
-			return read(Promise.resolve(next));
-		})
-		.catch(() => null);
+	// the PR, or the list, as GitHub has it now, null when it's what was served or it
+	// couldn't be read
+	const changed = async <T>({ now, fresh }: { now: Promise<T>; fresh: Promise<T> | null }) => {
+		const next = await fresh;
+		return next && JSON.stringify(next) !== JSON.stringify(await now) ? next : null;
+	};
+	const fresh = (
+		listed
+			? changed(listed).then((prs) => prs && { ...noDiff(), prs })
+			: pr
+				? pr.then(changed).then((next) => next && read(Promise.resolve(next)))
+				: Promise.resolve(null)
+	).catch(() => null);
 
 	const [branches, commits] = await meta.catch((): [Branch[], Commit[]] => [[], []]);
 	const [branch, defaultBase] = await head;

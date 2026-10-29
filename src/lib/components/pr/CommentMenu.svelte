@@ -30,7 +30,12 @@
 		deleting = true;
 		failure = '';
 		try {
-			await removeComment({ repo: page.data.repo, id: comment.id, kind });
+			await removeComment({
+				repo: page.data.repo,
+				number: Number(page.data.inputs.pr),
+				id: comment.id,
+				kind
+			});
 			await refresh();
 		} catch (e) {
 			failure = errorText(e);

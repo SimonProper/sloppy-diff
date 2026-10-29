@@ -28,12 +28,12 @@
 	let { pr, onjump, reply }: Props = $props();
 
 	async function post(body: string) {
-		await addComment({ repo: page.data.repo, pr: pr.id, body });
+		await addComment({ repo: page.data.repo, number: pr.number, pr: pr.id, body });
 		await refresh();
 	}
 
 	async function review(event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES', body: string) {
-		await finishReview({ repo: page.data.repo, pr: pr.id, event, body });
+		await finishReview({ repo: page.data.repo, number: pr.number, pr: pr.id, event, body });
 		await refresh();
 	}
 

@@ -14,7 +14,12 @@
 		busy = true;
 		failure = '';
 		try {
-			await setResolved({ repo: page.data.repo, thread: thread.id, resolved: !thread.isResolved });
+			await setResolved({
+				repo: page.data.repo,
+				number: Number(page.data.inputs.pr),
+				thread: thread.id,
+				resolved: !thread.isResolved
+			});
 			await refresh();
 		} catch (e) {
 			failure = errorText(e);
