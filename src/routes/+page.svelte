@@ -32,6 +32,7 @@
 	import ResizeHandle, { storedSize } from '$lib/components/ResizeHandle.svelte';
 	import SidebarLayout, { PANEL_DEFAULT, PANEL_KEY } from '$lib/components/SidebarLayout.svelte';
 	import AskLens from '$lib/components/ask/AskLens.svelte';
+	import { revealAnchor } from '$lib/ask/rows';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
 	import { lineStats } from '$lib/diff/hunks';
@@ -820,6 +821,10 @@
 				files={diff.files}
 				guide={view === 'guide' ? diff.guide : null}
 				docked
+				onshow={(anchor) =>
+					view === 'files' || view === 'guide'
+						? revealAnchor(anchor)
+						: switchView('files', () => revealAnchor(anchor))}
 			/>
 		{/if}
 	{/snippet}

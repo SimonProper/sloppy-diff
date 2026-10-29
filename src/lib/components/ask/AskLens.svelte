@@ -19,9 +19,11 @@
 		guide?: Guide | null;
 		/** the docked panel, placed in the page's layout. Otherwise the lens over the whole page */
 		docked?: boolean;
+		/** shows lines or a file in the diff, where the page isn't on one. Otherwise they're scrolled to where they are */
+		onshow?: (anchor: Anchor) => void;
 	}
 
-	let { threads, files, guide, docked = false }: Props = $props();
+	let { threads, files, guide, docked = false, onshow = revealAnchor }: Props = $props();
 
 	const thread = $derived(threads.get(threads.open));
 	const grouped = $derived(groupThreads(threads.list, files, guide));
@@ -54,7 +56,7 @@
 	async function jumpTo(anchor: Anchor) {
 		threads.expanded = false;
 		await tick();
-		revealAnchor(anchor);
+		onshow(anchor);
 	}
 
 	/** Opens the next or previous question, in the order of the questions list. */

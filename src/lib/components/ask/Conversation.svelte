@@ -311,18 +311,11 @@
 															>
 																<p class="flex items-center gap-2 text-[11px] text-faint">
 																	<span class="tabular-nums">#{n + 1}</span>
-																	{#if suggestion.kind === 'review'}
-																		<span
-																			class="min-w-0 truncate font-medium text-fg"
-																			title={suggestion.path}>{suggestion.path}</span
-																		>
-																	{/if}
-																	<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
-																	<span class="flex-1"></span>
 																	{#if suggestion.kind === 'review' && onjump}
 																		<button
 																			type="button"
-																			class="shrink-0 hover:text-fg"
+																			class="-ml-1 flex min-w-0 items-center gap-2 rounded-md px-1 hover:bg-subtle hover:text-fg"
+																			title="Show {suggestion.path} in the diff"
 																			onclick={() =>
 																				onjump({
 																					path: suggestion.path,
@@ -330,53 +323,76 @@
 																					code: '',
 																					...suggestion.span
 																				})}
-																			>{suggestion.span ? 'Jump to lines' : 'Jump to file'}</button
 																		>
-																	{/if}
-																	<button
-																		type="button"
-																		class="shrink-0 hover:text-fg"
-																		onclick={() => copy(suggestion.body, key)}
-																		>{copied === key ? 'Copied' : 'Copy'}</button
-																	>
-																	{#if threads.review}
-																		{@const drafting = drafted[key]}
-																		{#if typeof drafting === 'string'}
-																			<span class="shrink-0"
-																				>{drafting === 'sending'
-																					? 'Sending…'
-																					: drafting === 'posted'
-																						? 'Posted'
-																						: 'In your review'}</span
+																			<span class="min-w-0 truncate font-medium text-fg"
+																				>{suggestion.path}</span
 																			>
-																		{:else}
-																			{#if !threads.review.pending}
-																				<button
-																					type="button"
-																					class="shrink-0 hover:text-fg"
-																					title="Posts it on GitHub now"
-																					onclick={() => draft(suggestion, key, true)}
-																					>Comment</button
-																				>
-																			{/if}
-																			<button
-																				type="button"
-																				class="shrink-0 hover:text-fg"
-																				title="Adds it to your pending review, only you see it until you finish the review"
-																				onclick={() => draft(suggestion, key, false)}
-																				>{threads.review.pending
-																					? 'Add to review'
-																					: 'Start a review'}</button
+																			<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
+																		</button>
+																	{:else}
+																		{#if suggestion.kind === 'review'}
+																			<span
+																				class="min-w-0 truncate font-medium text-fg"
+																				title={suggestion.path}>{suggestion.path}</span
 																			>
 																		{/if}
+																		<span class="shrink-0 tabular-nums">{where(suggestion)}</span>
 																	{/if}
 																</p>
-																{#if typeof drafted[key] === 'object'}
-																	<p class="mt-1 text-[11px] text-del">{drafted[key].error}</p>
-																{/if}
 																<div class="prose mt-1.5 text-[13px] leading-relaxed">
 																	{@html suggestion.html}
 																</div>
+																<!-- the actions after the suggestion, the review the safe one so it leads -->
+																<div
+																	class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-faint"
+																>
+																	<button
+																		type="button"
+																		class="hover:text-fg"
+																		onclick={() => copy(suggestion.body, key)}
+																		>{copied === key ? 'Copied' : 'Copy'}</button
+																	>
+																	<span class="flex-1"></span>
+																	{#if threads.review}
+																		{@const drafting = drafted[key]}
+																		<span class="flex h-6 items-center gap-3" aria-live="polite">
+																			{#if typeof drafting === 'string'}
+																				{#if drafting === 'sending'}
+																					Sending…
+																				{:else}
+																					<span class="flex items-center gap-1.5 text-muted">
+																						{#if drafting === 'added'}<span
+																								class="size-1.5 rounded-full bg-accent"
+																							></span>{/if}
+																						{drafting === 'posted' ? 'Posted' : 'In your review'}
+																					</span>
+																				{/if}
+																			{:else}
+																				{#if !threads.review.pending}
+																					<button
+																						type="button"
+																						class="hover:text-fg"
+																						title="Posts it on GitHub now"
+																						onclick={() => draft(suggestion, key, true)}
+																						>Comment</button
+																					>
+																				{/if}
+																				<button
+																					type="button"
+																					class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
+																					title="Adds it to your pending review, only you see it until you finish the review"
+																					onclick={() => draft(suggestion, key, false)}
+																					>{threads.review.pending
+																						? 'Add to review'
+																						: 'Start a review'}</button
+																				>
+																			{/if}
+																		</span>
+																	{/if}
+																</div>
+																{#if typeof drafted[key] === 'object'}
+																	<p class="mt-1.5 text-[11px] text-del">{drafted[key].error}</p>
+																{/if}
 															</li>
 														{/each}
 													</ol>
