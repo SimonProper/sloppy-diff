@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# vendored Hairline kernel and figure, kept as they come from the hairline-create skill
+/src/lib/hairline/

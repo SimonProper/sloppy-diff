@@ -23,6 +23,9 @@
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import FileList from '$lib/components/FileList.svelte';
 	import GuideDialog from '$lib/components/GuideDialog.svelte';
+	import GuideRunning from '$lib/components/GuideRunning.svelte';
+	import { guideJob, openIfStill } from '$lib/guide/job.svelte';
+	import { getRange } from '$lib/guide/guides.remote';
 	import GuideView from '$lib/components/GuideView.svelte';
 	import ExplainerView from '$lib/components/ExplainerView.svelte';
 	import ChangeMapView from '$lib/components/ChangeMapView.svelte';
@@ -243,6 +246,30 @@
 	let dialog = $state<'pick' | 'onscreen' | null>(null);
 	/** a guide is a way of viewing the diff on screen, writing one shouldn't pick it again */
 	const guideHere = () => (dialog = range ? 'onscreen' : 'pick');
+	/** the guide being written is for what's on screen, its progress stands in for the guide */
+	const guidingHere = $derived(!!range && guideJob.covers(data.repo, range.from, range.to));
+	// the page forgets a guide being written when it reloads, the server doesn't: the guide tab
+	// asks, and follows it again. Once per range, a run that just ended isn't picked up again
+	let askedRunning = '';
+	$effect(() => {
+		if (view !== 'guide' || diff.guide || !range || guideJob.running) return;
+		const repo = data.repo;
+		const key = `${repo}\0${range.from}..${range.to}`;
+		if (askedRunning === key) return;
+		askedRunning = key;
+		const ondone = openIfStill(openGuide);
+		getRange({ repo, start: range.from, stop: range.to }).then(
+			(found) => {
+				if (found.running && !guideJob.running)
+					guideJob.follow(
+						{ repo, start: found.start, stop: found.stop },
+						found.commits.length,
+						ondone
+					);
+			},
+			() => {}
+		);
+	});
 
 	// questions to Claude about lines of the diff on screen. A range is named by the
 	// shas the page resolved, so the server files them where the page load found them
@@ -709,22 +736,34 @@
 			<button
 				type="button"
 				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
-				title="Generate or open review guides"
+				title={guideJob.running
+					? 'Writing a guide, open to follow or cancel it'
+					: guideJob.failure || 'Generate or open review guides'}
 				onclick={() => (dialog = 'pick')}
 			>
-				<svg
-					viewBox="0 0 16 16"
-					class="size-3.5"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					><path
-						d="M8 2.5 9.3 6.2 13 7.5 9.3 8.8 8 12.5 6.7 8.8 3 7.5l3.7-1.3zM12.5 11.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"
-					/></svg
-				>
+				{#if guideJob.running}
+					<span
+						class="size-3.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent"
+						aria-label="Writing a guide"
+					></span>
+				{:else}
+					<svg
+						viewBox="0 0 16 16"
+						class="size-3.5"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						><path
+							d="M8 2.5 9.3 6.2 13 7.5 9.3 8.8 8 12.5 6.7 8.8 3 7.5l3.7-1.3zM12.5 11.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"
+						/></svg
+					>
+				{/if}
 				Guides
+				{#if guideJob.failure && !guideJob.running}
+					<span class="size-1.5 rounded-full bg-del" aria-label="The last guide failed"></span>
+				{/if}
 				{#if repoGuides.length}
 					<span
 						class="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] text-surface tabular-nums"
@@ -944,6 +983,18 @@
 			bind:panelWidth
 			onregenerate={guideHere}
 		/>
+	{:else if view === 'guide' && guidingHere && (guideJob.running || guideJob.done)}
+		<div class="mx-auto flex w-[36rem] max-w-full flex-col gap-4 px-4 py-12">
+			<GuideRunning />
+			<div class="flex items-center justify-between gap-2">
+				<p class="text-[11.5px] text-faint">It keeps going while you look elsewhere.</p>
+				<button
+					type="button"
+					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-del/50 hover:text-del active:shadow-pressed"
+					onclick={() => guideJob.cancel()}>Cancel</button
+				>
+			</div>
+		</div>
 	{:else if view === 'guide'}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			{#if pr}
@@ -963,6 +1014,11 @@
 				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
 				onclick={guideHere}>Generate a guide</button
 			>
+			{#if guidingHere && guideJob.failure}
+				<p class="mt-3 flex items-center gap-1.5 text-[12px] text-del">
+					<span class="size-1.5 rounded-full bg-del"></span>{guideJob.failure}
+				</p>
+			{/if}
 			<!-- other ranges' guides are a way elsewhere, a pull request is what's being reviewed -->
 			{#if !pr}{@render saved()}{/if}
 		</div>

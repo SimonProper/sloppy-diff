@@ -2,21 +2,15 @@
 	import { cubicOut } from 'svelte/easing';
 	import { fade, slide } from 'svelte/transition';
 	import { errorText } from '$lib/errors';
-	import {
-		cancelGuide,
-		followGuide,
-		generateGuide,
-		getBranch,
-		getRange
-	} from '$lib/guide/guides.remote';
-	import type { GuideProgress } from '$lib/guide/progress';
+	import { getBranch, getRange } from '$lib/guide/guides.remote';
+	import { guideJob, openIfStill } from '$lib/guide/job.svelte';
 	import type { GuideListing } from '$lib/guide/types';
 	import { timeAgo, type Branch, type Commit } from '$lib/refs';
 	import CommitList from './CommitList.svelte';
 	import RefPicker from './RefPicker.svelte';
 	import SavedGuides from './SavedGuides.svelte';
+	import GuideRunning from './GuideRunning.svelte';
 	import SegmentedControl from './SegmentedControl.svelte';
-	import ToolText from './ToolText.svelte';
 
 	interface Props {
 		repo: string;
@@ -121,12 +115,6 @@
 	let range = $state<Awaited<ReturnType<typeof getRange>> | null>(null);
 	let rangeError = $state('');
 
-	let progress = $state<GuideProgress | null>(null);
-	let generating = $state(false);
-	let failure = $state('');
-
-	const tools = $derived(progress?.tools.slice(-6) ?? []);
-
 	$effect(() => {
 		// whatever was loaded belongs to the previous choice, "Open existing guide" and
 		// Generate must never act on it
@@ -139,7 +127,12 @@
 				if (stale) return;
 				range = value;
 				// pick up a generation that is already running for this range
-				if (range.running && !generating) follow(range.start, range.stop);
+				if (range.running && !guideJob.running)
+					guideJob.follow(
+						{ repo, start: range.start, stop: range.stop },
+						range.commits.length,
+						openIfStill(onopen)
+					);
 			},
 			(e) => {
 				if (stale) return;
@@ -160,44 +153,12 @@
 		onopen(start, stop);
 	}
 
-	async function generate() {
-		if (!target) return;
-		failure = '';
-		progress = null;
-		try {
-			const resolved = await generateGuide({ repo, ...target, pr });
-			follow(resolved.start, resolved.stop);
-		} catch (e) {
-			failure = errorText(e);
-		}
-	}
-
-	// closing leaves the generation running on the server, reopening picks it up again
-	let closed = false;
-	$effect(() => () => (closed = true));
-
-	async function follow(startSha: string, stopSha: string) {
-		generating = true;
-		failure = '';
-		progress = null;
-		try {
-			const follow = crypto.randomUUID();
-			for await (const next of followGuide({ repo, start: startSha, stop: stopSha, follow })) {
-				if (closed) break;
-				progress = next;
-				if (next.done) open(next.done.start, next.done.stop);
-				if (next.error) failure = next.error;
-			}
-		} catch (e) {
-			failure = errorText(e);
-		} finally {
-			generating = false;
-		}
-	}
-
-	function cancel() {
-		if (!range) return;
-		cancelGuide({ repo, start: range.start, stop: range.stop });
+	// the dialog closes, the progress shows on the page while the agent writes
+	function generate() {
+		if (!target || !range) return;
+		const resolved = { start: range.start, stop: range.stop, commits: range.commits.length };
+		guideJob.generate({ repo, ...target, pr }, resolved, openIfStill(onopen));
+		onclose();
 	}
 </script>
 
@@ -243,40 +204,9 @@
 				? ', or open a saved one below'
 				: ''}.
 		</p>
-	{:else if generating}
-		<div class="flex flex-col gap-3 px-5 py-5" role="status" aria-live="polite">
-			<div class="flex items-center gap-2.5">
-				<span
-					class="size-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent"
-				></span>
-				<div class="min-w-0">
-					<p class="truncate text-[13px] font-medium">
-						{progress?.status || 'Starting the agent…'}
-					</p>
-					{#if range}
-						<p class="font-mono text-[11px] text-faint">
-							{range.start.slice(0, 7)}..{range.stop.slice(0, 7)} · {range.commits.length}
-							{range.commits.length === 1 ? 'commit' : 'commits'}
-						</p>
-					{/if}
-				</div>
-			</div>
-			{#if tools.length}
-				<ul
-					class="flex h-36 flex-col justify-end gap-0.5 overflow-hidden rounded-xl border border-line bg-subtle/60 px-3 py-2.5"
-				>
-					{#each tools as tool, i (i)}
-						<li
-							class={[
-								'truncate font-mono text-[11px]',
-								i === tools.length - 1 ? 'text-fg' : 'text-muted'
-							]}
-						>
-							<ToolText text={tool} />
-						</li>
-					{/each}
-				</ul>
-			{/if}
+	{:else if guideJob.running}
+		<div class="px-5 py-5">
+			<GuideRunning plate="var(--surface)" />
 		</div>
 
 		<div class="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
@@ -284,7 +214,7 @@
 			<button
 				type="button"
 				class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-del/50 hover:text-del active:shadow-pressed"
-				onclick={cancel}>Cancel</button
+				onclick={() => guideJob.cancel()}>Cancel</button
 			>
 		</div>
 	{:else}
@@ -460,9 +390,9 @@
 				</p>
 			{/if}
 
-			{#if failure}
+			{#if guideJob.failure}
 				<p class="flex items-center gap-1.5 text-[12px] text-del">
-					<span class="size-1.5 rounded-full bg-del"></span>{failure}
+					<span class="size-1.5 rounded-full bg-del"></span>{guideJob.failure}
 				</p>
 			{/if}
 		</div>
@@ -506,7 +436,7 @@
 		</div>
 	{/if}
 
-	{#if guides.length && !generating && !onscreen}
+	{#if guides.length && !guideJob.running && !onscreen}
 		<div class={['px-5 py-3', canGenerate && 'border-t border-line']}>
 			<p class="mb-1.5 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 				Saved guides
