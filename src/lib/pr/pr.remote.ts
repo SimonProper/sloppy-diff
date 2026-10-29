@@ -3,9 +3,17 @@ import type { Suggestion } from '$lib/ask/types';
 import {
 	addPrComment,
 	addReviewComment,
+	changePullRequest,
 	deleteComment,
 	editComment,
-	recentPullRequests
+	recentPullRequests,
+	mergePullRequest,
+	updateBranch,
+	type MergeOptions,
+	type PrChange,
+	resolveThread,
+	submitReview,
+	type VerdictEvent
 } from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
 import { forgetPrs } from '$lib/server/cache';
@@ -82,6 +90,56 @@ export const addComment = command(
 	({ repo, pr, body }: { repo: string; pr: string; body: string }) =>
 		badRequestOnError(async () => {
 			await addPrComment(await repoRoot(repo), pr, body);
+			forgetPrs();
+		})
+);
+
+/** Resolves a review thread, or opens it again. */
+export const setResolved = command(
+	'unchecked',
+	({ repo, thread, resolved }: { repo: string; thread: string; resolved: boolean }) =>
+		badRequestOnError(async () => {
+			await resolveThread(await repoRoot(repo), thread, resolved === true);
+			forgetPrs();
+		})
+);
+
+/** Submits your review on the pull request `pr` (its node id), the pending one if there is one. */
+export const finishReview = command(
+	'unchecked',
+	({ repo, pr, event, body }: { repo: string; pr: string; event: VerdictEvent; body: string }) =>
+		badRequestOnError(async () => {
+			await submitReview(await repoRoot(repo), pr, event, body);
+			forgetPrs();
+		})
+);
+
+/** Closes, reopens, readies or drafts the pull request `pr` (its node id). */
+export const changePr = command(
+	'unchecked',
+	({ repo, pr, change }: { repo: string; pr: string; change: PrChange }) =>
+		badRequestOnError(async () => {
+			await changePullRequest(await repoRoot(repo), pr, change);
+			forgetPrs();
+		})
+);
+
+/** Merges the base into the pull request's branch. */
+export const updatePrBranch = command(
+	'unchecked',
+	({ repo, pr, head }: { repo: string; pr: string; head: string }) =>
+		badRequestOnError(async () => {
+			await updateBranch(await repoRoot(repo), pr, head);
+			forgetPrs();
+		})
+);
+
+/** Merges the pull request, and deletes its branch when asked. */
+export const mergePr = command(
+	'unchecked',
+	({ repo, pr, options }: { repo: string; pr: string; options: MergeOptions }) =>
+		badRequestOnError(async () => {
+			await mergePullRequest(await repoRoot(repo), pr, options);
 			forgetPrs();
 		})
 );

@@ -1,6 +1,6 @@
 <!-- the next pull request's overview loading, shaped like its header card -->
 <div
-	class="flex flex-col gap-6"
+	class="mx-auto flex w-full max-w-4xl flex-col gap-6"
 	role="status"
 	aria-label="Loading the pull request"
 	aria-busy="true"

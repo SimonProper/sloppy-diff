@@ -2,11 +2,16 @@ import { describe, expect, test } from 'vitest';
 import { prContext } from './ask';
 import {
 	addPrComment,
+	changePullRequest,
 	checkPrNumber,
 	checkSuggestion,
 	deleteComment,
 	editComment,
+	mergePullRequest,
+	updateBranch,
 	draftStep,
+	resolveThread,
+	submitReview,
 	threadInput,
 	toPrSummary,
 	toPullRequest
@@ -272,4 +277,77 @@ describe('toPrSummary', () => {
 		});
 		expect(toPrSummary(raw, 'bob')).toMatchObject({ mine: true, requested: false, reviewed: null });
 	});
+});
+
+test('a thread says whether you may resolve it or open it again, and bad input never reaches gh', async () => {
+	const raw = structuredClone(response.data.repository.pullRequest);
+	// the first is resolved, the second isn't
+	Object.assign(raw.reviewThreads.nodes[0], { viewerCanResolve: true, viewerCanUnresolve: false });
+	Object.assign(raw.reviewThreads.nodes[1], { viewerCanResolve: true });
+	Object.assign(raw, { viewerDidAuthor: true });
+	const pr = toPullRequest(raw as never);
+	expect(pr.threads.map((t) => t.canResolve)).toEqual([false, true]);
+	expect(pr.mine).toBe(true);
+	await expect(resolveThread('.', 'PRRT_1;rm', true)).rejects.toThrow();
+	await expect(submitReview('.', 'PR_1;rm', 'APPROVE', '')).rejects.toThrow();
+	await expect(submitReview('.', 'PR_1', 'MERGE' as never, '')).rejects.toThrow();
+	await expect(submitReview('.', 'PR_1', 'COMMENT', 'x'.repeat(65_537))).rejects.toThrow();
+});
+
+test('what you may do to a pull request and how it merges, from GitHub and the repo', async () => {
+	const raw = structuredClone(response.data.repository.pullRequest);
+	const pr = (over: object, repo: object = {}) =>
+		toPullRequest({
+			...raw,
+			...over,
+			baseRepository: { ...raw.baseRepository, ...repo }
+		} as never);
+	// what an older answer without these fields reads as: nothing you may do
+	expect(pr({})).toMatchObject({
+		mergeState: 'UNKNOWN',
+		canEdit: false,
+		canMerge: false,
+		mergeMethods: [],
+		branchToDelete: null
+	});
+	const open = pr(
+		{
+			mergeStateStatus: 'CLEAN',
+			viewerCanUpdate: true,
+			headRef: { id: 'REF_1' },
+			headRepositoryOwner: { login: 'teemingc' }
+		},
+		{
+			viewerPermission: 'WRITE',
+			mergeCommitAllowed: true,
+			rebaseMergeAllowed: true,
+			squashMergeAllowed: true
+		}
+	);
+	expect(open).toMatchObject({
+		mergeState: 'CLEAN',
+		canEdit: true,
+		canMerge: true,
+		branchToDelete: 'REF_1',
+		headOwner: 'teemingc'
+	});
+	expect(open.mergeMethods).toEqual(['SQUASH', 'MERGE', 'REBASE']);
+	// triage can't merge; GitHub deletes the branch itself where the repo says so
+	expect(
+		pr({ headRef: { id: 'REF_1' } }, { viewerPermission: 'TRIAGE', deleteBranchOnMerge: true })
+	).toMatchObject({ canMerge: false, branchToDelete: null });
+
+	const head = 'a'.repeat(40);
+	await expect(changePullRequest('.', 'PR_1;rm', 'close')).rejects.toThrow();
+	await expect(changePullRequest('.', 'PR_1', 'merge' as never)).rejects.toThrow();
+	await expect(changePullRequest('.', 'PR_1', '__proto__' as never)).rejects.toThrow();
+	await expect(updateBranch('.', 'PR_1', 'abc1234')).rejects.toThrow();
+	await expect(mergePullRequest('.', 'PR_1', { method: 'FAST' as never, head })).rejects.toThrow();
+	await expect(mergePullRequest('.', 'PR_1', { method: 'SQUASH', head: 'HEAD' })).rejects.toThrow();
+	await expect(
+		mergePullRequest('.', 'PR_1', { method: 'SQUASH', head, deleteBranch: 'R;rm' })
+	).rejects.toThrow();
+	await expect(
+		mergePullRequest('.', 'PR_1', { method: 'SQUASH', head, body: 'x'.repeat(65_537) })
+	).rejects.toThrow();
 });

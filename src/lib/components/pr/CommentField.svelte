@@ -1,3 +1,14 @@
+<script module lang="ts">
+	/** another way to send what's typed, a quiet button beside the send one */
+	export interface Action {
+		label: string;
+		title: string;
+		/** the colour it takes on hover */
+		tone?: string;
+		run: (body: string) => Promise<unknown>;
+	}
+</script>
+
 <script lang="ts">
 	import { errorText } from '$lib/errors';
 	import { readJson, readText, writeText } from '$lib/storage';
@@ -21,6 +32,8 @@
 		/** given, each sent comment is a card of its own, and the field the next one: on the
 		 * conversation, where a comment isn't a reply to the one before */
 		card?: string;
+		/** more ways to send what's typed, quiet buttons beside the send one; they work empty too */
+		actions?: Action[];
 	}
 
 	let {
@@ -31,7 +44,8 @@
 		placeholder = avatar === undefined ? 'Reply' : 'Leave a reply…',
 		action: given,
 		hint: givenHint,
-		card
+		card,
+		actions = []
 	}: Props = $props();
 
 	// without a choice, a reply goes to the review in progress
@@ -44,6 +58,8 @@
 		body: string;
 		/** to your pending review, not at once */
 		review?: boolean;
+		/** one of `actions`, by its label */
+		action?: string;
 		failure?: string;
 	}
 
@@ -59,9 +75,9 @@
 	const typed = $derived(reply.trim().length > 0);
 
 	// the field is free again at once, for the next one
-	function send(body: string, review = false) {
+	function send(body: string, review = false, action?: string) {
 		reply = '';
-		post({ id: crypto.randomUUID(), body, review });
+		post({ id: crypto.randomUUID(), body, review, action });
 	}
 
 	async function post(item: Sent) {
@@ -69,7 +85,13 @@
 			? sent.map((s) => (s.id === item.id ? item : s))
 			: [...sent, item];
 		try {
-			await (item.review && onreview ? onreview : onsend)(item.body);
+			const run = item.action
+				? actions.find((a) => a.label === item.action)?.run
+				: item.review && onreview
+					? onreview
+					: onsend;
+			if (!run) throw new Error(`${item.action} isn't offered here any more`);
+			await run(item.body);
 			sent = sent.filter((s) => s.id !== item.id);
 		} catch (e) {
 			sent = sent.map((s) => (s.id === item.id ? { ...s, failure: errorText(e) } : s));
@@ -118,12 +140,14 @@
 						failure="Not sent: {item.failure}"
 						action="Retry"
 						cancel="Discard"
-						onsave={(body) => post({ id: item.id, body })}
+						onsave={(body) => post({ ...item, body, failure: undefined })}
 						oncancel={() => (sent = sent.filter((s) => s.id !== item.id))}
 					/>
 				{:else}
-					<p class="text-[12px] leading-5 whitespace-pre-wrap text-muted">{item.body}</p>
-					<p class="text-[11px] text-faint">Sending…</p>
+					{#if item.body}
+						<p class="text-[12px] leading-5 whitespace-pre-wrap text-muted">{item.body}</p>
+					{/if}
+					<p class="text-[11px] text-faint">{item.action ? `${item.action}…` : 'Sending…'}</p>
 				{/if}
 			</div>
 		</div>
@@ -149,6 +173,17 @@
 				{onkeydown}
 				{@attach grow}></textarea>
 			{#if onreview && typed}{@render startReview()}{/if}
+			{#each actions as a (a.label)}
+				<button
+					type="button"
+					class={[
+						'shrink-0 self-end rounded-md px-1.5 text-[11px] leading-5 text-muted hover:bg-subtle',
+						a.tone ?? 'hover:text-fg'
+					]}
+					title={a.title}
+					onclick={() => send(reply.trim(), false, a.label)}>{a.label}</button
+				>
+			{/each}
 			<button
 				type="button"
 				class={[

@@ -4,6 +4,8 @@ import type { Suggestion } from '$lib/ask/types';
 import type {
 	CheckOutcome,
 	Checks,
+	MergeMethod,
+	MergeState,
 	PrComment,
 	PrSummary,
 	PullRequest,
@@ -78,10 +80,16 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   viewer { avatarUrl(size: 40) }
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      id number title body bodyHTML url state isDraft mergeable
+      id number title body bodyHTML url state isDraft mergeable mergeStateStatus viewerDidAuthor
+      viewerCanUpdate viewerCanUpdateBranch
       author { login avatarUrl(size: 40) }
       baseRefName headRefName baseRefOid headRefOid
-      baseRepository { url sshUrl }
+      headRef { id }
+      headRepositoryOwner { login }
+      baseRepository {
+        url sshUrl viewerPermission
+        mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed deleteBranchOnMerge
+      }
       reviewRequests(first: 20) {
         nodes {
           requestedReviewer {
@@ -116,7 +124,7 @@ const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
       }
       reviewThreads(first: 100) {
         nodes {
-          id path line startLine diffSide subjectType isResolved isOutdated
+          id path line startLine diffSide subjectType isResolved isOutdated viewerCanResolve viewerCanUnresolve
           comments(first: 100) {
             nodes { id author { login avatarUrl(size: 40) } body bodyHTML createdAt url state diffHunk pullRequestReview { id } viewerCanDelete viewerCanUpdate }
           }
@@ -154,12 +162,28 @@ export interface RawPullRequest {
 	state: PullRequest['state'];
 	isDraft: boolean;
 	mergeable: PullRequest['mergeable'];
+	mergeStateStatus?: MergeState;
+	viewerDidAuthor?: boolean;
+	viewerCanUpdate?: boolean;
+	viewerCanUpdateBranch?: boolean;
+	/** the branch, null once it's deleted */
+	headRef?: { id: string } | null;
+	/** null once the fork is deleted */
+	headRepositoryOwner?: { login: string } | null;
 	author: { login: string; avatarUrl: string } | null;
 	baseRefName: string;
 	headRefName: string;
 	baseRefOid: string;
 	headRefOid: string;
-	baseRepository: { url: string; sshUrl: string };
+	baseRepository: {
+		url: string;
+		sshUrl: string;
+		viewerPermission?: string | null;
+		mergeCommitAllowed?: boolean;
+		squashMergeAllowed?: boolean;
+		rebaseMergeAllowed?: boolean;
+		deleteBranchOnMerge?: boolean;
+	};
 	// a team has a name instead of a login, a reviewer that's gone neither
 	reviewRequests: {
 		nodes: { requestedReviewer: { login?: string; name?: string; avatarUrl: string } | null }[];
@@ -195,6 +219,8 @@ export interface RawPullRequest {
 			subjectType: 'LINE' | 'FILE';
 			isResolved: boolean;
 			isOutdated: boolean;
+			viewerCanResolve?: boolean;
+			viewerCanUnresolve?: boolean;
 			comments: { nodes: RawComment[] };
 		}[];
 	};
@@ -224,6 +250,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		side: t.diffSide === 'LEFT' ? 'old' : 'new',
 		isResolved: t.isResolved,
 		isOutdated: t.isOutdated,
+		canResolve: !!(t.isResolved ? t.viewerCanUnresolve : t.viewerCanResolve),
 		diffHunk: t.comments.nodes[0]?.diffHunk ?? '',
 		comments: t.comments.nodes.map((c) => comment(c, 'thread'))
 	}));
@@ -279,6 +306,22 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		),
 		threads,
 		pendingReviewId: raw.reviews.nodes[0]?.id ?? null,
+		mine: raw.viewerDidAuthor === true,
+		mergeState: raw.mergeStateStatus ?? 'UNKNOWN',
+		canEdit: raw.viewerCanUpdate === true,
+		canMerge: ['ADMIN', 'MAINTAIN', 'WRITE'].includes(raw.baseRepository.viewerPermission ?? ''),
+		canUpdateBranch: raw.viewerCanUpdateBranch === true,
+		// the way most repos settle on first
+		mergeMethods: (
+			[
+				['SQUASH', raw.baseRepository.squashMergeAllowed],
+				['MERGE', raw.baseRepository.mergeCommitAllowed],
+				['REBASE', raw.baseRepository.rebaseMergeAllowed]
+			] as const
+		).flatMap(([method, allowed]) => (allowed ? [method] : [])),
+		// GitHub deletes it itself where the repo says so
+		headOwner: raw.headRepositoryOwner?.login ?? '',
+		branchToDelete: raw.baseRepository.deleteBranchOnMerge ? null : (raw.headRef?.id ?? null),
 		viewerAvatar: raw.viewerAvatar ?? ''
 	};
 }
@@ -692,4 +735,119 @@ export async function deleteComment(root: string, id: string, kind: 'issue' | 't
 	if (!NODE_ID.test(id)) throw new Error('Invalid comment');
 	if (kind !== 'issue' && kind !== 'thread') throw new Error('Invalid comment');
 	await graphql(root, DELETE[kind], { id });
+}
+
+// ---------------------------------------------------------------------------
+// resolving a review thread, and finishing your review with a verdict
+
+const RESOLVE = {
+	resolve: `mutation($id: ID!) { resolveReviewThread(input: { threadId: $id }) { clientMutationId } }`,
+	unresolve: `mutation($id: ID!) { unresolveReviewThread(input: { threadId: $id }) { clientMutationId } }`
+};
+
+/** Resolves a review thread, or opens it again. */
+export async function resolveThread(root: string, id: string, resolved: boolean) {
+	if (!NODE_ID.test(id)) throw new Error('Invalid thread');
+	await graphql(root, RESOLVE[resolved ? 'resolve' : 'unresolve'], { id });
+}
+
+export const VERDICT_EVENTS = ['COMMENT', 'APPROVE', 'REQUEST_CHANGES'] as const;
+export type VerdictEvent = (typeof VERDICT_EVENTS)[number];
+
+const SUBMIT_PENDING = `mutation($review: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  submitPullRequestReview(input: { pullRequestReviewId: $review, event: $event, body: $body }) { clientMutationId }
+}`;
+const REVIEW = `mutation($pr: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  addPullRequestReview(input: { pullRequestId: $pr, event: $event, body: $body }) { clientMutationId }
+}`;
+
+/**
+ * Submits your review with a verdict and an optional summary: the pending one with its
+ * comments, asked for anew in case it was finished on GitHub since, or a new one of its own.
+ */
+export async function submitReview(root: string, pr: string, event: VerdictEvent, body: string) {
+	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	if (!VERDICT_EVENTS.includes(event)) throw new Error('Invalid review');
+	if (typeof body !== 'string' || body.length > MAX_BODY)
+		throw new Error('That review is too long');
+	const review: string | undefined = (await graphql(root, PENDING, { pr })).node?.reviews?.nodes[0]
+		?.id;
+	const text = body.trim() || undefined;
+	if (review) await graphql(root, SUBMIT_PENDING, { review, event, body: text });
+	else await graphql(root, REVIEW, { pr, event, body: text });
+}
+
+// ---------------------------------------------------------------------------
+// what happens to the pull request itself: closed, opened again, drafted, brought up to date, merged
+
+const CHANGE = {
+	close: `mutation($pr: ID!) { closePullRequest(input: { pullRequestId: $pr }) { clientMutationId } }`,
+	reopen: `mutation($pr: ID!) { reopenPullRequest(input: { pullRequestId: $pr }) { clientMutationId } }`,
+	ready: `mutation($pr: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pr }) { clientMutationId } }`,
+	draft: `mutation($pr: ID!) { convertPullRequestToDraft(input: { pullRequestId: $pr }) { clientMutationId } }`
+};
+export type PrChange = keyof typeof CHANGE;
+
+export async function changePullRequest(root: string, pr: string, change: PrChange) {
+	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	if (!Object.hasOwn(CHANGE, change)) throw new Error('Invalid change');
+	await graphql(root, CHANGE[change], { pr });
+}
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+// ponytail: merges the base in, GitHub's rebase update isn't offered
+const UPDATE_BRANCH = `mutation($pr: ID!, $head: GitObjectID!) {
+  updatePullRequestBranch(input: { pullRequestId: $pr, expectedHeadOid: $head }) { clientMutationId }
+}`;
+
+/** Merges the base into the pull request's branch, as long as its head is still `head`. */
+export async function updateBranch(root: string, pr: string, head: string) {
+	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	if (!FULL_SHA.test(head)) throw new Error(`Invalid commit: ${head}`);
+	await graphql(root, UPDATE_BRANCH, { pr, head });
+}
+
+const MERGE = `mutation($pr: ID!, $method: PullRequestMergeMethod!, $head: GitObjectID!, $headline: String, $body: String) {
+  mergePullRequest(input: { pullRequestId: $pr, mergeMethod: $method, expectedHeadOid: $head, commitHeadline: $headline, commitBody: $body }) { clientMutationId }
+}`;
+const DELETE_REF = `mutation($ref: ID!) { deleteRef(input: { refId: $ref }) { clientMutationId } }`;
+
+export interface MergeOptions {
+	method: MergeMethod;
+	/** the head the page showed: GitHub turns the merge down if there's more since */
+	head: string;
+	/** the commit's message, GitHub's own where left empty */
+	headline?: string;
+	body?: string;
+	/** the branch's ref id, deleted once it's merged */
+	deleteBranch?: string;
+}
+
+/** Merges the pull request, then deletes its branch when asked. */
+export async function mergePullRequest(root: string, pr: string, o: MergeOptions) {
+	if (!NODE_ID.test(pr)) throw new Error('Invalid pull request');
+	if (!['MERGE', 'SQUASH', 'REBASE'].includes(o.method)) throw new Error('Invalid merge method');
+	if (!FULL_SHA.test(o.head)) throw new Error(`Invalid commit: ${o.head}`);
+	if (o.deleteBranch !== undefined && !NODE_ID.test(o.deleteBranch))
+		throw new Error('Invalid branch');
+	const text = (s: unknown) => {
+		if (s !== undefined && (typeof s !== 'string' || s.length > MAX_BODY)) {
+			throw new Error('That commit message is too long');
+		}
+		return (s as string | undefined)?.trim() || undefined;
+	};
+	await graphql(root, MERGE, {
+		pr,
+		method: o.method,
+		head: o.head,
+		headline: text(o.headline),
+		body: text(o.body)
+	});
+	if (!o.deleteBranch) return;
+	try {
+		await graphql(root, DELETE_REF, { ref: o.deleteBranch });
+	} catch (e) {
+		throw new Error(`Merged, but the branch wasn't deleted: ${(e as Error).message}`);
+	}
 }

@@ -18,6 +18,7 @@ const thread = (over: Partial<ReviewThread>): ReviewThread => ({
 	side: 'new',
 	isResolved: false,
 	isOutdated: false,
+	canResolve: false,
 	diffHunk: '',
 	comments: [],
 	...over

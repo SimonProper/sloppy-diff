@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { ReviewThread, Replying } from '$lib/pr/types';
+	import ResolveButton from './ResolveButton.svelte';
 	import ReviewComments from './ReviewComments.svelte';
 
 	interface Props {
@@ -61,8 +62,11 @@
 >
 	{#each threads as thread, i (thread.id)}
 		<div class={[i > 0 && 'mt-3 border-t border-line pt-3']}>
-			{#if thread.isResolved}
-				<p class="mb-2 text-[11px] text-faint">Resolved</p>
+			{#if thread.isResolved || thread.canResolve}
+				<p class="mb-2 flex items-center justify-between text-[11px] text-faint">
+					<span>{thread.isResolved ? 'Resolved' : ''}</span>
+					<ResolveButton {thread} />
+				</p>
 			{/if}
 			<ReviewComments {thread} {reply} />
 		</div>

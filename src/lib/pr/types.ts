@@ -40,6 +40,22 @@ export interface PullRequest {
 	threads: ReviewThread[];
 	/** your pending review, where drafted comments go, null until there is one */
 	pendingReviewId: string | null;
+	/** you opened it, GitHub won't take your approval or change request */
+	mine: boolean;
+	/** whether GitHub would merge it now, and what's in the way if not */
+	mergeState: MergeState;
+	/** you may close, reopen or draft it: you opened it, or you can write to the repo */
+	canEdit: boolean;
+	/** you can write to the repo */
+	canMerge: boolean;
+	/** you may merge its base into it */
+	canUpdateBranch: boolean;
+	/** the ways the repo lets it merge, the usual first */
+	mergeMethods: MergeMethod[];
+	/** whose repo the branch is in, for a merge commit's message; empty once a fork is gone */
+	headOwner: string;
+	/** the branch's ref id, to delete it on merge; null when GitHub deletes it itself or it's gone */
+	branchToDelete: string | null;
 	/** your picture on GitHub, beside where you reply */
 	viewerAvatar: string;
 }
@@ -73,6 +89,11 @@ export interface PrComment {
 	/** how it's edited, where GitHub lets you, the same way */
 	editable?: 'issue' | 'thread';
 }
+
+export type MergeMethod = 'SQUASH' | 'MERGE' | 'REBASE';
+
+export type MergeState =
+	'CLEAN' | 'HAS_HOOKS' | 'UNSTABLE' | 'BEHIND' | 'BLOCKED' | 'DIRTY' | 'DRAFT' | 'UNKNOWN';
 
 export type ReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
 
@@ -120,6 +141,8 @@ export interface ReviewThread {
 	side: Side;
 	isResolved: boolean;
 	isOutdated: boolean;
+	/** you may resolve it, or open it again once it's resolved */
+	canResolve: boolean;
 	/** the code the thread was started on, for one whose lines changed since */
 	diffHunk: string;
 	comments: PrComment[];

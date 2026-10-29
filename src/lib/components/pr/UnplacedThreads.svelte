@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ReviewThread, Replying } from '$lib/pr/types';
+	import ResolveButton from './ResolveButton.svelte';
 	import ReviewComments from './ReviewComments.svelte';
 
 	interface Props {
@@ -28,6 +29,7 @@
 				<span class="size-1.5 rounded-full bg-ink-soft"></span>
 				{where(thread)}
 				{#if thread.isResolved}<span>· resolved</span>{/if}
+				<span class="ml-auto"><ResolveButton {thread} /></span>
 			</p>
 			{#if thread.diffHunk && !thread.file}
 				<pre

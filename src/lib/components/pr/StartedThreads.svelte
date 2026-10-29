@@ -6,6 +6,7 @@
 	import Avatar from './Avatar.svelte';
 	import CommentMenu from './CommentMenu.svelte';
 	import CommentField from './CommentField.svelte';
+	import ResolveButton from './ResolveButton.svelte';
 
 	interface Props {
 		/** the threads a review started, by id */
@@ -58,6 +59,7 @@
 							>Resolved</span
 						>
 					{/if}
+					<ResolveButton {thread} />
 				</span>
 			</p>
 			<div class="divide-y divide-line bg-surface">

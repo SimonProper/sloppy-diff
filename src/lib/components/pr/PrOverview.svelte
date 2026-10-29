@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { addComment } from '$lib/pr/pr.remote';
+	import { addComment, finishReview } from '$lib/pr/pr.remote';
 	import { refresh } from '$lib/pr/refresh';
 	import type {
 		Check,
@@ -12,7 +12,9 @@
 	} from '$lib/pr/types';
 	import Avatar from './Avatar.svelte';
 	import Comment from './Comment.svelte';
-	import CommentField from './CommentField.svelte';
+	import CommentField, { type Action } from './CommentField.svelte';
+	import MergePanel from './MergePanel.svelte';
+	import PrActions from './PrActions.svelte';
 	import StartedThreads from './StartedThreads.svelte';
 
 	interface Props {
@@ -29,6 +31,52 @@
 		await addComment({ repo: page.data.repo, pr: pr.id, body });
 		await refresh();
 	}
+
+	async function review(event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES', body: string) {
+		await finishReview({ repo: page.data.repo, pr: pr.id, event, body });
+		await refresh();
+	}
+
+	const pending = $derived(
+		pr.threads.reduce((n, t) => n + t.comments.filter((c) => c.pending).length, 0)
+	);
+	// beside the comment field, what's typed their summary. GitHub won't take a verdict on your own
+	const reviewing = $derived.by((): Action[] => {
+		if (pr.state !== 'OPEN') return [];
+		const yours = pending
+			? ` with your ${pending} pending ${pending === 1 ? 'comment' : 'comments'}`
+			: '';
+		return [
+			...(pr.pendingReviewId
+				? [
+						{
+							label: 'Submit review',
+							title: `Submits your review${yours}, what's typed its summary`,
+							run: (body: string) => review('COMMENT', body)
+						}
+					]
+				: []),
+			...(pr.mine
+				? []
+				: [
+						{
+							label: 'Request changes',
+							title: `Requests changes${yours}, what's typed says which`,
+							tone: 'hover:text-del',
+							run: (body: string) => review('REQUEST_CHANGES', body)
+						},
+						{
+							label: 'Approve',
+							title: `Approves${yours}, what's typed its summary`,
+							tone: 'hover:text-add',
+							run: (body: string) => review('APPROVE', body)
+						}
+					])
+		];
+	});
+
+	/** the merge panel open, under the card */
+	let merging = $state(false);
 
 	const status = $derived(pr.isDraft && pr.state === 'OPEN' ? 'Draft' : pr.state.toLowerCase());
 
@@ -99,7 +147,7 @@
 
 <!-- what the pull request is, a card like the guide's summary, and where it stands in a
      strip along its foot. What people said under it -->
-<div class="flex flex-col gap-6">
+<div class="mx-auto flex w-full max-w-4xl flex-col gap-6">
 	<section class="overflow-hidden rounded-xl border border-line bg-surface">
 		<div class="p-5">
 			<h1 class="text-[17px] leading-snug font-semibold tracking-tight">
@@ -125,11 +173,11 @@
 				</span>
 			</p>
 			{#if pr.bodyHtml}
-				<div class="prose mt-4 max-w-3xl text-[13px] leading-relaxed">{@html pr.bodyHtml}</div>
+				<div class="prose mt-4 text-[13px] leading-relaxed">{@html pr.bodyHtml}</div>
 			{/if}
 		</div>
 
-		{#if pr.reviewers.length || pr.checks || branch || pr.issues.length}
+		{#if pr.reviewers.length || pr.checks || branch || pr.issues.length || pr.canEdit || pr.canMerge}
 			<div
 				class="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-subtle px-5 py-2.5 text-[12px] text-muted"
 			>
@@ -197,14 +245,20 @@
 						Closes <span class="font-mono text-[11px] text-fg">#{issue.number}</span>
 					</a>
 				{/each}
+
+				<PrActions {pr} bind:merging />
 			</div>
 		{/if}
 	</section>
 
+	{#if merging && pr.state === 'OPEN' && !pr.isDraft}
+		<MergePanel {pr} onclose={() => (merging = false)} />
+	{/if}
+
 	<!-- each check on the head commit, a row that opens where it ran. Failing and running ones
 	     in sight, the passed and skipped folded under one row -->
 	{#if pr.checks}
-		<section class="max-w-3xl">
+		<section>
 			<h2 class="px-1 text-[12px] font-medium text-muted">
 				Checks <span class="ml-1 font-normal text-faint tabular-nums">{pr.checks.runs.length}</span>
 			</h2>
@@ -243,7 +297,7 @@
 
 	<!-- read top to bottom, all of it: entries are cards on the page, threads a step lighter
 	     inside them. A verdict without words is a line between the cards. Yours goes last -->
-	<section class="max-w-3xl">
+	<section>
 		<h2 class="px-1 text-[12px] font-medium text-muted">
 			Activity <span class="ml-1 font-normal text-faint tabular-nums">{total}</span>
 		</h2>
@@ -277,6 +331,7 @@
 					placeholder="Leave a comment…"
 					action="Comment"
 					hint="⌘↵ to comment"
+					actions={reviewing}
 				/>
 			</li>
 		</ul>
