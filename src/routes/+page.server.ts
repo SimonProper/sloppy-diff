@@ -96,7 +96,9 @@ interface Selection {
 
 const CHANGE_MODES: ChangeMode[] = ['lines', 'tokens'];
 
-export const load: PageServerLoad = async ({ url, cookies, setHeaders }) => {
+export const load: PageServerLoad = async ({ url, cookies, setHeaders, depends }) => {
+	// read again in the background on coming back to the page, see keepFresh
+	depends('app:page');
 	const timing = new Timing();
 	const report = () => setHeaders({ 'server-timing': timing.header() });
 

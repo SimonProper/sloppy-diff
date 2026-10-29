@@ -33,6 +33,7 @@ async function run(root: string, query: Record<string, string>) {
 	const landed: any = await (load as any)({
 		url,
 		cookies: { get: () => undefined },
+		depends: () => {},
 		setHeaders: (values: Record<string, string>) => {
 			for (const [key, value] of Object.entries(values)) headers.set(key, value);
 		}

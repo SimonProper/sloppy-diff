@@ -40,6 +40,7 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import AgentPicker from '$lib/components/AgentPicker.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
+	import { keepFresh } from '$lib/pr/refresh';
 	import { jumpToThread } from '$lib/pr/jump';
 	import type { PrSummary, PrView, ReviewThread } from '$lib/pr/types';
 	import { noDiff } from './no-diff';
@@ -74,6 +75,12 @@
 	let held = $state<View>(urlView);
 	beforeNavigate(() => (held = view));
 	const view = $derived(pending ? held : urlView);
+
+	// what's here changes in another window, an editor or a terminal, and is read again on
+	// coming back. A pull request, or the list of them, moves on GitHub meanwhile too
+	const onGitHub = $derived(data.mode === 'pr');
+	// the open pull requests beside one follow along
+	$effect(() => keepFresh(onGitHub, () => prsQuery?.refresh().catch(() => {})));
 	let awaited: PageData['diff'] | undefined;
 	let awaitedAt = '';
 	$effect(() => {
@@ -178,18 +185,9 @@
 
 	// the repo's open pull requests for the picker on a pull request, asked of gh after
 	// the page is up, it takes a moment. Undefined till then, null without gh, a sign in
-	// or a GitHub remote
-	let prs = $state<PrSummary[] | null | undefined>(undefined);
-	// asked again on another pull request, not when the one on screen is read again
-	const prNumber = $derived(pr?.number);
-	$effect(() => {
-		const repo = data.repo;
-		if (!prNumber) return;
-		getPullRequests(repo).then(
-			(list) => repo === data.repo && (prs = list),
-			() => (prs = null)
-		);
-	});
+	// or a GitHub remote. Held while it's on screen, so a page loaded again asks again
+	const prsQuery = $derived(pr ? getPullRequests(data.repo) : null);
+	const prs = $derived<PrSummary[] | null | undefined>(prsQuery?.error ? null : prsQuery?.current);
 	/** the PRs to pick from, with the one on screen when it isn't open anymore */
 	const prChoices = $derived(
 		pr && !prs?.some((p) => p.number === pr.number)
