@@ -190,6 +190,11 @@ html:has(dialog:modal) {
 }
 
 /* markdown: guide descriptions and answers by Claude, PR text as GitHub renders it */
+/* a path or URL too long for the line breaks where it must, rather than widening the page.
+   Code blocks keep their lines and scroll */
+.prose {
+	overflow-wrap: anywhere;
+}
 .prose p + p,
 .prose ul,
 .prose ol,
