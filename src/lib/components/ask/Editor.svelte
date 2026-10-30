@@ -6,6 +6,8 @@
 	import { createState, parse, serialize } from '$lib/ask/editor';
 	import { codeTokens } from '$lib/ask/ask.remote';
 	import { getMentions, insertMention, mentionAt, mentionsFor } from '$lib/ask/mentions';
+	import { modeOf, setVim, vimEscape } from '$lib/ask/vim';
+	import { vimKeys } from '$lib/vim.svelte';
 
 	interface Props {
 		/** markdown, what's sent */
@@ -61,7 +63,9 @@
 	});
 
 	function track(editor: EditorView) {
-		const at = editor.hasFocus() ? mentionAt(editor.state) : null;
+		// only while typing, not with vim's cursor resting after an `@`
+		const typing = editor.hasFocus() && modeOf(editor.state) === 'insert';
+		const at = typing ? mentionAt(editor.state) : null;
 		if (!at) dismissed = -1;
 		if (!at || at.from === dismissed) {
 			mention = null;
@@ -109,8 +113,14 @@
 		written = value;
 		const { tr, doc } = view.state;
 		tr.replaceWith(0, doc.content.size, parse(value).content);
-		// at the end, where text added from outside goes
-		view.dispatch(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView());
+		// at the end, where text added from outside goes, typing again after a send
+		view.dispatch(setVim(tr.setSelection(Selection.atEnd(tr.doc)).scrollIntoView(), vimKeys.on));
+	});
+
+	// vim's keys switched in the View menu
+	$effect(() => {
+		const on = vimKeys.on;
+		untrack(() => view && view.dispatch(setVim(view.state.tr, on)));
 	});
 </script>
 
@@ -125,14 +135,21 @@
 				// a ```suggestion is in the language of the lines it changes
 				tokens: (lang, text) =>
 					codeTokens({ lang: lang === 'suggestion' ? (language ?? '') : lang, text }),
-				language: () => language
+				language: () => language,
+				vim: vimKeys.on
 			});
 			const editor = new EditorView(el, {
 				state,
 				attributes: { 'data-placeholder': placeholder, 'aria-label': placeholder },
 				handleKeyDown: (editor, event) => {
 					if (onMenuKey(editor, event)) return true;
-					if (event.key !== 'Escape' || !onescape) return false;
+					if (event.key !== 'Escape') return false;
+					// vim: from typing to normal mode first, the next one closes
+					if (vimEscape(editor)) {
+						event.stopPropagation();
+						return true;
+					}
+					if (!onescape) return false;
 					event.stopPropagation();
 					onescape();
 					return true;
@@ -246,5 +263,24 @@
 	}
 	.editor :global(a) {
 		text-decoration: underline;
+	}
+	/* vim's normal mode: a block on the character the cursor is on, hollow when it's elsewhere */
+	.editor :global(.vim-normal) {
+		caret-color: transparent;
+	}
+	.editor :global(.vim-cursor) {
+		border-radius: 1px;
+		background: color-mix(in oklab, var(--fg) 35%, transparent);
+	}
+	.editor :global(.vim-end) {
+		display: inline-block;
+		width: 0.6em;
+		height: 1.2em;
+		vertical-align: text-bottom;
+	}
+	.editor :global(.ProseMirror:not(:focus) .vim-cursor) {
+		background: none;
+		outline: 1px solid color-mix(in oklab, var(--fg) 50%, transparent);
+		outline-offset: -1px;
 	}
 </style>

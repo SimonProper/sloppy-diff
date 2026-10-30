@@ -4,16 +4,18 @@ import type { EditorView } from 'prosemirror-view';
 import { firstLine } from '$lib/markdown';
 import { createState, parse, serialize } from './editor';
 import { insertMention, mentionAt, mentionsFor } from './mentions';
+import { modeOf } from './vim';
 
 /** Types into a field as the browser would, each key through the editor's plugins. */
-function field(markdown = '', language?: string) {
+function field(markdown = '', language?: string, vim = false) {
 	let sent = 0;
 	const view = {
 		composing: false,
 		state: createState(markdown, {
 			send: () => sent++,
 			tokens: async () => [],
-			language: () => language
+			language: () => language,
+			vim
 		}) as EditorState,
 		dispatch(tr: Transaction) {
 			view.state = view.state.apply(tr);
@@ -34,6 +36,10 @@ function field(markdown = '', language?: string) {
 		press(key: string, mods: Partial<KeyboardEvent> = {}) {
 			const event = { key, preventDefault() {}, ...mods } as KeyboardEvent;
 			plugins().some((p) => p.props.handleKeyDown?.call(p, ed, event));
+		},
+		/** each a key of its own, as in vim's normal mode */
+		keys(keys: string) {
+			for (const key of keys) this.press(key);
 		},
 		/** as the browser hands a paste to the editor, its own parser after the plugins' */
 		paste(data: Record<string, string>) {
@@ -196,4 +202,58 @@ test("@ offers the diff's files and the pull request's people, and puts one in",
 	f.type('now');
 	expect(f.markdown.trim()).toBe('see `src/lib/cart.ts` now');
 	expect(mentionAt(field('`a @b`').state)).toBeNull();
+});
+
+test('vim: Esc to normal mode, where keys are commands, words moved over and changed', () => {
+	const f = field('', undefined, true);
+	f.type('one two three');
+	f.press('Escape');
+	expect(modeOf(f.state)).toBe('normal');
+	f.keys('ggw');
+	f.keys('cw');
+	expect(modeOf(f.state)).toBe('insert');
+	f.type('2');
+	f.press('Escape');
+	f.keys('wdiw');
+	expect(f.doc.textContent).toBe('one 2 ');
+	f.keys('bbx');
+	expect(f.doc.textContent).toBe('ne 2 ');
+	f.keys('u');
+	expect(f.doc.textContent).toBe('one 2 ');
+	f.keys('2dw');
+	expect(f.doc.textContent).toBe('');
+});
+
+test('vim: lines deleted, yanked and put, in a list and in code', () => {
+	const f = field('a\n\nb\n\nc', undefined, true);
+	f.press('Escape');
+	f.keys('dd');
+	expect(f.markdown).toBe('b\n\nc');
+	f.keys('p');
+	expect(f.markdown).toBe('b\n\na\n\nc');
+
+	const list = field('* one', undefined, true);
+	list.press('Escape');
+	list.keys('o');
+	list.type('two');
+	expect(list.markdown).toBe('* one\n* two');
+
+	const code = field('```ts\na\nb\n```', undefined, true);
+	code.press('Escape');
+	code.keys('dd');
+	expect(code.markdown.trim()).toBe('```ts\nb\n```');
+	code.keys('p');
+	expect(code.markdown.trim()).toBe('```ts\nb\na\n```');
+});
+
+test('vim: what v selects is what d deletes, and off types as usual', () => {
+	const f = field('one two', undefined, true);
+	f.press('Escape');
+	f.keys('vwd');
+	expect(f.doc.textContent).toBe('two');
+
+	const off = field('', undefined, false);
+	off.press('Escape');
+	off.type('dd');
+	expect(off.doc.textContent).toBe('dd');
 });

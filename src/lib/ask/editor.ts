@@ -26,6 +26,7 @@ import {
 } from 'prosemirror-commands';
 import { history, redo, undo } from 'prosemirror-history';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
+import { vim } from './vim';
 
 /**
  * The fields questions and comments are typed in: rich text that is markdown underneath,
@@ -256,6 +257,8 @@ export interface Options {
 	tokens: Tokens;
 	/** the extension of the file it's about, for a fence that names no language */
 	language?: () => string | undefined;
+	/** vim's keys, switched with `setVim` after */
+	vim?: boolean;
 }
 
 function keys({ send, tab, language }: Options) {
@@ -393,6 +396,8 @@ export function createState(markdown: string, options: Options) {
 	return EditorState.create({
 		doc: needsLineBelow(doc) ? doc.copy(doc.content.addToEnd(nodes.paragraph.create())) : doc,
 		plugins: [
+			// first, its normal mode takes the keys before anything else sees them
+			vim(!!options.vim),
 			rules(options.language),
 			keys(options),
 			keymap(baseKeymap),

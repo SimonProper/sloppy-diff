@@ -2,6 +2,7 @@
 	import type { Layout } from '$lib/diff/split';
 	import type { ChangeMode, ChangeSummary } from '$lib/diff/types';
 	import { remember } from '$lib/prefs';
+	import { chooseVim, vimKeys } from '$lib/vim.svelte';
 	import LayoutToggle from './LayoutToggle.svelte';
 	import Popover from './Popover.svelte';
 	import SegmentedControl from './SegmentedControl.svelte';
@@ -33,6 +34,15 @@
 	const WIDTHS: { value: 'max' | 'full'; label: string; title: string }[] = [
 		{ value: 'max', label: 'Max', title: 'Centred, as wide as a 100-column line' },
 		{ value: 'full', label: 'Full', title: 'As wide as the window' }
+	];
+
+	const VIM: { value: 'off' | 'vim'; label: string; title: string }[] = [
+		{ value: 'off', label: 'Off', title: 'Text fields type as usual' },
+		{
+			value: 'vim',
+			label: 'Vim',
+			title: "Vim's normal mode in text fields, Esc to it. j and k move by the line on screen"
+		}
 	];
 
 	function chooseWidth(value: 'max' | 'full') {
@@ -74,5 +84,12 @@
 		<SegmentedControl options={WIDTHS} value={width} onchange={chooseWidth} label="Width" />
 		<span class="text-[11.5px] text-muted">Changes</span>
 		<SegmentedControl options={MODES} value={mode} {onchange} label="Changes" />
+		<span class="text-[11.5px] text-muted">Keys</span>
+		<SegmentedControl
+			options={VIM}
+			value={vimKeys.on ? 'vim' : 'off'}
+			onchange={(value) => chooseVim(value === 'vim')}
+			label="Keys"
+		/>
 	</div>
 </Popover>
