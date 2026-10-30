@@ -61,9 +61,18 @@ export interface Cursor {
 	side?: Side;
 }
 
+/** Whether two comments are about the same lines, or the same whole file. */
+const sameAbout = (a: Omit<Draft, 'text'>, b: Omit<Draft, 'text'>) =>
+	a.path === b.path &&
+	a.span?.hunk === b.span?.hunk &&
+	a.span?.start === b.span?.start &&
+	a.span?.end === b.span?.end &&
+	a.span?.side === b.span?.side;
+
 /** What was typed and not sent yet, kept per diff. */
 interface Typed {
 	draft?: Draft;
+	drafts?: Draft[];
 	replies?: Record<string, string>;
 	newChat?: string;
 	attached?: Record<string, Added[]>;
@@ -89,6 +98,8 @@ interface Config {
 	prId?: string;
 	/** you have a review in progress on it, comments go in there */
 	pending?: boolean;
+	/** your picture on GitHub, beside what you comment */
+	avatar?: string;
 }
 
 /**
@@ -103,6 +114,8 @@ export class Threads {
 	list = $derived.by(() => this.#config().threads);
 	live = $state<Record<string, Live>>({});
 	draft = $state<Draft | null>(null);
+	/** comments put away unsent, each kept at its own lines until it's opened again */
+	drafts = $state<Draft[]>([]);
 	/** the composer is open on the draft's lines */
 	composing = $state(false);
 	cursor = $state<Cursor | null>(null);
@@ -156,6 +169,7 @@ export class Threads {
 				restored = key;
 				const typed = readJson<Typed>(key, {});
 				this.draft = typed.draft ?? null;
+				this.drafts = typed.drafts ?? [];
 				this.composing = !!typed.draft;
 				this.replies = typed.replies ?? {};
 				this.newChat = typed.newChat ?? '';
@@ -165,11 +179,13 @@ export class Threads {
 			const attached = Object.entries(this.attached).filter(([, added]) => added.length);
 			const typed: Typed = {
 				draft: this.draft?.text.trim() ? this.draft : undefined,
+				drafts: this.drafts.length ? this.drafts : undefined,
 				replies: replies.length ? Object.fromEntries(replies) : undefined,
 				newChat: this.newChat.trim() || undefined,
 				attached: attached.length ? Object.fromEntries(attached) : undefined
 			};
-			if (typed.draft || typed.replies || typed.newChat || typed.attached) writeJson(key, typed);
+			if (typed.draft || typed.drafts || typed.replies || typed.newChat || typed.attached)
+				writeJson(key, typed);
 			else writeText(key, null);
 		});
 		$effect(() => {
@@ -199,9 +215,10 @@ export class Threads {
 		pr: string;
 		commit: string;
 		pending: boolean;
+		avatar: string;
 	} | null {
-		const { repo, pr, prId, to, pending = false } = this.#config();
-		return pr && prId ? { repo, number: pr, pr: prId, commit: to, pending } : null;
+		const { repo, pr, prId, to, pending = false, avatar = '' } = this.#config();
+		return pr && prId ? { repo, number: pr, pr: prId, commit: to, pending, avatar } : null;
 	}
 
 	/**
@@ -316,8 +333,7 @@ export class Threads {
 			else this.newChat = value;
 		}
 
-		this.draft = null;
-		this.composing = false;
+		this.putAway();
 		this.cursor = null;
 		this.peek = null;
 		this.panel = true;
@@ -325,16 +341,44 @@ export class Threads {
 		// a frame on, after a field that has just opened has taken the focus itself
 		tick().then(() =>
 			requestAnimationFrame(() =>
-				document.querySelector<HTMLElement>('[data-ask-field] textarea')?.focus()
+				document
+					.querySelector<HTMLElement>('[data-ask-field] [contenteditable]')
+					?.focus({ preventScroll: true })
 			)
 		);
 	}
 
+	/**
+	 * The comment open on lines, or a whole file: the one put away there before, or a new
+	 * one. Another one open elsewhere is put away at its own lines.
+	 */
 	#compose(about: Omit<Draft, 'text'>) {
-		const keep = this.draft?.text ?? '';
-		this.draft = { ...about, text: keep };
+		const before = this.draft;
+		if (before && sameAbout(before, about)) {
+			this.draft = { ...about, text: before.text };
+		} else {
+			this.putAway();
+			const kept = this.drafts.find((d) => sameAbout(d, about));
+			this.drafts = this.drafts.filter((d) => d !== kept);
+			this.draft = { ...about, text: kept?.text ?? '' };
+		}
 		this.composing = true;
 		this.cursor = null;
+	}
+
+	/** Opens a comment put away unsent, from its mark in the diff. */
+	reopen(draft: Draft) {
+		const { text: _, ...about } = draft;
+		this.#compose(about);
+	}
+
+	/** Closes the comment open on lines, keeping it at them if anything's typed. */
+	putAway() {
+		const draft = this.draft;
+		if (draft?.text.trim())
+			this.drafts = [...this.drafts.filter((d) => !sameAbout(d, draft)), draft];
+		this.draft = null;
+		this.composing = false;
 	}
 
 	/** Opens the panel on a chat. */

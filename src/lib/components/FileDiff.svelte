@@ -4,7 +4,7 @@
 	import type { GuideNote } from '$lib/guide/types';
 	import { selectedSpan, span } from '$lib/ask/rows';
 	import { inSpan } from '$lib/ask/span';
-	import type { Status, Threads } from '$lib/ask/threads.svelte';
+	import type { Draft, Status, Threads } from '$lib/ask/threads.svelte';
 	import { linesOf, type LineSpan, type Side, type Thread } from '$lib/ask/types';
 	import { splitRows, type Layout } from '$lib/diff/split';
 	import { displayPath, isGenerated, splitPath } from '$lib/diff/path';
@@ -229,35 +229,50 @@
 	 * on the side the question was asked on. Overlapping questions show the most
 	 * pressing state.
 	 */
+	/** The lines of `a` shown in this diff, keyed as the markers are, on the side it was picked on. */
+	function shownKeys(a: LineSpan): string[] {
+		const hunk = hunks.find((h) => h.id === a.hunk);
+		if (!hunk) return [];
+		// picked in unified layout: on the new side, unless only removed lines were picked
+		const side: Side =
+			a.side ?? (hunk.lines.slice(a.start, a.end + 1).some((l) => l.new !== null) ? 'new' : 'old');
+		const keys: string[] = [];
+		for (let i = a.start; i <= a.end; i++) {
+			const line = hunk.lines[i];
+			if (!line || !inSpan(a, i, line)) continue;
+			if (layout === 'split' && (side === 'old' ? line.kind === 'add' : line.kind === 'del'))
+				continue;
+			keys.push(layout === 'split' ? `${a.hunk}:${i}:${side}` : `${a.hunk}:${i}`);
+		}
+		return keys;
+	}
+
 	const marks = $derived.by(() => {
 		const map = new Map<string, Mark>();
 		for (const thread of fileThreads) {
 			const a = linesOf(thread.anchor);
-			const hunk = a && hunks.find((h) => h.id === a.hunk);
-			if (!a || !hunk || !threads) continue;
+			if (!a || !threads) continue;
 			const status = threads.status(thread);
-			// asked in unified layout: on the new side, unless only removed lines were picked
-			const side: Side =
-				a.side ??
-				(hunk.lines.slice(a.start, a.end + 1).some((l) => l.new !== null) ? 'new' : 'old');
-			const indexes: number[] = [];
-			for (let i = a.start; i <= a.end; i++) {
-				const line = hunk.lines[i];
-				if (!line || !inSpan(a, i, line)) continue;
-				if (layout === 'split' && (side === 'old' ? line.kind === 'add' : line.kind === 'del'))
-					continue;
-				indexes.push(i);
-			}
-			indexes.forEach((i, n) => {
-				const key = layout === 'split' ? `${a.hunk}:${i}:${side}` : `${a.hunk}:${i}`;
+			const keys = shownKeys(a);
+			keys.forEach((key, n) => {
 				const before = map.get(key);
 				map.set(key, {
 					status: before && RANK[before.status] > RANK[status] ? before.status : status,
 					first: n === 0 || (before?.first ?? false),
-					last: n === indexes.length - 1 || (before?.last ?? false),
+					last: n === keys.length - 1 || (before?.last ?? false),
 					dot: n === 0 ? thread : before?.dot
 				});
 			});
+		}
+		return map;
+	});
+
+	/** your comments put away unsent, a mark on the last of their lines that opens them again */
+	const draftMarks = $derived.by(() => {
+		const map = new Map<string, Draft>();
+		for (const draft of threads?.drafts ?? []) {
+			const last = draft.span && shownKeys(draft.span).at(-1);
+			if (last) map.set(last, draft);
 		}
 		return map;
 	});
@@ -674,6 +689,7 @@
 													onpointerdown={(e) => pick(e, hunk.id, index)}
 												>
 													{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}`))}
+													{@render draftMark(`${hunk.id}:${index}`)}
 													<span class="w-12 pr-2">{line.old ?? ''}</span>
 													<span class="w-12 pr-2">{line.new ?? ''}</span>
 												</span>
@@ -799,6 +815,22 @@
 	{/if}
 {/snippet}
 
+<!-- your comment put away unsent, after a review thread's count on the same line -->
+{#snippet draftMark(key: string)}
+	{@const draft = draftMarks.get(key)}
+	{#if draft && threads}
+		{@const text = draft.text.trim().split('\n')[0]}
+		<button
+			type="button"
+			class={['draft-open', reviewMarks.get(key)?.threads.length && 'beside']}
+			aria-label="Your comment, not sent: {text}"
+			title="Not sent: {text}"
+			onpointerdown={(e) => e.stopPropagation()}
+			onclick={() => threads.reopen(draft)}>Draft</button
+		>
+	{/if}
+{/snippet}
+
 {#snippet code(line: DiffLine)}
 	{@html line.html}{#if line.noNewline}<span
 			class="ml-2 font-sans text-[10px] text-faint select-none"
@@ -887,9 +919,9 @@
 				class="gutter relative w-12 shrink-0 pr-2 text-right text-[11px] text-faint tabular-nums select-none"
 				title={threads ? PICK : undefined}
 				onpointerdown={(e) => pick(e, hunk.id, index, side)}
-				>{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}:${side}`))}{side === 'old'
-					? line.old
-					: line.new}</span
+				>{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}:${side}`))}{@render draftMark(
+					`${hunk.id}:${index}:${side}`
+				)}{side === 'old' ? line.old : line.new}</span
 			>
 			<span class="text min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap"
 				>{@render code(line)}</span
@@ -904,6 +936,12 @@
 {/snippet}
 
 <style>
+	/* only the section centres itself on the panels' edges. Set again under it, so the edges
+	   easing as a panel opens restyle the section, not every line in it */
+	section > :global(*) {
+		--left: 0px;
+		--right: 0px;
+	}
 	/* the gutter says a line was added or removed, with a bar against the code: solid
 	   when added, dashed when removed, so it tells apart without the colour. The code
 	   itself stays on the surface so the changed tokens are the only colour in it, and
@@ -1189,6 +1227,32 @@
 	.rv-open.open {
 		background: color-mix(in oklab, var(--fg) 18%, transparent);
 		color: var(--fg);
+	}
+
+	.draft-open {
+		position: absolute;
+		top: 3px;
+		left: 4px;
+		z-index: 2;
+		height: 14px;
+		padding: 0 3px;
+		border-radius: 5px 5px 5px 1.5px;
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 30%, transparent);
+		background: var(--gutter-bg, var(--surface));
+		font: 600 9px/14px var(--font-sans);
+		color: var(--muted);
+	}
+	.draft-open.beside {
+		left: 24px;
+	}
+	.draft-open:active {
+		transform: scale(0.94);
+	}
+	@media (hover: hover) and (pointer: fine) {
+		.draft-open:hover {
+			color: var(--fg);
+			box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--fg) 55%, transparent);
+		}
 	}
 
 	/* split layout */

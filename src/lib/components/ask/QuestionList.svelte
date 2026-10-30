@@ -6,6 +6,7 @@
 	import { shortLines } from '$lib/ask/groups';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Elsewhere, Thread } from '$lib/ask/types';
+	import { firstLine as titleOf } from '$lib/markdown';
 	import { timeAgo } from '$lib/refs';
 
 	interface Props {
@@ -20,8 +21,7 @@
 
 	let { threads, grouped, actions, children }: Props = $props();
 
-	const firstLine = (t: Thread) =>
-		t.messages.find((m) => m.role === 'user')?.text.split('\n')[0] ?? '';
+	const firstLine = (t: Thread) => titleOf(t.messages.find((m) => m.role === 'user')?.text ?? '');
 
 	/** "L12–15 · cart.ts", what a chat is about at a glance */
 	const place = (anchor: Pick<Anchor, 'path' | 'label'>) =>

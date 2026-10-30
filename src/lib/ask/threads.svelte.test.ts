@@ -117,3 +117,48 @@ describe('lines picked in the diff', () => {
 		})();
 	});
 });
+
+describe('comments on a pull request', () => {
+	test('each stays at its own lines when others are picked, and comes back after a reload', () => {
+		stored.clear();
+		const config = () => ({
+			repo: 'r',
+			from: 'a',
+			to: 'b',
+			scope: 'worktree' as const,
+			threads: [],
+			files,
+			pr: 1,
+			prId: 'P'
+		});
+		const first = { hunk, start: 0, end: 0 };
+		const second = { hunk, start: 1, end: 1 };
+
+		const cleanup = $effect.root(() => {
+			const threads = new Threads(config);
+			flushSync();
+			threads.setIntent('comment');
+			threads.select(first);
+			threads.draft!.text = 'about one';
+			threads.select(second);
+			expect(threads.draft).toEqual({ span: second, text: '' });
+			expect(threads.drafts).toEqual([{ span: first, text: 'about one' }]);
+
+			// opened again from its mark, the one open goes to its lines, empty ones aren't kept
+			threads.reopen(threads.drafts[0]);
+			expect(threads.draft).toEqual({ span: first, text: 'about one' });
+			expect(threads.drafts).toEqual([]);
+			threads.draft!.text = 'about one, more';
+			threads.putAway();
+			flushSync();
+		});
+		cleanup();
+
+		const again = $effect.root(() => {
+			const threads = new Threads(config);
+			flushSync();
+			expect(threads.drafts).toEqual([{ span: first, text: 'about one, more' }]);
+		});
+		again();
+	});
+});

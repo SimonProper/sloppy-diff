@@ -7,6 +7,7 @@
 	import type { DiffFile } from '$lib/diff/types';
 	import type { Guide } from '$lib/guide/types';
 	import { errorText } from '$lib/errors';
+	import { extensionOf } from '$lib/ask/editor';
 	import AskField from './AskField.svelte';
 	import Conversation from './Conversation.svelte';
 	import AddedLines from './AddedLines.svelte';
@@ -105,7 +106,9 @@
 		if (threads.expanded && (event.key === 'j' || event.key === 'k')) {
 			step(event.key === 'j' ? 1 : -1);
 		} else if (event.key === 'r') {
-			document.querySelector<HTMLTextAreaElement>('[data-followup] textarea')?.focus();
+			document
+				.querySelector<HTMLElement>('[data-followup] [contenteditable]')
+				?.focus({ preventScroll: true });
 		} else if (event.key === 't') {
 			threads.toggleTrail();
 		} else if (event.key === 'e') {
@@ -214,6 +217,7 @@
 						hints={['', '⌘↵ to ask']}
 						busy={starting}
 						autofocus
+						language={extensionOf(adding[0]?.path)}
 						trailing={adding[0]?.hunk !== undefined && !threads.newChat.trim()
 							? blastRadius
 							: undefined}
@@ -238,7 +242,7 @@
 			event.preventDefault();
 			// esc leaves a box being typed in first, then the lens for the docked panel
 			const active = document.activeElement as HTMLElement | null;
-			if (active?.matches('textarea, input')) active.blur();
+			if (active?.matches('textarea, input, [contenteditable]')) active.blur();
 			else threads.expanded = false;
 		}}
 		{onkeydown}

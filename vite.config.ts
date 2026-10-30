@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { THEMES, themeCss } from './src/lib/themes/themes.ts';
+import { THEMES, highlightCss, themeCss } from './src/lib/themes/themes.ts';
 
 /** The built-in themes' CSS, made from their definitions as the app is built or served. */
 function themes(): Plugin {
@@ -10,7 +10,8 @@ function themes(): Plugin {
 	return {
 		name: 'themes',
 		resolveId: (source) => (source === id ? `\0${id}` : undefined),
-		load: (resolved) => (resolved === `\0${id}` ? THEMES.map(themeCss).join('\n') : undefined)
+		load: (resolved) =>
+			resolved === `\0${id}` ? [...THEMES.map(themeCss), highlightCss()].join('\n') : undefined
 	};
 }
 

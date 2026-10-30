@@ -7,10 +7,11 @@
 	import { findHunk } from '$lib/diff/hunks';
 	import type { DiffFile } from '$lib/diff/types';
 	import { errorText } from '$lib/errors';
-	import { commentOn } from '$lib/pr/comment';
+	import { commentOn, suggestionFor } from '$lib/pr/comment';
+	import { extensionOf } from '$lib/ask/editor';
 	import type { Guide } from '$lib/guide/types';
 	import AskField from './AskField.svelte';
-	import SegmentedControl from '../SegmentedControl.svelte';
+	import Avatar from '../pr/Avatar.svelte';
 
 	interface Props {
 		threads: Threads;
@@ -41,8 +42,9 @@
 			.join(' · ');
 	});
 
-	/** where it floats: under the last picked line, lined up with the code */
-	let place = $state<{ top: number; left: number; width: number } | null>(null);
+	/** where it floats: under the last picked line, lined up with the code, up to the markers on
+	 * the right, for a suggestion's lines to wrap as little as the diff's */
+	let place = $state<{ top: number; left: number; width: number; cut?: number } | null>(null);
 	let box = $state<HTMLElement>();
 
 	function measure() {
@@ -72,7 +74,7 @@
 		// past the line numbers and the padding, and clear of the markers down the right edge. A
 		// unified row scrolls sideways with its hunk, the card doesn't
 		const left = side ? row.left + 48 + 12 : cardLeft + 1 + 96 + 12;
-		const width = Math.max(260, Math.min(460, edge - 24 - left));
+		const width = Math.max(260, edge - 24 - left);
 		// its own height, without measuring again whenever it shows up
 		const height = untrack(() => box?.offsetHeight) ?? 48;
 		let top = row.bottom + 6;
@@ -81,7 +83,10 @@
 			const first = rowOf(hunk, start, side)?.getBoundingClientRect();
 			if (first) top = first.top - 6 - height;
 		}
-		place = { top: top + window.scrollY, left: left + window.scrollX, width };
+		// on the top layer it would cover the bars stuck above, so what's under the file's header is cut
+		const under = card.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+		const cut = Math.max(0, under - top);
+		place = { top: top + window.scrollY, left: left + window.scrollX, width, cut };
 	}
 
 	$effect(() => {
@@ -124,15 +129,37 @@
 		}
 	}
 
-	/** Asks the agent instead: the lines, and what's typed, go to its panel. */
-	function toAgent() {
-		if (!draft) return;
-		threads.setIntent('ask');
-		threads.add(draft);
+	// the file's extension, for code typed about it
+	const language = $derived(
+		extensionOf(draft?.span ? findHunk(files, draft.span.hunk)?.file.newPath : draft?.path)
+	);
+
+	// the picked lines to change in place, on GitHub's apply button. Not for removed lines
+	const suggestion = $derived(draft?.span && suggestionFor(files, draft.span));
+
+	/** esc: the comment is dropped, what's typed and the lines picked for it */
+	function abort() {
+		threads.draft = null;
+		threads.composing = false;
+	}
+
+	function suggest() {
+		if (!threads.draft || !suggestion) return;
+		threads.draft.text = [threads.draft.text.trim(), suggestion].filter(Boolean).join('\n\n');
 	}
 </script>
 
 {#snippet extra()}
+	{#if suggestion && !draft?.text.includes('```suggestion')}
+		<!-- the focus stays in the text, its cursor in the block to change the lines in -->
+		<button
+			type="button"
+			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg"
+			title="Adds the lines as a suggestion, for them to be changed and applied on GitHub"
+			onpointerdown={(event) => event.preventDefault()}
+			onclick={suggest}>Suggest a change</button
+		>
+	{/if}
 	{#if !threads.review?.pending && draft?.text.trim()}
 		<button
 			type="button"
@@ -165,43 +192,35 @@
 		style:top="{place.top}px"
 		style:left="{place.left}px"
 		style:width="{place.width}px"
+		style:clip-path={place.cut ? `inset(${place.cut}px -40px -40px -40px)` : null}
+		style:visibility={place.cut && place.cut >= (box?.offsetHeight ?? 0) ? 'hidden' : null}
 	>
-		<!-- Ask AI, or Tab, takes the lines to the agent's panel. Clicking leaves the focus in the text -->
-		<div class="flex px-2 pt-2">
-			<SegmentedControl
-				options={[
-					{ value: 'ask', label: 'Ask AI' },
-					{ value: 'comment', label: 'Comment' }
-				]}
-				value="comment"
-				onchange={(intent) => intent === 'ask' && toAgent()}
-				text="sm"
-				label="Send to"
-				keepFocus
-			/>
+		<!-- you, as beside your comments on the overview, lined up with the first line -->
+		<div class="flex items-start">
+			<Avatar src={threads.review?.avatar ?? ''} class="mt-[12px] ml-3 size-5" />
+			<div class="min-w-0 flex-1">
+				<AskField
+					bind:value={
+						() => threads.draft?.text ?? '',
+						(v) => {
+							if (threads.draft) threads.draft.text = v;
+						}
+					}
+					bare
+					autofocus
+					{context}
+					{language}
+					people
+					placeholder="Comment on {what}"
+					hints={['', threads.review?.pending ? '⌘↵ adds it to your review' : '⌘↵ to comment']}
+					busy={sending}
+					trailing={extra}
+					action="Comment"
+					onsend={(text) => comment(text)}
+					onescape={abort}
+				/>
+			</div>
 		</div>
-		<AskField
-			bind:value={
-				() => threads.draft?.text ?? '',
-				(v) => {
-					if (threads.draft) threads.draft.text = v;
-				}
-			}
-			bare
-			autofocus
-			{context}
-			placeholder="Comment on {what}"
-			hints={[
-				'tab to ask AI',
-				threads.review?.pending ? '⌘↵ adds it to your review' : '⌘↵ to comment'
-			]}
-			busy={sending}
-			trailing={extra}
-			action="Comment"
-			onsend={(text) => comment(text)}
-			ontab={toAgent}
-			onescape={() => (threads.composing = false)}
-		/>
 		{#if failure}
 			<p class="px-2.5 pb-2 text-[12px] text-del">{failure}</p>
 		{/if}

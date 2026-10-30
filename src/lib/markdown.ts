@@ -16,3 +16,10 @@ export function createMarkdown(highlight?: (code: string, lang: string) => strin
 	};
 	return md;
 }
+
+/** The first line of what was typed in a field, as a title: without markdown's escapes. */
+export const firstLine = (markdown: string) =>
+	markdown
+		.split('\n')[0]
+		.replace(/\\$/, '')
+		.replace(/\\([!-/:-@[-`{-~])/g, '$1');

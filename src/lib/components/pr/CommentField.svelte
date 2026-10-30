@@ -13,6 +13,7 @@
 	import { errorText } from '$lib/errors';
 	import { readJson, readText, writeText } from '$lib/storage';
 	import AskField from '../ask/AskField.svelte';
+	import Editor from '../ask/Editor.svelte';
 	import Avatar from './Avatar.svelte';
 	import CommentEditor from './CommentEditor.svelte';
 
@@ -97,21 +98,6 @@
 			sent = sent.map((s) => (s.id === item.id ? { ...s, failure: errorText(e) } : s));
 		}
 	}
-
-	function onkeydown(event: KeyboardEvent) {
-		if (event.key !== 'Enter' || !(event.metaKey || event.ctrlKey)) return;
-		event.preventDefault();
-		if (typed) send(reply.trim());
-	}
-
-	// one line until the text wraps, then up to six, as AskField grows. Runs again as it's typed
-	function grow(textarea: HTMLTextAreaElement) {
-		void reply;
-		textarea.style.height = '';
-		if (textarea.scrollHeight > textarea.clientHeight) {
-			textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-		}
-	}
 </script>
 
 {#snippet startReview()}
@@ -158,20 +144,21 @@
 			{placeholder}
 			hints={['', hint]}
 			{action}
+			people
 			onsend={send}
 			trailing={onreview && typed ? startReview : undefined}
 		/>
 	{:else}
 		<div class={['flex items-start gap-2 px-3 py-2', card]}>
 			<Avatar src={avatar} class="mt-0.5 size-4" />
-			<textarea
+			<!-- one line until the text wraps, then up to six, as AskField grows -->
+			<Editor
 				bind:value={reply}
-				rows="1"
 				{placeholder}
-				title={hint}
-				class="h-5 min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-[12px] leading-5 text-fg outline-none placeholder:text-faint"
-				{onkeydown}
-				{@attach grow}></textarea>
+				people
+				onsend={() => typed && send(reply.trim())}
+				class="max-h-[min(50vh,480px)] min-w-0 flex-1 overflow-y-auto text-[12px] leading-5 text-fg"
+			/>
 			{#if onreview && typed}{@render startReview()}{/if}
 			{#each actions as a (a.label)}
 				<button

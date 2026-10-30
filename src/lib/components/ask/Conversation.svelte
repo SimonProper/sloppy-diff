@@ -4,7 +4,9 @@
 	import type { Live, Threads } from '$lib/ask/threads.svelte';
 	import type { Anchor, Message, ShownSuggestion, Thread } from '$lib/ask/types';
 	import { errorText } from '$lib/errors';
+	import { createMarkdown } from '$lib/markdown';
 	import AddedLines from './AddedLines.svelte';
+	import { extensionOf } from '$lib/ask/editor';
 	import AskField from './AskField.svelte';
 	import LinesChip from './LinesChip.svelte';
 	import ToolText from '../ToolText.svelte';
@@ -30,6 +32,7 @@
 
 	let { threads, thread, title, detail, onreveal, onjump, leading, actions }: Props = $props();
 
+	const markdown = createMarkdown();
 	const live = $derived(threads.live[thread.id]);
 	const lost = $derived(threads.lost[thread.id] ?? false);
 	const cost = $derived(thread.messages.reduce((sum, m) => sum + (m.cost ?? 0), 0));
@@ -273,11 +276,12 @@
 									<LinesChip {anchor} {onjump} />
 								{/each}
 								{#if message.text}
-									<p
-										class="rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap"
+									<!-- markdown, as typed in the field. Raw HTML in it stays text -->
+									<div
+										class="prose rounded-[calc(var(--radius)*1.25)] bg-subtle px-3 py-2 text-[13px] leading-normal break-words"
 									>
-										{message.text}
-									</p>
+										{@html markdown.render(message.text)}
+									</div>
 								{/if}
 							</div>
 						{:else}
@@ -456,6 +460,7 @@
 			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}
 			placeholder="Follow up"
 			hints={['', '⌘↵ to send']}
+			language={extensionOf(thread.anchor.path)}
 			busy={sending || !!live}
 			onsend={(text) => send(text)}
 			onstop={live ? () => threads.cancel(thread.id) : undefined}

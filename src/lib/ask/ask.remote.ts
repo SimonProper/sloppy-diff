@@ -5,6 +5,7 @@ import { watchJob } from '$lib/server/jobs';
 import { requestProvider } from '$lib/server/provider-request';
 import { badRequestOnError } from '$lib/server/requests';
 import { repoRoot } from '$lib/server/git';
+import { fenceLanguage, tokenRanges } from '$lib/server/highlight';
 import { checkScope, checkThreadId, deleteThread, threadsElsewhere } from '$lib/server/threads';
 import { applyAskEvent, startAnswer } from './answer';
 
@@ -63,3 +64,13 @@ export const removeThread = command('unchecked', ({ repo, scope, thread }: Threa
 		await deleteThread(repo, s, id);
 	})
 );
+
+/** [start, end, type] of the tokens in code typed in a fence naming `lang`, none without a grammar. */
+export const codeTokens = query('unchecked', ({ lang, text }: { lang: string; text: string }) => {
+	const language = fenceLanguage(lang);
+	try {
+		return language ? tokenRanges(language, text) : [];
+	} catch {
+		return [];
+	}
+});

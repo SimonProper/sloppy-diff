@@ -16,6 +16,7 @@ import { spanLabel, spanLines } from '$lib/ask/span';
 import { suggestionBlocks } from '$lib/ask/suggest';
 import { findHunk, spanAt } from '$lib/diff/hunks';
 import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
+import { firstLine } from '$lib/markdown';
 import { git } from './git';
 import { repoDir } from './guides';
 import { markdown } from './markdown';
@@ -128,7 +129,7 @@ export async function threadsElsewhere(root: string, here: Scope): Promise<Elsew
 				const threads = (await loadThreads(root, scope))
 					.map((t) => ({
 						id: t.id,
-						question: t.messages[0].text.split('\n')[0],
+						question: firstLine(t.messages[0].text),
 						anchor: { path: t.anchor.path, label: t.anchor.label },
 						at: t.messages.at(-1)?.createdAt ?? t.createdAt
 					}))

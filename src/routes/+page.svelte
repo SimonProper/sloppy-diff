@@ -36,6 +36,7 @@
 	import SidebarLayout, { PANEL_DEFAULT, PANEL_KEY } from '$lib/components/SidebarLayout.svelte';
 	import AskLens from '$lib/components/ask/AskLens.svelte';
 	import { revealAnchor } from '$lib/ask/rows';
+	import { peopleOn, setMentions } from '$lib/ask/mentions';
 	import StatusBadge from '$lib/components/StatusBadge.svelte';
 	import { displayPath } from '$lib/diff/path';
 	import { lineStats } from '$lib/diff/hunks';
@@ -146,6 +147,12 @@
 	const branchSel = $derived(diff.selection?.branch ?? null);
 	const commit = $derived(diff.selection?.commit ?? null);
 	const pr = $derived(diff.selection?.pr ?? null);
+
+	// what `@` offers in every field typed in
+	setMentions(() => ({
+		files: diff.files.map((f) => f.newPath),
+		people: pr ? peopleOn(pr) : []
+	}));
 
 	const tabs = $derived<{ value: View; label: string }[]>([
 		...(pr ? [{ value: 'overview' as const, label: 'Overview' }] : []),
@@ -291,7 +298,8 @@
 		pr: diff.selection?.pr?.number,
 		branch: diff.selection?.branch?.first ? undefined : diff.selection?.branch?.name,
 		prId: diff.selection?.pr?.id,
-		pending: !!diff.selection?.pr?.pendingReviewId
+		pending: !!diff.selection?.pr?.pendingReviewId,
+		avatar: diff.selection?.pr?.viewerAvatar
 	}));
 	const asking = $derived(diff.scope !== null && diff.selection !== null ? threads : undefined);
 	/** the agent panel docked at the right, beside the diff */

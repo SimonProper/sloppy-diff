@@ -1,4 +1,4 @@
-import { spanNumbers } from '$lib/ask/span';
+import { spanLines, spanNumbers } from '$lib/ask/span';
 import type { LineSpan, Suggestion } from '$lib/ask/types';
 import { findHunk } from '$lib/diff/hunks';
 import type { DiffFile } from '$lib/diff/types';
@@ -27,4 +27,21 @@ export function commentOn(
 		...(at.first < at.last && { startLine: at.first }),
 		body
 	};
+}
+
+/**
+ * The picked lines as a ```suggestion block, which GitHub offers to apply in their place.
+ * Null for removed lines, which there's nothing to change in.
+ */
+export function suggestionFor(files: DiffFile[], span: LineSpan): string | null {
+	const found = findHunk(files, span.hunk);
+	if (!found || spanNumbers(found.hunk, span)?.side !== 'new') return null;
+	const code = spanLines(found.hunk, span)
+		.filter((l) => l.new !== null)
+		.map((l) => l.text)
+		.join('\n');
+	// longer than any run of backticks in the code, so none of it closes the block
+	const longest = Math.max(2, ...(code.match(/`+/g) ?? []).map((run) => run.length));
+	const fence = '`'.repeat(longest + 1);
+	return `${fence}suggestion\n${code}\n${fence}`;
 }

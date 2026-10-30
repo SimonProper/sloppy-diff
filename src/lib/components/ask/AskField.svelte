@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import Editor from './Editor.svelte';
 
 	interface Props {
 		value: string;
@@ -8,6 +9,9 @@
 		hints: [string, string];
 		/** what the question is about, shown inline before the text */
 		context?: string;
+		/** the extension of the file it's about: a fence's language when it names none, and a
+		 * ```suggestion's */
+		language?: string;
 		/** a question is being sent */
 		busy?: boolean;
 		/** ⌘↵, or the send button. ↵ alone is a new line */
@@ -17,6 +21,8 @@
 		/** Tab, to switch what send does */
 		ontab?: () => void;
 		onescape?: () => void;
+		/** `@` offers the pull request's people as well as the diff's files: a comment on it */
+		people?: boolean;
 		autofocus?: boolean;
 		/** frameless, when it sits in a floating shell that has the border */
 		bare?: boolean;
@@ -31,43 +37,20 @@
 		placeholder,
 		hints,
 		context,
+		language,
 		busy = false,
 		onsend,
 		action = 'Ask',
 		ontab,
 		onescape,
+		people = false,
 		autofocus = false,
 		bare = false,
 		trailing,
 		onstop
 	}: Props = $props();
 
-	let textarea: HTMLTextAreaElement;
 	const typed = $derived(value.trim().length > 0);
-
-	// one line until the text wraps, then up to six. A field that isn't laid out yet, like
-	// one in a popover about to open, measures nothing and keeps its one line
-	$effect(() => {
-		void value;
-		textarea.style.height = '';
-		if (textarea.scrollHeight > textarea.clientHeight) {
-			textarea.style.height = `${Math.min(textarea.scrollHeight, 132)}px`;
-		}
-	});
-
-	function onkeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-			event.preventDefault();
-			if (typed && !busy) onsend(value.trim());
-		} else if (event.key === 'Tab' && !event.shiftKey && ontab) {
-			event.preventDefault();
-			ontab();
-		} else if (event.key === 'Escape' && onescape) {
-			event.preventDefault();
-			event.stopPropagation();
-			onescape();
-		}
-	}
 </script>
 
 <!-- the text on top, and under it a row inside the box: what it's about and the hint on
@@ -78,19 +61,18 @@
 		bare ? 'border border-transparent' : 'framed border'
 	]}
 >
-	<textarea
-		bind:this={textarea}
+	<!-- one line until the text wraps, growing to half the window, then scrolling -->
+	<Editor
 		bind:value
-		rows="1"
 		{placeholder}
-		class="h-[22px] max-h-[132px] min-h-[22px] min-w-0 resize-none border-0 bg-transparent p-0 text-[13.5px] leading-[22px] text-fg outline-none placeholder:text-[color-mix(in_oklab,var(--fg)_50%,transparent)]"
-		{onkeydown}
-		{@attach (el) => {
-			if (!autofocus) return;
-			// after the popover it may sit in has opened, a hidden field can't take focus
-			const frame = requestAnimationFrame(() => el.focus({ preventScroll: true }));
-			return () => cancelAnimationFrame(frame);
-		}}></textarea>
+		{language}
+		{people}
+		{autofocus}
+		{onescape}
+		{ontab}
+		onsend={() => typed && !busy && onsend(value.trim())}
+		class="max-h-[min(50vh,480px)] min-h-[22px] min-w-0 overflow-y-auto text-[13.5px] leading-[22px] text-fg"
+	/>
 	<div class="flex h-6 items-center gap-2 text-[11px] text-muted">
 		{#if context}
 			<span class="min-w-0 truncate rounded-md bg-subtle px-1.5 font-mono leading-5">{context}</span

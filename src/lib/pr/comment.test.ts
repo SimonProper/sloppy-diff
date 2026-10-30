@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { parseDiff } from '$lib/diff/parse';
-import { commentOn } from './comment';
+import { commentOn, suggestionFor } from './comment';
 
 // old: 1 a, 2 b, 3 c   new: 1 a, 2 B, 3 c, 4 x
 const files = parseDiff(
@@ -40,4 +40,9 @@ describe('commentOn', () => {
 		expect(commentOn(files, {}, 'hm')).toBeNull();
 		expect(commentOn(files, { span: { hunk: 'gone', start: 0, end: 0 } }, 'hm')).toBeNull();
 	});
+});
+
+test('suggestionFor offers the new side of the picked lines, not removed ones', () => {
+	expect(suggestionFor(files, { hunk, start: 1, end: 3 })).toBe('```suggestion\nB\nc\n```');
+	expect(suggestionFor(files, { hunk, start: 1, end: 1 })).toBeNull();
 });

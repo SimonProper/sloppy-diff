@@ -67,7 +67,7 @@
 		} else if (event.key === 'Escape' && threads.composing) {
 			threads.composing = false;
 		} else if (event.key === 'Escape' && threads.draft) {
-			threads.draft = null;
+			threads.putAway();
 		} else if (event.key === 'Escape' && threads.panel) {
 			threads.close();
 		} else return;

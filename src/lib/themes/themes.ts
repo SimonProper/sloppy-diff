@@ -211,6 +211,12 @@ export const COPIED = [
 	...Object.keys(TOKENS).map((token) => `--twp-${token}`)
 ];
 
+/** Each token's colour for code coloured in place, as in the fields typed in, through the CSS Custom Highlight API. */
+export const highlightCss = () =>
+	Object.keys(TOKENS)
+		.map((token) => `::highlight(twp-${token}) { color: var(--twp-${token}); }`)
+		.join('\n');
+
 /** One theme's variables, under its class. */
 export function themeCss(theme: ThemeDef): string {
 	const { id, label, dark, about, roles, shape } = theme;
