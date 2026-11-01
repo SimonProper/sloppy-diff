@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { MODES, theme, type Mode } from '$lib/theme.svelte';
 	import Popover from './Popover.svelte';
 
@@ -60,17 +61,9 @@
 	class="w-40 rounded-xl border border-line bg-surface p-1 shadow-float"
 >
 	{#snippet trigger(props)}
-		<button
-			{...props}
-			class={[
-				'grid size-8 place-items-center rounded-lg border bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
-				open ? 'border-muted' : 'border-line'
-			]}
-			title="Theme"
-			aria-label="Theme"
-		>
+		<Button {...props} size="lg" icon pressed={open} title="Theme" aria-label="Theme">
 			{@render icon(theme.mode)}
-		</button>
+		</Button>
 	{/snippet}
 	{#each MODES as option (option.value)}
 		<button

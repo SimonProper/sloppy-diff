@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { onMount } from 'svelte';
 	import { errorText } from '$lib/errors';
 	import type { Scan } from '$lib/repos';
@@ -217,9 +218,10 @@
 				onclick={() => refresh(true)}>{scanning ? 'Scanning…' : 'Rescan'}</button
 			>
 		{/if}
-		<button
-			type="button"
-			class="ml-auto flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-0.5 text-muted hover:bg-subtle hover:text-fg disabled:opacity-60"
+		<Button
+			variant="ghost"
+			size="xs"
+			class="ml-auto"
 			disabled={picking}
 			title="Open your system's folder dialog"
 			onclick={choose}
@@ -232,6 +234,6 @@
 			{:else}
 				Choose folder…
 			{/if}
-		</button>
+		</Button>
 	</div>
 </div>

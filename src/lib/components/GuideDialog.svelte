@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { cubicOut } from 'svelte/easing';
 	import { fade, slide } from 'svelte/transition';
 	import { errorText } from '$lib/errors';
@@ -207,12 +208,7 @@
 					{/snippet}
 				</SegmentedControl>
 			{/if}
-			<button
-				type="button"
-				class="grid size-7 shrink-0 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg disabled:opacity-40"
-				aria-label="Close"
-				onclick={onclose}
-			>
+			<Button variant="ghost" icon aria-label="Close" onclick={onclose}>
 				<svg
 					viewBox="0 0 16 16"
 					class="size-3.5"
@@ -221,7 +217,7 @@
 					stroke-width="1.5"
 					stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8" /></svg
 				>
-			</button>
+			</Button>
 		</div>
 
 		{#if view === 'saved'}
@@ -245,10 +241,8 @@
 
 			<div class="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
 				<p class="text-[11.5px] text-faint">Closing keeps it running in the background.</p>
-				<button
-					type="button"
-					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-del/50 hover:text-del active:shadow-pressed"
-					onclick={() => guideJob.cancel()}>Cancel</button
+				<Button variant="danger" size="lg" class="font-medium" onclick={() => guideJob.cancel()}
+					>Cancel</Button
 				>
 			</div>
 		{:else}
@@ -440,11 +434,7 @@
 
 			<div class="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
 				{#if tab === 'branch' && branchNeedsRange}
-					<button
-						type="button"
-						class="flex h-8 items-center gap-1.5 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
-						onclick={chooseCommitRange}
-					>
+					<Button variant="solid" size="lg" onclick={chooseCommitRange}>
 						Choose a commit range
 						<svg
 							viewBox="0 0 16 16"
@@ -456,23 +446,23 @@
 							stroke-linejoin="round"
 							aria-hidden="true"><path d="M3 8h10M9.5 4.5 13 8l-3.5 3.5" /></svg
 						>
-					</button>
+					</Button>
 				{:else}
 					{#if range?.hasGuide}
-						<button
-							type="button"
-							class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed"
-							onclick={() => range && open(range.start, range.stop)}>Open existing guide</button
+						<Button
+							size="lg"
+							class="font-medium"
+							onclick={() => range && open(range.start, range.stop)}>Open existing guide</Button
 						>
 					{/if}
-					<button
-						type="button"
-						class="h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
+					<Button
+						variant="solid"
+						size="lg"
 						disabled={!target || !range || range.commits.length === 0}
 						onclick={generate}
 					>
 						{range?.hasGuide ? 'Regenerate' : 'Generate guide'}
-					</button>
+					</Button>
 				{/if}
 			</div>
 		{/if}

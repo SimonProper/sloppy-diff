@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { inSpan } from '$lib/ask/span';
 	import { linesOf, type Thread } from '$lib/ask/types';
 	import type { DiffFile, DiffLine } from '$lib/diff/types';
@@ -51,11 +52,7 @@
 	<header
 		class="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3 text-[12px] shadow-strip"
 	>
-		<button
-			type="button"
-			class="flex h-7 items-center gap-1.5 rounded-md px-2 text-muted hover:bg-subtle hover:text-fg"
-			onclick={onclose}
-		>
+		<Button variant="ghost" onclick={onclose}>
 			<svg
 				viewBox="0 0 16 16"
 				class="size-3.5"
@@ -66,7 +63,7 @@
 				stroke-linejoin="round"><path d="M13 8H3.5M7.5 4 3.5 8l4 4" /></svg
 			>
 			Diff <kbd class="font-mono text-[10.5px] text-faint">esc</kbd>
-		</button>
+		</Button>
 		{#if anchor.path}
 			<span class="min-w-0 truncate font-mono text-[12px]" title={anchor.path}>
 				<span class="text-muted">{anchor.path.slice(0, -name.length)}</span>{name}
@@ -82,11 +79,7 @@
 		{/if}
 		<span class="flex-1"></span>
 		{#if !thread.outdated && anchor.path}
-			<button
-				type="button"
-				class="h-7 shrink-0 rounded-md px-2 text-muted hover:bg-subtle hover:text-fg"
-				onclick={onreveal}>Show in diff ↗</button
-			>
+			<Button variant="ghost" onclick={onreveal}>Show in diff ↗</Button>
 		{/if}
 	</header>
 

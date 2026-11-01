@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { page } from '$app/state';
 	import { errorText } from '$lib/errors';
 	import { changePr, updatePrBranch } from '$lib/pr/pr.remote';
@@ -55,22 +56,16 @@
 		<span class="text-[11.5px] text-faint">{busy}</span>
 	{:else}
 		{#if open && pr.isDraft && pr.canEdit}
-			<button
-				type="button"
-				class="h-6 rounded-md bg-ink px-2.5 text-[12px] font-medium text-surface shadow-raised active:shadow-pressed enabled:hover:opacity-80 disabled:opacity-50"
-				onclick={() => change('Marking ready…', 'ready')}>Ready for review</button
+			<Button variant="solid" size="sm" onclick={() => change('Marking ready…', 'ready')}
+				>Ready for review</Button
 			>
 		{:else if open && pr.canMerge && pr.mergeMethods.length}
-			<button
-				type="button"
-				class={[
-					'h-6 rounded-md px-2.5 text-[12px] font-medium',
-					merging
-						? 'bg-surface text-fg shadow-pressed ring-1 ring-line ring-inset'
-						: 'bg-ink text-surface shadow-raised hover:opacity-80 active:shadow-pressed'
-				]}
+			<Button
+				variant={merging ? 'outline' : 'solid'}
+				size="sm"
+				pressed={merging}
 				aria-expanded={merging}
-				onclick={() => (merging = !merging)}>Merge</button
+				onclick={() => (merging = !merging)}>Merge</Button
 			>
 		{/if}
 

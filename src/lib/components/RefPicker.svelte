@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import { listNav } from '$lib/list-nav';
 	import { sameSha, timeAgo, type Branch, type Commit } from '$lib/refs';
@@ -63,7 +64,7 @@
 		group?: string;
 	};
 
-	let button: HTMLButtonElement;
+	let button = $state<HTMLButtonElement>();
 	let list = $state<HTMLElement>();
 	const id = $props.id();
 	const listId = `${id}-list`;
@@ -205,14 +206,17 @@
 	{onfocusout}
 >
 	{#snippet trigger(props)}
-		<button
+		<Button
 			{...props}
-			bind:this={button}
+			bind:ref={button}
+			size="lg"
 			class={[
-				'flex h-8 items-center gap-2 rounded-lg border bg-control px-2.5 text-left shadow-raised hover:border-muted active:shadow-pressed',
-				compact ? 'compact' : 'w-56',
-				open ? 'border-muted' : 'border-line'
+				'text-left',
+				compact
+					? 'w-44 max-w-56 min-w-32 flex-[1_1_11rem] max-[1350px]:max-w-44 max-[1350px]:px-2'
+					: 'w-56'
 			]}
+			pressed={open}
 			title={fullLabel}
 			aria-label={fullLabel}
 			aria-haspopup="listbox"
@@ -222,7 +226,7 @@
 			{#if display.sha}
 				<span class="shrink-0 font-mono text-[11.5px] text-accent">{shownSha}</span>
 			{/if}
-			<span class={['min-w-0 flex-1 truncate text-[12px]', !display.sha && 'font-mono']}>
+			<span class={['min-w-0 flex-1 truncate text-[12px] text-fg', !display.sha && 'font-mono']}>
 				{display.title}
 			</span>
 			<svg
@@ -234,7 +238,7 @@
 				stroke-linecap="round"
 				stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
 			>
-		</button>
+		</Button>
 	{/snippet}
 
 	<div class="flex items-center gap-2 border-b border-line p-2">
@@ -408,19 +412,3 @@
 		{/each}
 	</div>
 </Popover>
-
-<style>
-	.compact {
-		flex: 1 1 11rem;
-		width: 11rem;
-		min-width: 8rem;
-		max-width: 14rem;
-	}
-	@media (max-width: 1350px) {
-		.compact {
-			max-width: 11rem;
-			padding-inline: 0.5rem;
-			column-gap: 0.375rem;
-		}
-	}
-</style>

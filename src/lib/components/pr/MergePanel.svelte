@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { errorText } from '$lib/errors';
@@ -166,17 +167,10 @@
 				<button type="button" class="px-1 text-muted hover:text-fg" onclick={onclose}>Cancel</button
 				>
 				{#if pr.mergeState === 'BEHIND' && updatable}
-					<button
-						type="button"
-						class="h-6 rounded-md border border-line px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-						onclick={update}>Update branch</button
-					>
+					<Button size="sm" onclick={update}>Update branch</Button>
 				{/if}
-				<button
-					type="button"
-					class="h-6 rounded-md bg-ink px-2.5 text-[12px] font-medium text-surface shadow-raised active:shadow-pressed enabled:hover:opacity-80 disabled:opacity-50"
-					disabled={!!blocked}
-					onclick={merge}>{METHODS[method][1]}</button
+				<Button variant="solid" size="sm" disabled={!!blocked} onclick={merge}
+					>{METHODS[method][1]}</Button
 				>
 			{/if}
 		</span>

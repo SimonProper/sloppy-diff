@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import { beforeNavigate, goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
@@ -565,9 +566,9 @@
 						</span>
 					{/if}
 					{#if span}
-						<button
-							type="button"
-							class="flex h-6 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11.5px] font-medium text-accent hover:bg-accent/15"
+						<Button
+							variant="tint"
+							size="sm"
 							title="Show the whole branch"
 							onclick={() => navigate({ commits: null })}
 						>
@@ -582,7 +583,7 @@
 								stroke-width="1.75"
 								stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
 							>
-						</button>
+						</Button>
 					{/if}
 				{:else if data.mode === 'commit'}
 					<RefPicker
@@ -596,9 +597,9 @@
 						placeholder="Filter branches"
 						onselect={(branch) => navigate({ branch, view: null }, true)}
 					/>
-					<button
-						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+					<Button
+						size="lg"
+						icon
 						title={older
 							? 'Older commit  ['
 							: commit
@@ -617,7 +618,7 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"><path d="m10 3.5-4.5 4.5 4.5 4.5" /></svg
 						>
-					</button>
+					</Button>
 					<RefPicker
 						compact
 						label="commit"
@@ -633,9 +634,9 @@
 							: 'Filter commits, or pick a branch or tag'}
 						onselect={(sha) => navigate(commitParams(sha))}
 					/>
-					<button
-						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted"
+					<Button
+						size="lg"
+						icon
 						title={newer
 							? 'Newer commit  ]'
 							: commit
@@ -656,15 +657,16 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg
 						>
-					</button>
+					</Button>
 					{#if lane && at >= 0}
 						{@const label = position
 							? `commit ${position.index} of ${position.total}`
 							: `before ${lane.name}, on ${lane.base}`}
 						{#if lane.base}
-							<button
-								type="button"
-								class="flex h-6 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11.5px] font-medium text-accent tabular-nums hover:bg-accent/15"
+							<Button
+								variant="tint"
+								size="sm"
+								class="tabular-nums"
 								title="Show the whole branch"
 								onclick={() => navigate({ branch: lane.name, view: null }, true)}
 							>
@@ -677,7 +679,7 @@
 									stroke-width="1.75"
 									stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
 								>
-							</button>
+							</Button>
 						{:else}
 							<!-- the default branch has no whole-branch view to go back to -->
 							<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
@@ -709,9 +711,9 @@
 						commits={data.commits}
 						onselect={(from) => navigate({ from })}
 					/>
-					<button
-						type="button"
-						class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
+					<Button
+						size="lg"
+						icon
 						title="Swap from and to"
 						aria-label="Swap from and to"
 						onclick={() => navigate({ from: data.inputs.to, to: data.inputs.from || 'HEAD' })}
@@ -725,7 +727,7 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"><path d="M2.5 5.5h10l-3-3M13.5 10.5h-10l3 3" /></svg
 						>
-					</button>
+					</Button>
 					<RefPicker
 						compact
 						label="to"
@@ -842,12 +844,9 @@
 			{/if}
 			{#if asking && (view === 'files' || view === 'overview' || (view === 'guide' && diff.guide))}
 				<!-- the agent panel: every chat about this diff, and a new one about the whole change -->
-				<button
-					type="button"
-					class={[
-						'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-control px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
-						threads.panel && 'border-muted text-fg'
-					]}
+				<Button
+					class="ml-3"
+					pressed={threads.panel}
 					title="{threads.panel ? 'Close' : 'Open'} the agent panel  q"
 					aria-pressed={threads.panel}
 					onclick={() => (threads.panel ? threads.close() : threads.show())}
@@ -862,7 +861,7 @@
 							<span class="text-faint tabular-nums">{threads.list.length}</span>
 						{/if}
 					{/if}
-				</button>
+				</Button>
 			{/if}
 		</nav>
 	{/snippet}
@@ -1029,10 +1028,8 @@
 			<GuideRunning />
 			<div class="flex items-center justify-between gap-2">
 				<p class="text-[11.5px] text-faint">It keeps going while you look elsewhere.</p>
-				<button
-					type="button"
-					class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-del/50 hover:text-del active:shadow-pressed"
-					onclick={() => guideJob.cancel()}>Cancel</button
+				<Button variant="danger" size="lg" class="font-medium" onclick={() => guideJob.cancel()}
+					>Cancel</Button
 				>
 			</div>
 		</div>
@@ -1050,11 +1047,7 @@
 					saved per commit range, a branch keeps its guide through new commits and rebases.
 				</p>
 			{/if}
-			<button
-				type="button"
-				class="mt-4 h-8 rounded-lg bg-accent px-3 text-[12px] font-medium text-surface hover:opacity-90"
-				onclick={guideHere}>Generate a guide</button
-			>
+			<Button variant="solid" size="lg" class="mt-4" onclick={guideHere}>Generate a guide</Button>
 			{#if guidingHere && guideJob.failure}
 				<p class="mt-3 flex items-center gap-1.5 text-[12px] text-del">
 					<span class="size-1.5 rounded-full bg-del"></span>{guideJob.failure}

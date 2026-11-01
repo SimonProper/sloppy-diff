@@ -25,6 +25,7 @@
 </script>
 
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import type { Snippet } from 'svelte';
 	import { typing } from '$lib/keys';
 	import { readText, writeText } from '$lib/storage';
@@ -303,10 +304,11 @@
 					class="flex h-11 shrink-0 items-center justify-between border-b border-line pr-2 pl-1 shadow-strip"
 				>
 					{#if rail}
-						<button
-							bind:this={toggleButton}
-							type="button"
-							class="grid size-8 place-items-center rounded-lg text-muted hover:bg-subtle hover:text-fg"
+						<Button
+							bind:ref={toggleButton}
+							variant="ghost"
+							size="lg"
+							icon
 							aria-label={open ? 'Close the sidebar' : 'Open the sidebar'}
 							aria-expanded={open}
 							aria-keyshortcuts="s"
@@ -323,14 +325,14 @@
 								stroke-linejoin="round"
 								><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M6 2.5v11" /></svg
 							>
-						</button>
+						</Button>
 					{:else}
 						<span></span>
 					{/if}
 					{#if !collapsed}
-						<button
-							type="button"
-							class="flex h-6 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
+						<Button
+							variant="ghost"
+							size="sm"
 							title={rail
 								? narrow
 									? panelContent && crowded
@@ -359,7 +361,7 @@
 								{/if}
 							</svg>
 							{rail ? 'Keep open' : 'Fold'}
-						</button>
+						</Button>
 					{/if}
 				</div>
 				<div class={['flex min-h-0 flex-1 flex-col', asideClass, collapsed && 'invisible']}>

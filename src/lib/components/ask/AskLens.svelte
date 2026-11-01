@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import { groupThreads, sectionLabel } from '$lib/ask/groups';
 	import { revealAnchor } from '$lib/ask/rows';
@@ -122,19 +123,19 @@
 
 <!-- for lines alone, nothing typed: what else they affect -->
 {#snippet blastRadius()}
-	<button
-		type="button"
-		class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
+	<Button
+		variant="ghost"
+		size="xs"
 		title="What else this change affects: where the compiler finds it used, judged by the agent"
 		disabled={starting}
-		onclick={() => startChat('', true)}>Blast radius</button
+		onclick={() => startChat('', true)}>Blast radius</Button
 	>
 {/snippet}
 
 {#snippet closeButton()}
-	<button
-		type="button"
-		class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+	<Button
+		variant="ghost"
+		icon
 		title="Close  esc"
 		aria-label="Close the agent panel"
 		onclick={() => threads.close()}
@@ -147,7 +148,7 @@
 			stroke-width="1.5"
 			stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
 		>
-	</button>
+	</Button>
 {/snippet}
 
 {#if docked && !threads.expanded}
@@ -165,9 +166,10 @@
 					onjump={jumpTo}
 				>
 					{#snippet leading()}
-						<button
-							type="button"
-							class="-ml-1.5 grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+						<Button
+							variant="ghost"
+							icon
+							class="-ml-1.5"
 							title="All chats"
 							aria-label="Back to all chats"
 							onclick={() => threads.back()}
@@ -181,12 +183,12 @@
 								stroke-linecap="round"
 								stroke-linejoin="round"><path d="M10 3.5 5.5 8l4.5 4.5" /></svg
 							>
-						</button>
+						</Button>
 					{/snippet}
 					{#snippet actions()}
-						<button
-							type="button"
-							class="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+						<Button
+							variant="ghost"
+							icon
 							title="Every chat, with the lines beside it  e"
 							aria-label="Open the chats view"
 							onclick={() => (threads.expanded = true)}
@@ -201,7 +203,7 @@
 								stroke-linejoin="round"
 								><path d="M9.5 3H13v3.5M6.5 13H3V9.5M13 3 9 7M3 13l4-4" /></svg
 							>
-						</button>
+						</Button>
 						{@render closeButton()}
 					{/snippet}
 				</Conversation>

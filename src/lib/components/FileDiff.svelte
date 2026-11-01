@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 	import type { GuideNote } from '$lib/guide/types';
@@ -424,9 +425,11 @@
 				]
 			]}
 		>
-			<button
-				type="button"
-				class="-ml-1 grid size-6 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+			<Button
+				variant="ghost"
+				size="sm"
+				icon
+				class="-ml-1"
 				aria-expanded={open}
 				aria-label={open ? 'Collapse file' : 'Expand file'}
 				onclick={toggle}
@@ -440,7 +443,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
 				>
-			</button>
+			</Button>
 			<StatusBadge status={file.status} />
 			<span class="min-w-0 truncate font-mono text-[12.5px]">
 				{#if file.status === 'renamed' || file.status === 'copied'}
@@ -472,19 +475,19 @@
 			<span class="ml-auto flex shrink-0 items-center gap-3">
 				{#if threads}
 					<!-- a question about the whole file, the composer floats under this -->
-					<button
-						type="button"
+					<Button
 						id="ask-{anchor ?? file.id}"
-						class="h-6 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
+						variant="ghost"
+						size="sm"
 						title="Ask AI about this whole file"
 						onclick={() => threads.selectWhole(file.newPath, section, `ask-${anchor ?? file.id}`)}
-						>Ask</button
+						>Ask</Button
 					>
 				{/if}
 				{#if headerThreads.length}
-					<button
-						type="button"
-						class="flex h-6 items-center gap-1 rounded-md px-1.5 text-[11px] text-muted hover:bg-subtle hover:text-fg"
+					<Button
+						variant="ghost"
+						size="sm"
 						title="{headerThreads.length} {headerThreads.length === 1
 							? 'question'
 							: 'questions'} to AI in this file, open the first"
@@ -499,7 +502,7 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" /></svg
 						>{headerThreads.length}
-					</button>
+					</Button>
 				{/if}
 				{#if canShowWhole && open}
 					{@const reading = showWhole && !wholeHere}

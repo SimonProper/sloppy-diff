@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { tick, untrack, type Snippet } from 'svelte';
 	import { providerLabel } from '$lib/agent';
 	import type { Live, Threads } from '$lib/ask/threads.svelte';
@@ -301,11 +302,8 @@
 											<span class="text-del">Couldn't answer: {message.error}</span>
 										{/if}
 										{#if last && !live}
-											<button
-												type="button"
-												class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-												onclick={retry}
-												>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</button
+											<Button size="sm" onclick={retry}
+												>{message.error === 'Cancelled' ? 'Ask again' : 'Retry'}</Button
 											>
 										{/if}
 										{#if i === firstAnswer}<span class="text-[11px] text-faint"
@@ -392,14 +390,13 @@
 																						>Comment</button
 																					>
 																				{/if}
-																				<button
-																					type="button"
-																					class="h-6 rounded-md border border-line px-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
+																				<Button
+																					size="sm"
 																					title="Adds it to your pending review, only you see it until you finish the review"
 																					onclick={() => draft(suggestion, key, false)}
 																					>{threads.review.pending
 																						? 'Add to review'
-																						: 'Start a review'}</button
+																						: 'Start a review'}</Button
 																				>
 																			{/if}
 																		</span>
@@ -444,11 +441,7 @@
 		{#if !live && lost && thread.messages.at(-1)?.role === 'user'}
 			<p class="mt-3.5 flex items-center gap-2.5 text-[12px] text-muted">
 				This answer was interrupted.
-				<button
-					type="button"
-					class="h-6 rounded-md border border-line px-2 text-[11.5px] shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-					onclick={retry}>Ask again</button
-				>
+				<Button size="sm" onclick={retry}>Ask again</Button>
 			</p>
 		{/if}
 	</div>

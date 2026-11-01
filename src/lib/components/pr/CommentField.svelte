@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { errorText } from '$lib/errors';
 	import { readJson, readText, writeText } from '$lib/storage';
 	import AskField from '../ask/AskField.svelte';
@@ -101,11 +102,12 @@
 </script>
 
 {#snippet startReview()}
-	<button
-		type="button"
-		class="shrink-0 self-end rounded-md px-1.5 text-[11px] leading-5 text-muted hover:bg-subtle hover:text-fg"
+	<Button
+		variant="ghost"
+		size="xs"
+		class="self-end"
 		title="Adds it to a new pending review, only you see it until you finish the review"
-		onclick={() => send(reply.trim(), true)}>Start a review</button
+		onclick={() => send(reply.trim(), true)}>Start a review</Button
 	>
 {/snippet}
 

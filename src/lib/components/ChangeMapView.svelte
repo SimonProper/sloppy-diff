@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import {
 		GAP_X,
@@ -1383,17 +1384,12 @@
 							<LayoutToggle bind:layout={() => panelLayout, (next) => (pick = next)} />
 						{/if}
 						{#if shown.node.hunks.length}
-							<button
-								type="button"
-								class="rounded-md px-2 py-1 text-[11.5px] text-muted hover:bg-subtle hover:text-fg"
-								onclick={() => onjump(shown.node.hunks[0])}>Open in the diff</button
+							<Button variant="ghost" size="sm" onclick={() => onjump(shown.node.hunks[0])}
+								>Open in the diff</Button
 							>
 						{/if}
-						<button
-							type="button"
-							class="grid size-7 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
-							aria-label="Close"
-							onclick={() => (st.selected = null)}>✕</button
+						<Button variant="ghost" icon aria-label="Close" onclick={() => (st.selected = null)}
+							>✕</Button
 						>
 					</header>
 					<!-- a code character's width, measured: it depends on the font -->

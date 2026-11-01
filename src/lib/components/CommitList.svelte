@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { timeAgo, type Commit } from '$lib/refs';
 
 	interface Props {
@@ -151,14 +152,15 @@
 				class="min-w-0 flex-1 bg-transparent text-[12px] text-fg outline-none placeholder:text-faint"
 			/>
 			{#if query}
-				<button
-					type="button"
+				<Button
 					aria-label="Clear commit search"
 					onclick={() => {
 						query = '';
 						document.getElementById(searchId)?.focus();
 					}}
-					class="grid size-5 shrink-0 place-items-center rounded text-faint hover:bg-subtle hover:text-fg"
+					variant="ghost"
+					size="xs"
+					icon
 					><svg
 						viewBox="0 0 16 16"
 						class="size-3"
@@ -166,7 +168,7 @@
 						stroke="currentColor"
 						stroke-width="1.5"
 						aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg
-					></button
+					></Button
 				>
 			{/if}
 		</div>

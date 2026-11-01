@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import type { DiffFile } from '$lib/diff/types';
 	import { jumpToThread, where } from '$lib/pr/jump';
 	import type { ReviewThread } from '$lib/pr/types';
@@ -27,17 +28,10 @@
 	class="max-h-[60vh] w-[26rem] overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-float"
 >
 	{#snippet trigger(props)}
-		<button
-			{...props}
-			class={[
-				'ml-3 flex h-7 shrink-0 items-center gap-1.5 rounded-lg border bg-control px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
-				open ? 'border-muted' : 'border-line'
-			]}
-			title="Go to a review comment"
-		>
+		<Button {...props} class="ml-3" pressed={open} title="Go to a review comment">
 			Comments
 			<span class="text-faint tabular-nums">{unresolved}/{threads.length}</span>
-		</button>
+		</Button>
 	{/snippet}
 	{#each threads as thread (thread.id)}
 		{@const first = thread.comments[0]}

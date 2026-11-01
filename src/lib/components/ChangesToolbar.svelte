@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import type { Layout } from '$lib/diff/split';
 	import type { ChangeMode, ChangeSummary } from '$lib/diff/types';
 	import { remember } from '$lib/prefs';
@@ -53,13 +54,7 @@
 
 <Popover bind:open align="end" class="rounded-xl border border-line bg-surface p-3 shadow-float">
 	{#snippet trigger(props)}
-		<button
-			{...props}
-			class={[
-				'flex h-7 items-center gap-1.5 rounded-lg border bg-control px-2.5 text-[12px] text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed',
-				open ? 'border-muted text-fg' : 'border-line'
-			]}
-		>
+		<Button {...props} pressed={open}>
 			<svg
 				viewBox="0 0 16 16"
 				class="size-3.5"
@@ -74,7 +69,7 @@
 				/><circle cx="6" cy="11.5" r="1.5" /></svg
 			>
 			View
-		</button>
+		</Button>
 	{/snippet}
 	<!-- a grid inside: on the popover itself it would override the hiding while closed -->
 	<div class="grid grid-cols-[auto_auto] items-center gap-x-4 gap-y-2">

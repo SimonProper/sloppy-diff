@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	interface Props {
 		/** what's there to edit: the comment's markdown, or a send that failed */
 		body: string;
@@ -50,11 +51,8 @@
 				class="flex-1 text-faint">⌘↵ to {action.toLowerCase()}, esc to {cancel.toLowerCase()}</span
 			>{/if}
 		<button type="button" class="text-muted hover:text-fg" onclick={oncancel}>{cancel}</button>
-		<button
-			type="button"
-			class="rounded-sm bg-ink px-1.5 py-0.5 font-medium text-surface disabled:opacity-50"
-			disabled={!typed}
-			onclick={() => onsave(text.trim())}>{action}</button
+		<Button variant="solid" size="xs" disabled={!typed} onclick={() => onsave(text.trim())}
+			>{action}</Button
 		>
 	</div>
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { untrack } from 'svelte';
 	import { sectionLabel, shortLines } from '$lib/ask/groups';
 	import { rowOf } from '$lib/ask/rows';
@@ -152,21 +153,21 @@
 {#snippet extra()}
 	{#if suggestion && !draft?.text.includes('```suggestion')}
 		<!-- the focus stays in the text, its cursor in the block to change the lines in -->
-		<button
-			type="button"
-			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg"
+		<Button
+			variant="ghost"
+			size="xs"
 			title="Adds the lines as a suggestion, for them to be changed and applied on GitHub"
 			onpointerdown={(event) => event.preventDefault()}
-			onclick={suggest}>Suggest a change</button
+			onclick={suggest}>Suggest a change</Button
 		>
 	{/if}
 	{#if !threads.review?.pending && draft?.text.trim()}
-		<button
-			type="button"
-			class="shrink-0 rounded-md px-1.5 leading-5 hover:bg-subtle hover:text-fg disabled:pointer-events-none"
+		<Button
+			variant="ghost"
+			size="xs"
 			title="Adds it to a new pending review, only you see it until you finish the review"
 			disabled={sending}
-			onclick={() => comment(draft?.text.trim() ?? '', false)}>Start a review</button
+			onclick={() => comment(draft?.text.trim() ?? '', false)}>Start a review</Button
 		>
 	{/if}
 {/snippet}

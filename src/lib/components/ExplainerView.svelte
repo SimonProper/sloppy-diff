@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import { onMount, tick } from 'svelte';
 	import { errorText } from '$lib/errors';
 	import { explainerDocument } from '$lib/explainer/document';
@@ -310,13 +311,8 @@
 						{/if}
 					</div>
 					<div class="flex shrink-0 items-center gap-2">
-						<button
-							type="button"
-							onclick={download}
-							class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-							>Download HTML</button
-						>
-						<button
+						<Button onclick={download} size="lg" class="font-medium">Download HTML</Button>
+						<Button
 							{@attach (element) => {
 								expandButton = element;
 								return () => (expandButton = undefined);
@@ -324,7 +320,8 @@
 							type="button"
 							onclick={toggleExpanded}
 							aria-pressed={expanded}
-							class="flex h-8 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-medium text-fg shadow-raised hover:border-muted active:shadow-pressed"
+							size="lg"
+							class="font-medium"
 						>
 							<svg
 								viewBox="0 0 16 16"
@@ -340,14 +337,10 @@
 									/>{/if}</svg
 							>
 							{expanded ? 'Exit expanded view' : 'Expand'}
-						</button>
+						</Button>
 						{#if !expanded}
-							<button
-								type="button"
-								onclick={generate}
-								disabled={!canGenerate}
-								class="h-8 rounded-lg border border-line px-3 text-[12px] font-medium shadow-raised hover:border-muted active:shadow-pressed disabled:opacity-40"
-								>Regenerate</button
+							<Button onclick={generate} disabled={!canGenerate} size="lg" class="font-medium"
+								>Regenerate</Button
 							>
 						{/if}
 					</div>
@@ -396,16 +389,12 @@
 							explainer.
 						</p>
 					{/if}
-					<button
-						type="button"
-						onclick={generate}
-						disabled={!canGenerate}
-						class="mt-4 h-9 rounded-lg bg-accent px-4 text-[12px] font-medium text-surface hover:opacity-90 disabled:opacity-40"
+					<Button onclick={generate} disabled={!canGenerate} variant="solid" size="lg" class="mt-4"
 						>{generating
 							? 'Creating visual explainer…'
 							: failure && range
 								? 'Try again'
-								: 'Generate visual explainer'}</button
+								: 'Generate visual explainer'}</Button
 					>
 					<p class="mt-3 text-[11px] text-faint">
 						Your selected agent reads the code and builds a saved explainer for this range.
@@ -422,12 +411,11 @@
 						<p class="min-w-0 flex-1 text-[12.5px] font-medium">
 							{progress?.status || 'Starting the agent…'}
 						</p>
-						<button
-							type="button"
+						<Button
 							onclick={cancel}
 							disabled={starting || cancelling}
-							class="h-7 shrink-0 rounded-lg border border-line bg-surface px-2.5 text-[11.5px] font-medium text-muted hover:border-del/50 hover:text-del disabled:opacity-40"
-							>{cancelling ? 'Canceling…' : 'Cancel'}</button
+							variant="danger"
+							class="font-medium">{cancelling ? 'Canceling…' : 'Cancel'}</Button
 						>
 					</div>
 					{#if tools.length}
@@ -460,19 +448,9 @@
 				>
 					<p class="min-w-0 flex-1 text-[12px] text-del">{failure}</p>
 					{#if !range}
-						<button
-							type="button"
-							onclick={load}
-							class="h-7 shrink-0 rounded-lg border border-line px-2.5 text-[11.5px] font-medium text-muted hover:text-fg"
-							>Retry loading</button
-						>
+						<Button onclick={load} class="font-medium">Retry loading</Button>
 					{:else if explainer && !generating}
-						<button
-							type="button"
-							onclick={generate}
-							disabled={!canGenerate}
-							class="h-7 shrink-0 rounded-lg border border-line px-2.5 text-[11.5px] font-medium text-muted hover:text-fg disabled:opacity-40"
-							>Try again</button
+						<Button onclick={generate} disabled={!canGenerate} class="font-medium">Try again</Button
 						>
 					{/if}
 				</div>

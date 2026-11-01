@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/Button.svelte';
 	import SidebarLayout, { diffWidth } from './SidebarLayout.svelte';
 	import type { Snippet } from 'svelte';
 	import { tick } from 'svelte';
@@ -472,11 +473,7 @@
 					</span>
 					<span class="flex-1"></span>
 					{#if onregenerate}
-						<button
-							type="button"
-							class="flex h-6 shrink-0 items-center rounded-md border border-faint px-2 text-[11.5px] font-medium text-fg transition-transform hover:border-muted active:scale-[0.97]"
-							onclick={onregenerate}>Regenerate</button
-						>
+						<Button size="sm" class="font-medium" onclick={onregenerate}>Regenerate</Button>
 					{/if}
 				</div>
 			{/if}
@@ -559,7 +556,7 @@
 									class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
 								>
 									{#snippet trigger(props)}
-										<button
+										<Button
 											{...props}
 											onpointerenter={(e) => hover(e, section.id)}
 											onpointerleave={(e) => hover(e, null)}
@@ -567,7 +564,10 @@
 												// already open from hovering, the click keeps it open rather than closing it
 												if (described === section.id) e.preventDefault();
 											}}
-											class="grid size-6 shrink-0 place-items-center rounded-md text-faint hover:bg-subtle hover:text-fg aria-expanded:bg-subtle aria-expanded:text-fg"
+											variant="ghost"
+											size="sm"
+											icon
+											class="aria-expanded:bg-subtle aria-expanded:text-fg"
 											title="Show what this step is about"
 											aria-label="Show the description of {section.title}"
 										>
@@ -580,7 +580,7 @@
 												stroke-linecap="round"
 												><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
 											>
-										</button>
+										</Button>
 									{/snippet}
 									{@render description(section)}
 								</Popover>
