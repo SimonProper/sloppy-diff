@@ -196,9 +196,13 @@
 	/** the lines being dragged over, from `anchor` to wherever the pointer is */
 	let drag = $state<{ hunk: string; side?: Side; anchor: number } | null>(null);
 	let dragged = $state<LineSpan | null>(null);
+	/** lines picked by a text selection within one hunk, or on a pull request by dragging,
+	 *  and where to offer asking about them */
+	let offer = $state<{ span: LineSpan; top: number; left: number } | null>(null);
 	const cursor = $derived(threads?.cursor ?? null);
 	const picked = $derived(
 		dragged ??
+			offer?.span ??
 			(cursor && span(cursor.hunk, cursor.anchor, cursor.head, cursor.side)) ??
 			threads?.draft?.span ??
 			null
@@ -329,33 +333,40 @@
 		dragged = span(drag.hunk, drag.anchor, Number(row.dataset.index), drag.side);
 	}
 
-	function drop() {
+	function drop(event: PointerEvent) {
 		window.removeEventListener('pointermove', dragTo);
-		if (dragged) threads?.select(dragged, section);
+		// on a pull request, offered to ask about or comment on, under the last line picked
+		const last =
+			dragged &&
+			root.querySelector(
+				`[data-hunk="${dragged.hunk}"][data-index="${dragged.end}"]${dragged.side ? `[data-side="${dragged.side}"]` : ''}`
+			);
+		if (threads?.review && dragged && last)
+			offerAt(dragged, { bottom: last.getBoundingClientRect().bottom, right: event.clientX + 40 });
+		else if (dragged) threads?.select(dragged, section);
 		drag = null;
 		dragged = null;
 	}
 
 	$effect(() => () => window.removeEventListener('pointermove', dragTo));
 
-	/** a text selection within one hunk, and where to offer asking about it */
-	let offer = $state<{ span: LineSpan; top: number; left: number } | null>(null);
-
 	/** Offers asking about the lines of a selection once it's made. */
 	function offerSelection() {
 		offer = null;
 		const selected = threads && selectedSpan(root);
-		if (!selected) return;
+		if (selected) offerAt(selected.span, selected.rect);
+	}
+
+	function offerAt(lines: LineSpan, under: { bottom: number; right: number }) {
 		const box = root.getBoundingClientRect();
-		const width = threads.review ? 200 : 116;
+		const width = threads?.review ? 200 : 116;
 		// in the page, a popover over the card: under the last line it isn't cut off by the
 		// card's edge. Kept clear of the markers down the card's right edge
 		offer = {
-			span: selected.span,
-			top: selected.rect.bottom + 4 + window.scrollY,
+			span: lines,
+			top: under.bottom + 4 + window.scrollY,
 			left:
-				Math.max(box.left + 8, Math.min(selected.rect.right - 40, box.right - 24 - width)) +
-				window.scrollX
+				Math.max(box.left + 8, Math.min(under.right - 40, box.right - 24 - width)) + window.scrollX
 		};
 	}
 
@@ -375,6 +386,20 @@
 <svelte:document
 	onselectionchange={() => {
 		if (offer && window.getSelection()?.isCollapsed) offer = null;
+	}}
+	onpointerdown={(e) => {
+		// lines dragged over have no selection to clear, so the offer goes on a click elsewhere
+		if (offer && !(e.target as Element).closest('[data-offer]')) offer = null;
+	}}
+	onkeydown={(e) => {
+		// before the ask layer's a and c, which only see a text selection
+		if (!offer || e.metaKey || e.ctrlKey || e.altKey) return;
+		if (e.key === 'Escape') offer = null;
+		else if (e.key === 'a' || e.key === 'A')
+			acceptOffer(threads?.review ? 'ask' : undefined, e.key === 'A');
+		else if (e.key === 'c' && threads?.review) acceptOffer('comment');
+		else return;
+		e.preventDefault();
 	}}
 />
 
@@ -731,6 +756,7 @@
 	{#if offer}
 		<!-- on a pull request, to comment as well -->
 		<div
+			data-offer
 			popover="manual"
 			{@attach (el) => {
 				el.showPopover();
