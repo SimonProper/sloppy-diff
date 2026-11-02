@@ -18,7 +18,7 @@
 	interface Props {
 		threads: Threads;
 		files: DiffFile[];
-		/** the guide being read, questions are grouped and labelled by its sections */
+		/** the guide being read, a chat is labelled by its section */
 		guide?: Guide | null;
 		/** the docked panel, placed in the page's layout. Otherwise the lens over the whole page */
 		docked?: boolean;
@@ -29,7 +29,7 @@
 	let { threads, files, guide, docked = false, onshow = revealAnchor }: Props = $props();
 
 	const thread = $derived(threads.get(threads.open));
-	const grouped = $derived(groupThreads(threads.list, files, guide));
+	const grouped = $derived(groupThreads(threads.list));
 	const order = $derived(grouped.flatMap((g) => g.threads));
 	const lines = $derived(thread && linesOf(thread.anchor));
 	const section = $derived(lines ? sectionLabel(guide, lines.hunk) : undefined);

@@ -11,7 +11,7 @@
 
 	interface Props {
 		threads: Threads;
-		/** the questions in reading order, see groupThreads */
+		/** the chats, last asked or answered in first, see groupThreads */
 		grouped: Group[];
 		/** buttons at the end of the header, in place of the j k hint */
 		actions?: Snippet;
@@ -60,12 +60,14 @@
 	</header>
 	<div class="min-h-0 flex-1 overflow-y-auto p-2">
 		{#each grouped as group (group.key)}
-			<p
-				class="truncate px-2 pt-2 pb-1 text-[10.5px] font-medium tracking-wide text-faint uppercase first:pt-1"
-				title={group.label}
-			>
-				{group.label}
-			</p>
+			{#if group.label}
+				<p
+					class="truncate px-2 pt-2 pb-1 text-[10.5px] font-medium tracking-wide text-faint uppercase first:pt-1"
+					title={group.label}
+				>
+					{group.label}
+				</p>
+			{/if}
 			{#each group.threads as thread (thread.id)}
 				{@const status = threads.status(thread)}
 				<button
