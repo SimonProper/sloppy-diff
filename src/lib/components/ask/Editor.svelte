@@ -160,7 +160,12 @@
 					track(editor);
 				},
 				handleDOMEvents: {
-					blur: () => ((mention = null), false)
+					// a field taken off the page blurs while Svelte updates it, where state can't
+					// be written: only when there's a mention list to close
+					blur: () => {
+						if (mention) mention = null;
+						return false;
+					}
 				}
 			});
 			view = editor;

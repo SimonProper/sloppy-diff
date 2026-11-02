@@ -110,8 +110,13 @@ interface Config {
 export class Threads {
 	#config: () => Config;
 
-	/** saved threads, from the page load until the page loads another diff */
-	list = $derived.by(() => this.#config().threads);
+	/** the saved threads the page loaded, a new array only once it loads them again */
+	#saved = $derived.by(() => this.#config().threads);
+	/**
+	 * saved threads, from the page load until the page loads them again. Not reset by the
+	 * rest of the page's data changing, which would drop a chat started since
+	 */
+	list = $derived(this.#saved);
 	live = $state<Record<string, Live>>({});
 	draft = $state<Draft | null>(null);
 	/** comments put away unsent, each kept at its own lines until it's opened again */
