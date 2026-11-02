@@ -21,7 +21,7 @@ type Mode = 'insert' | 'normal' | 'visual' | 'line';
 interface Vim {
 	on: boolean;
 	mode: Mode;
-	/** where a line selection started */
+	/** where v or V started, the selection running from it to the cursor */
 	anchor: number;
 }
 
@@ -67,6 +67,16 @@ export function vim(on: boolean) {
 				return meta ? { ...value, ...meta } : value;
 			}
 		},
+		// out of insert mode the cursor is on a character, so not past a line's last one: a after it
+		appendTransaction(_, __, state) {
+			const { on, mode } = get(state);
+			const { empty, head, $head } = state.selection;
+			if (!on || mode === 'insert' || !empty || !$head.parent.inlineContent) return null;
+			const { doc } = state;
+			const atEnd = head === $head.end() || doc.textBetween(head, head + 1) === '\n';
+			const atStart = head === $head.start() || doc.textBetween(head - 1, head) === '\n';
+			return atEnd && !atStart ? state.tr.setSelection(TextSelection.create(doc, head - 1)) : null;
+		},
 		props: {
 			handleKeyDown(view, event) {
 				const { on, mode } = get(view.state);
@@ -94,20 +104,34 @@ export function vim(on: boolean) {
 			},
 			decorations(state) {
 				const { on, mode } = get(state);
-				if (!on || mode !== 'normal') return null;
+				if (!on || mode === 'insert') return null;
 				const { head, $head } = state.selection;
-				const at =
+				const cursor =
 					head < $head.end() && state.doc.textBetween(head, head + 1) !== '\n'
 						? Decoration.inline(head, head + 1, { class: 'vim-cursor' })
 						: Decoration.widget(head, end, { side: 1, ignoreSelection: true, key: 'vim-end' });
-				return DecorationSet.create(state.doc, [at]);
+				const range = selection(state);
+				const selected =
+					range && Decoration.inline(range.from, range.to, { class: 'vim-selected' });
+				return DecorationSet.create(state.doc, selected ? [selected, cursor] : [cursor]);
 			},
+			// the block in place of the caret, in visual mode too
 			attributes: (state): Record<string, string> => {
 				const { on, mode } = get(state);
-				return on && mode !== 'insert' ? { class: `vim-${mode}` } : {};
+				return on && mode !== 'insert' ? { class: 'vim-block' } : {};
 			}
 		}
 	});
+}
+
+/** what v or V has selected: from where it started to the cursor, the character under it too */
+function selection(state: EditorState) {
+	const { mode, anchor } = get(state);
+	const { head } = state.selection;
+	if (mode === 'line') return lines(state, anchor, head);
+	if (mode !== 'visual') return null;
+	const [from, last] = [Math.min(anchor, head), Math.max(anchor, head)];
+	return { from, to: Math.min(last + 1, state.doc.resolve(last).end()), line: null };
 }
 
 const end = () => {
@@ -275,7 +299,8 @@ function move(view: EditorView, pos: number, motion: string, goal: { x?: number 
 		case '^':
 			return native(view, pos, 'backward', 'lineboundary');
 		case '$':
-			return native(view, pos, 'forward', 'lineboundary');
+			// onto the line's last character, not past it
+			return Math.max(pos, native(view, pos, 'forward', 'lineboundary') - 1);
 		case 'gg':
 			return Selection.atStart(doc).from;
 		case 'G':
@@ -381,15 +406,7 @@ function run(view: EditorView, command: Command, goal: { x?: number }) {
 	if (command.kind === 'motion') {
 		let pos = head;
 		for (let i = 0; i < command.count; i++) pos = move(view, pos, command.motion, goal);
-		const tr = state.tr;
-		if (mode === 'visual')
-			tr.setSelection(TextSelection.create(state.doc, state.selection.anchor, pos));
-		else if (mode === 'line') {
-			const l = lines(state, anchor, pos);
-			const [a, b] = pos < anchor ? [l.to, l.from] : [l.from, l.to];
-			tr.setSelection(TextSelection.create(state.doc, a, b));
-		} else tr.setSelection(TextSelection.create(state.doc, pos));
-		view.dispatch(tr.scrollIntoView());
+		view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, pos)).scrollIntoView());
 		return;
 	}
 
@@ -417,7 +434,7 @@ function run(view: EditorView, command: Command, goal: { x?: number }) {
 		let pos = head;
 		for (let i = 0; i < command.count; i++) pos = move(view, pos, m, goal);
 		// e takes the word's last character too
-		if (m.toLowerCase() === 'e' && pos >= head)
+		if ((m.toLowerCase() === 'e' || m === '$') && pos >= head)
 			pos = Math.min(pos + 1, state.doc.resolve(pos).end());
 		// dw at the end of a line stops there, the next line stays where it is
 		if (m.toLowerCase() === 'w' && pos > $head.end()) pos = $head.end();
@@ -430,38 +447,24 @@ function run(view: EditorView, command: Command, goal: { x?: number }) {
 	const cursor = (pos: number, next: Mode = 'normal') =>
 		view.dispatch(to(tr.setSelection(TextSelection.create(tr.doc, pos)).scrollIntoView(), next));
 	const line = lines(state, head, head);
-	const selected = state.selection;
 
 	// v and V: what's selected
 	if (mode === 'visual' || mode === 'line') {
-		const l = mode === 'line' ? lines(state, anchor, head) : null;
+		const range = selection(state)!;
 		if ('dxs'.includes(key) || key === 'c' || key === 'y') {
 			const op = key === 'x' ? 'd' : key === 's' ? 'c' : key;
-			if (l) return operateLines(view, op, l);
-			if (selected.empty) return operate(view, op, head, Math.min(head + 1, $head.end()));
-			return operate(view, op, selected.from, selected.to);
+			if (mode === 'line') return operateLines(view, op, lines(state, anchor, head));
+			return operate(view, op, range.from, range.to);
 		}
 		if (key === 'p' && register) {
-			if (register.kind === 'code') tr.insertText(register.text, selected.from, selected.to);
-			else tr.replaceRange(selected.from, selected.to, register.slice);
-			return cursor(tr.mapping.map(selected.to));
+			if (register.kind === 'code') tr.insertText(register.text, range.from, range.to);
+			else tr.replaceRange(range.from, range.to, register.slice);
+			return cursor(tr.mapping.map(range.to));
 		}
+		// the other v or V switches to it from the same start, the same one ends it
 		if (key === 'v' || key === 'V') {
 			const next = key === 'v' ? 'visual' : 'line';
-			if (next === mode) return cursor(head);
-			if (next === 'visual') {
-				return view.dispatch(
-					to(tr.setSelection(TextSelection.create(state.doc, anchor, head)), 'visual')
-				);
-			}
-			const lv = lines(state, selected.anchor, head);
-			return view.dispatch(
-				to(
-					tr.setSelection(TextSelection.create(state.doc, lv.from, lv.to)),
-					'line',
-					selected.anchor
-				)
-			);
+			return view.dispatch(to(tr, next === mode ? 'normal' : next, anchor));
 		}
 		return;
 	}
@@ -510,7 +513,7 @@ function run(view: EditorView, command: Command, goal: { x?: number }) {
 		}
 		case 'D':
 		case 'C': {
-			const until = move(view, head, '$', goal);
+			const until = Math.min(move(view, head, '$', goal) + 1, $head.end());
 			if (until > head) return operate(view, key === 'D' ? 'd' : 'c', head, until);
 			return key === 'C' ? cursor(head, 'insert') : undefined;
 		}
@@ -558,10 +561,8 @@ function run(view: EditorView, command: Command, goal: { x?: number }) {
 			for (let i = 0; i < count; i++) redo(view.state, view.dispatch);
 			return;
 		case 'v':
-			return view.dispatch(to(tr, 'visual'));
+			return view.dispatch(to(tr, 'visual', head));
 		case 'V':
-			return view.dispatch(
-				to(tr.setSelection(TextSelection.create(state.doc, line.from, line.to)), 'line', head)
-			);
+			return view.dispatch(to(tr, 'line', head));
 	}
 }

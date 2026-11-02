@@ -246,14 +246,32 @@ test('vim: lines deleted, yanked and put, in a list and in code', () => {
 	expect(code.markdown.trim()).toBe('```ts\nb\na\n```');
 });
 
-test('vim: what v selects is what d deletes, and off types as usual', () => {
+test('vim: v selects from where it started to the character under the cursor, off types as usual', () => {
 	const f = field('one two', undefined, true);
 	f.press('Escape');
 	f.keys('vwd');
-	expect(f.doc.textContent).toBe('two');
+	expect(f.doc.textContent).toBe('wo');
+	const back = field('one two', undefined, true);
+	back.press('Escape');
+	back.keys('Gvbd');
+	expect(back.doc.textContent).toBe('one ');
 
 	const off = field('', undefined, false);
 	off.press('Escape');
 	off.type('dd');
 	expect(off.doc.textContent).toBe('dd');
+});
+
+test('vim: normal mode rests on the last character, a goes after it', () => {
+	const f = field('', undefined, true);
+	f.type('one two');
+	f.press('Escape');
+	f.keys('ggww');
+	expect(f.state.selection.head).toBe(7);
+	f.keys('x');
+	expect(f.doc.textContent).toBe('one tw');
+	expect(f.state.selection.head).toBe(6);
+	f.keys('a');
+	f.type('o!');
+	expect(f.doc.textContent).toBe('one two!');
 });

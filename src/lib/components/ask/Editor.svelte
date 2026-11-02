@@ -264,9 +264,13 @@
 	.editor :global(a) {
 		text-decoration: underline;
 	}
-	/* vim's normal mode: a block on the character the cursor is on, hollow when it's elsewhere */
-	.editor :global(.vim-normal) {
+	/* vim out of insert mode: a block on the character the cursor is on, hollow when it's
+	   elsewhere, and what v or V has selected */
+	.editor :global(.vim-block) {
 		caret-color: transparent;
+	}
+	.editor :global(.vim-selected) {
+		background: color-mix(in oklab, var(--accent) 30%, transparent);
 	}
 	.editor :global(.vim-cursor) {
 		border-radius: 1px;
