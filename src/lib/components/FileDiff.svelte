@@ -939,8 +939,8 @@
 {/snippet}
 
 <style>
-	/* only the section centres itself on the panels' edges. Set again under it, so the edges
-	   easing as a panel opens restyle the section, not every line in it */
+	/* only the section centres itself on the panels' edges. Set again under it, so a panel
+	   opening restyles the section, not every line in it */
 	section > :global(*) {
 		--left: 0px;
 		--right: 0px;

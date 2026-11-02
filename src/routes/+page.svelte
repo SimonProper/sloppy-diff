@@ -134,8 +134,9 @@
 
 	const totals = $derived(lineStats(diff.files.flatMap((f) => f.hunks)));
 	// below this many lines everything renders, so the browser's find sees all of it.
-	// Beyond, only lines near the viewport exist
-	const VIRTUALIZE_LINES = 4000;
+	// Beyond, only lines near the viewport exist: every line in the page is restyled when the
+	// layout switches beside the agent panel, and when Chrome reads the page for its AI features
+	const VIRTUALIZE_LINES = 1000;
 	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
 	// the file on screen, for the sidebar. The guide follows its own steps. Read from
 	// a little below where a file jumped to lands (scroll-mt-32 in FileDiff, its header

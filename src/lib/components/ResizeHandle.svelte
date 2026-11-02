@@ -57,6 +57,19 @@
 
 	const current = () => (vertical ? panel?.offsetWidth : panel?.offsetHeight) ?? size ?? min;
 
+	// the panel's size for a screen reader before it's resized, told by the browser after it lays
+	// the page out: read while rendering, it would lay out everything just rendered on the spot
+	let shown = $state<number>();
+	$effect(() => {
+		if (!panel) return;
+		const observer = new ResizeObserver(([entry]) => {
+			const box = entry.borderBoxSize[0];
+			shown = Math.round(vertical ? box.inlineSize : box.blockSize);
+		});
+		observer.observe(panel);
+		return () => observer.disconnect();
+	});
+
 	function limit(px: number) {
 		const parent = handle.parentElement;
 		const room =
@@ -106,7 +119,7 @@
 	role="separator"
 	aria-orientation={orientation}
 	aria-label={label}
-	aria-valuenow={size ?? current()}
+	aria-valuenow={size ?? shown ?? min}
 	aria-valuemin={min}
 	aria-valuemax={max}
 	tabindex="0"
