@@ -57,7 +57,7 @@
      the left, send on the right, however many lines the text grows to -->
 <div
 	class={[
-		'field flex flex-col gap-2 rounded-xl px-3 pt-2.5 pb-2 transition-colors',
+		'field flex flex-col gap-2 rounded-[calc(var(--radius-2xl)-8px)] pt-2.5 pr-2 pb-2 pl-3 transition-colors',
 		bare ? 'border border-transparent' : 'framed border'
 	]}
 >

@@ -198,7 +198,7 @@
 <!-- clicking a heading or the padding keeps focus in the filter, the list stays open -->
 <Popover
 	bind:open
-	class="w-[28rem] overflow-hidden rounded-xl border border-line bg-surface shadow-float"
+	class="w-[28rem] overflow-hidden rounded-2xl border border-line bg-surface shadow-float"
 	role="presentation"
 	onpointerdown={(e) => {
 		if (!(e.target as HTMLElement).closest('button, input')) e.preventDefault();
@@ -300,7 +300,7 @@
 				tabindex="-1"
 				data-active={i === active || undefined}
 				class={[
-					'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-1.5 text-left',
+					'flex w-full items-start gap-2.5 rounded-xl px-2.5 py-1.5 text-left',
 					i === active && 'bg-subtle'
 				]}
 				onpointermove={() => (active = i)}

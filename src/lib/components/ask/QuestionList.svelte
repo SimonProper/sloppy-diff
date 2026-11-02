@@ -73,7 +73,7 @@
 				<button
 					type="button"
 					class={[
-						'flex w-full items-start gap-[9px] rounded-lg px-2 py-[7px] text-left hover:bg-subtle',
+						'flex w-full items-start gap-[9px] rounded-[calc(var(--radius-2xl)-8px)] px-2 py-[7px] text-left hover:bg-subtle',
 						threads.open === thread.id && 'bg-subtle'
 					]}
 					onclick={() => threads.openLens(thread.id)}
@@ -122,7 +122,7 @@
 					<div class="mt-3 first:mt-1">
 						<a
 							href={hrefOf(e)}
-							class="flex items-baseline gap-2 rounded-lg px-2 py-1 hover:bg-subtle focus-visible:bg-subtle"
+							class="flex items-baseline gap-2 rounded-[calc(var(--radius-2xl)-8px)] px-2 py-1 hover:bg-subtle focus-visible:bg-subtle"
 							title={e.label}
 						>
 							<span class="min-w-0 flex-1 truncate text-[12.5px] font-medium">{e.label}</span>
@@ -134,7 +134,7 @@
 						{#each more[e.scope] ? e.threads : e.threads.slice(0, 3) as t (t.id)}
 							<a
 								href={hrefOf(e)}
-								class="block rounded-lg py-[5px] pr-2 pl-6 hover:bg-subtle focus-visible:bg-subtle"
+								class="block rounded-[calc(var(--radius-2xl)-8px)] py-[5px] pr-2 pl-6 hover:bg-subtle focus-visible:bg-subtle"
 								onclick={() => (threads.opening = t.id)}
 							>
 								<span class="block truncate text-[12.5px] leading-[1.35] text-muted"
@@ -148,7 +148,7 @@
 						{#if e.threads.length > 3 && !more[e.scope]}
 							<button
 								type="button"
-								class="rounded-lg py-1 pr-2 pl-6 text-[11px] text-faint hover:text-muted focus-visible:text-muted"
+								class="rounded-[calc(var(--radius-2xl)-8px)] py-1 pr-2 pl-6 text-[11px] text-faint hover:text-muted focus-visible:text-muted"
 								onclick={() => (more[e.scope] = true)}>{e.threads.length - 3} more</button
 							>
 						{/if}

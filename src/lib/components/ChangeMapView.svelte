@@ -779,7 +779,7 @@
 		<button
 			type="button"
 			class={[
-				'group/hint relative grid shrink-0 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg',
+				'group/hint relative grid shrink-0 place-items-center rounded-full text-muted hover:bg-subtle hover:text-fg',
 				size
 			]}
 			aria-label="Show {node.name} in the diff"
@@ -811,7 +811,7 @@
 	<span
 		role="dialog"
 		aria-label="Why"
-		class="absolute top-full left-0 z-40 mt-1.5 block w-72 rounded-lg border border-line bg-surface p-1.5 text-left font-sans shadow-raised"
+		class="absolute top-full left-0 z-40 mt-1.5 block w-72 rounded-2xl border border-line bg-surface p-1.5 text-left font-sans shadow-raised"
 	>
 		<span class="block px-1.5 pb-1 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 			{heat.level === 2 ? 'Needs attention' : 'Worth a look'}
@@ -822,7 +822,7 @@
 			<button
 				type="button"
 				class={[
-					'flex w-full items-start gap-2 rounded px-1.5 py-1 text-left text-[11.5px] hover:bg-subtle',
+					'flex w-full items-start gap-2 rounded-xl px-1.5 py-1 text-left text-[11.5px] hover:bg-subtle',
 					pinned?.key === key && 'bg-subtle'
 				]}
 				aria-pressed={pinned?.key === key}
@@ -930,7 +930,7 @@
 				{#if firstOpen}
 					<!-- the boxes to look at first, a click away -->
 					<div
-						class="absolute top-full right-0 z-50 mt-1.5 w-72 rounded-lg border border-line bg-surface p-1.5 shadow-raised"
+						class="absolute top-full right-0 z-50 mt-1.5 w-72 rounded-2xl border border-line bg-surface p-1.5 shadow-raised"
 						style:--heat={HEAT}
 					>
 						{#each ranked(hot.heat) as id (id)}
@@ -939,7 +939,7 @@
 							{#if b}
 								<button
 									type="button"
-									class="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-subtle"
+									class="flex w-full items-center gap-2 rounded-xl px-1.5 py-1 text-left hover:bg-subtle"
 									onclick={() => {
 										firstOpen = false;
 										goTo(id);
@@ -1183,7 +1183,7 @@
 				{#each drawn.boxes as box (box.id)}
 					<div
 						class={[
-							'group absolute top-0 left-0 rounded-lg border',
+							'group absolute top-0 left-0 rounded-md border',
 							'transition-opacity motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.77,0,0.175,1)]',
 							STATUS[box.status],
 							focus && !focus.boxes.has(box.id) && preview?.box !== box.id && 'opacity-30',
@@ -1238,7 +1238,7 @@
 							{#if (box.members || madeUp(box)) && box.kind !== 'more'}
 								<button
 									type="button"
-									class="group/hint relative mr-1.5 flex size-6 shrink-0 items-center justify-center rounded text-[11px] text-muted hover:bg-subtle hover:text-fg"
+									class="group/hint relative mr-1.5 flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] text-muted hover:bg-subtle hover:text-fg"
 									aria-label={box.open ? 'Close' : `Show what's in ${box.name}`}
 									aria-expanded={box.open}
 									aria-busy={loading(box, 'members')}
@@ -1370,7 +1370,7 @@
 			{#if shown}
 				<aside
 					data-panel
-					class="absolute top-3 right-3 bottom-3 z-40 flex max-w-[calc(100%-1.5rem)] cursor-default flex-col overflow-hidden rounded-xl border border-line bg-canvas shadow-raised"
+					class="absolute top-2 right-2 bottom-2 z-40 flex max-w-[calc(100%-1rem)] cursor-default flex-col overflow-hidden rounded-2xl border border-line bg-canvas shadow-raised"
 					style:width="{panelWidth}px"
 				>
 					<header class="flex items-center gap-2 border-b border-line px-3 py-2">

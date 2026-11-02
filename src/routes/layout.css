@@ -18,6 +18,8 @@
 	--radius-lg: var(--radius);
 	--radius-xl: calc(var(--radius) * 1.5);
 	--radius-2xl: calc(var(--radius) * 2);
+	/* pills and circles, square where a theme's corners are */
+	--radius-full: calc(var(--radius) * 999);
 }
 
 @theme inline {
@@ -49,7 +51,11 @@
 }
 
 :root {
-	--radius: 0.5rem;
+	/* 20px on a panel, a card or a dialog, at rounded-2xl. What sits inside one follows its
+	   corner: its radius less the gap between them, rounded-xl for rows 4px in from a
+	   popover's edge, rounded-[calc(var(--radius-2xl)-8px)] for rows and fields 8px in from
+	   a panel's. Buttons and tabs are pills whatever they're in */
+	--radius: 0.625rem;
 	/* a font picked on /theme goes in front of these, they stay as its fallback */
 	--sans-stack: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 	--mono-stack: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -61,8 +67,8 @@
 	--fg: #0a0a0a;
 	--muted: #6e6e6e;
 	--faint: #a6a6a6;
-	/* the lists beside the diff, the page's own colour unless a theme sets one */
-	--sidebar: var(--canvas);
+	/* the panels beside the diff, a card on the page unless a theme sets one */
+	--sidebar: var(--surface);
 
 	/* the UI's own chrome is drawn in the text colour, so every hue on screen says
 	   something about the diff: added, removed, modified, moved */
@@ -372,6 +378,24 @@ html:has(dialog:modal) {
 	}
 }
 
+/* the panels' widths, set on SidebarLayout's grid. Not inherited, passed down by hand only as
+   far as each column: inherited, a panel opening restyled every element on the page */
+@property --left {
+	syntax: '<length>';
+	inherits: false;
+	initial-value: 0px;
+}
+@property --right {
+	syntax: '<length>';
+	inherits: false;
+	initial-value: 0px;
+}
+.columns-middle,
+.columns-middle :not(.page-column *) {
+	--left: inherit;
+	--right: inherit;
+}
+
 /* a column centred on the page, not between the panels (SidebarLayout's --left and --right),
    unless that brings it within 8rem of one: with less room than that it's centred between
    them, rather than up against one with all the room on the other side. As wide as a
@@ -379,11 +403,14 @@ html:has(dialog:modal) {
    header stays near its code */
 .page-column {
 	--cap: 120rem;
-	/* unregistered, so they're substituted as written and the 100% is the margin's */
-	--slack: max(0px, 100% - var(--cap));
+	/* unregistered, so they're substituted as written and the 100% is the margin's. A few
+	   pixels over the cap go to the column rather than a gap a little off the panels' 8px:
+	   it fills up to 2rem past it, from there the room beside it grows back to all of it */
+	--free: max(0px, 100% - var(--cap));
+	--slack: min(var(--free), max(0px, 2 * var(--free) - 4rem));
 	--gutter: min(8rem, var(--slack) / 2);
 	width: 100%;
-	max-width: var(--cap);
+	max-width: calc(100% - var(--slack));
 	margin-left: clamp(
 		var(--gutter),
 		calc((var(--slack) + var(--right, 0px) - var(--left, 0px)) / 2),

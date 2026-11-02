@@ -148,7 +148,7 @@
 <!-- what the pull request is, a card like the guide's summary, and where it stands in a
      strip along its foot. What people said under it -->
 <div class="mx-auto flex w-full max-w-4xl flex-col gap-6">
-	<section class="overflow-hidden rounded-xl border border-line bg-surface">
+	<section class="overflow-hidden rounded-2xl border border-line bg-surface">
 		<div class="p-5">
 			<h1 class="text-[17px] leading-snug font-semibold tracking-tight">
 				{pr.title} <span class="font-normal text-faint">#{pr.number}</span>
@@ -263,7 +263,7 @@
 				Checks <span class="ml-1 font-normal text-faint tabular-nums">{pr.checks.runs.length}</span>
 			</h2>
 			<div
-				class="mt-3 divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
+				class="mt-3 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface"
 			>
 				{#each unsettled as run, i (i)}
 					{@render check(run)}
@@ -305,7 +305,7 @@
 			{#each pr.comments as comment (comment.id)}
 				<li
 					class={said(comment)
-						? 'rounded-lg border border-line bg-surface px-3.5 py-3'
+						? 'rounded-2xl border border-line bg-surface px-3.5 py-3'
 						: 'px-[15px]'}
 				>
 					<Comment {comment} threads={comment.threads?.length} />
@@ -327,7 +327,7 @@
 					onsend={post}
 					keep={pr.id}
 					avatar={pr.viewerAvatar}
-					card="overflow-hidden rounded-lg border border-line bg-surface"
+					card="overflow-hidden rounded-2xl border border-line bg-surface"
 					placeholder="Leave a comment…"
 					action="Comment"
 					hint="⌘↵ to comment"

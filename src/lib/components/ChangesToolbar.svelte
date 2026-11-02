@@ -52,7 +52,7 @@
 	}
 </script>
 
-<Popover bind:open align="end" class="rounded-xl border border-line bg-surface p-3 shadow-float">
+<Popover bind:open align="end" class="rounded-2xl border border-line bg-surface p-3 shadow-float">
 	{#snippet trigger(props)}
 		<Button {...props} pressed={open}>
 			<svg

@@ -19,7 +19,7 @@
 	let failure = $state('');
 
 	const item =
-		'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] text-muted hover:bg-subtle';
+		'flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-[12px] text-muted hover:bg-subtle';
 
 	async function remove() {
 		open = false;
@@ -57,13 +57,13 @@
 			bind:open
 			align="end"
 			offset={4}
-			class="w-28 rounded-xl border border-line bg-surface p-1 shadow-float"
+			class="w-28 rounded-2xl border border-line bg-surface p-1 shadow-float"
 		>
 			{#snippet trigger(props)}
 				<button
 					{...props}
 					class={[
-						'grid size-4 place-items-center rounded-sm hover:text-fg focus-visible:opacity-100',
+						'grid size-4 place-items-center rounded-full hover:text-fg focus-visible:opacity-100',
 						!open && !failure && 'opacity-0 group-hover/comment:opacity-100'
 					]}
 					aria-label="More"

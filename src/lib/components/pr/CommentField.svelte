@@ -166,7 +166,7 @@
 				<button
 					type="button"
 					class={[
-						'shrink-0 self-end rounded-md px-1.5 text-[11px] leading-5 text-muted hover:bg-subtle',
+						'shrink-0 self-end rounded-full px-2 text-[11px] leading-5 text-muted hover:bg-subtle',
 						a.tone ?? 'hover:text-fg'
 					]}
 					title={a.title}

@@ -189,7 +189,7 @@
 			el.showPopover();
 			return () => el.hidePopover();
 		}}
-		class="absolute rounded-[calc(var(--radius)*1.25)] border border-line bg-surface shadow-float"
+		class="absolute rounded-2xl border border-line bg-surface shadow-float"
 		style:top="{place.top}px"
 		style:left="{place.left}px"
 		style:width="{place.width}px"

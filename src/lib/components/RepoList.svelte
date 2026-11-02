@@ -136,7 +136,7 @@
 					tabindex="-1"
 					data-active={i === active || undefined}
 					class={[
-						'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left',
+						'flex w-full items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left',
 						i === active && 'bg-subtle'
 					]}
 					title={repo.remote ?? repo.path}

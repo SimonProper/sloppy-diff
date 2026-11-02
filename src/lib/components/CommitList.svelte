@@ -123,7 +123,7 @@
 	<div class="shrink-0 px-3 pt-1 pb-2">
 		<label for={searchId} class="sr-only">Find a commit by subject or SHA</label>
 		<div
-			class="flex h-8 items-center gap-2 rounded-lg border border-line bg-canvas px-2.5 text-faint focus-within:border-muted"
+			class="flex h-8 items-center gap-2 rounded-full border border-line bg-canvas px-2.5 text-faint focus-within:border-muted"
 		>
 			<svg
 				viewBox="0 0 16 16"
@@ -190,7 +190,7 @@
 			<button
 				type="button"
 				class={[
-					'relative flex shrink-0 gap-2 rounded-lg px-2 py-1 text-left text-[12px]',
+					'relative flex shrink-0 gap-2 rounded-[calc(var(--radius-2xl)-8px)] px-2 py-1 text-left text-[12px]',
 					selected ? 'items-start bg-accent/8' : 'items-center hover:bg-subtle',
 					narrowed && !selected && 'opacity-55'
 				]}

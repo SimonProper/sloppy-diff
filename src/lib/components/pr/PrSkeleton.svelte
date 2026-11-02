@@ -12,7 +12,7 @@
 	aria-label="Loading the pull request"
 	aria-busy="true"
 >
-	<section class="overflow-hidden rounded-xl border border-line bg-surface">
+	<section class="overflow-hidden rounded-2xl border border-line bg-surface">
 		<div class="p-5">
 			{#if summary}
 				<h1 class="text-[17px] leading-snug font-semibold tracking-tight">

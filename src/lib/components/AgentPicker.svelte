@@ -71,7 +71,7 @@
 			onchange={change}
 			disabled={loading || saving}
 			title="AI provider for new questions, guides, and explainers. Existing conversations keep their agent."
-			class="h-7 max-w-32 appearance-none rounded-lg border border-line bg-control pr-7 pl-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg focus:border-accent focus:outline-none disabled:opacity-50"
+			class="h-7 max-w-32 appearance-none rounded-full border border-line bg-control pr-7 pl-2 text-[11.5px] text-muted shadow-raised hover:border-muted hover:text-fg focus:border-accent focus:outline-none disabled:opacity-50"
 		>
 			{#if selected === ''}
 				<option value="">{loading ? 'Loading…' : 'Choose AI…'}</option>
@@ -94,7 +94,7 @@
 	<span class="sr-only" role="status">{saving ? 'Saving AI provider…' : ''}</span>
 	{#if failure}
 		<div
-			class="absolute top-full right-0 z-30 mt-2 w-72 rounded-lg border border-line bg-surface px-3 py-2.5 text-[11.5px] shadow-float"
+			class="absolute top-full right-0 z-30 mt-2 w-72 rounded-2xl border border-line bg-surface px-3 py-2.5 text-[11.5px] shadow-float"
 			role="alert"
 		>
 			<p class="break-words text-del">{failure}</p>

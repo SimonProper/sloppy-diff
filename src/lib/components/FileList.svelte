@@ -108,7 +108,7 @@
 <div class="shrink-0 px-3 pt-1 pb-2">
 	<label for={searchId} class="sr-only">Find a changed file by name or path</label>
 	<div
-		class="flex h-8 items-center gap-2 rounded-lg border border-line bg-canvas px-2.5 text-faint focus-within:border-muted"
+		class="flex h-8 items-center gap-2 rounded-full border border-line bg-canvas px-2.5 text-faint focus-within:border-muted"
 	>
 		<svg
 			viewBox="0 0 16 16"
@@ -199,7 +199,7 @@
 				>
 					<button
 						type="button"
-						class="flex h-7 w-full items-center gap-1.5 rounded-lg bg-sidebar pr-2 text-left text-[12.5px] text-muted hover:bg-subtle hover:text-fg"
+						class="flex h-7 w-full items-center gap-1.5 rounded-[calc(var(--radius-2xl)-8px)] bg-sidebar pr-2 text-left text-[12.5px] text-muted hover:bg-subtle hover:text-fg"
 						style:padding-left="{8 + depth * 12}px"
 						title={node.path}
 						aria-expanded={open}
@@ -236,7 +236,7 @@
 	<a
 		href="#{file.id}"
 		class={[
-			'group relative flex items-center gap-2 rounded-lg py-1.5 pr-2 text-[12.5px] hover:bg-subtle',
+			'group relative flex items-center gap-2 rounded-[calc(var(--radius-2xl)-8px)] py-1.5 pr-2 text-[12.5px] hover:bg-subtle',
 			here && 'current bg-subtle'
 		]}
 		style:padding-left="{8 + depth * 12}px"

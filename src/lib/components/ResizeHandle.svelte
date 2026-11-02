@@ -28,6 +28,8 @@
 		key?: string;
 		/** the panel is after the handle, dragging towards it makes it smaller */
 		reverse?: boolean;
+		/** drawn as a line, rather than only on hover beside a panel with its own edge */
+		line?: boolean;
 	}
 
 	let {
@@ -40,7 +42,8 @@
 		reserve = 96,
 		dragging = $bindable(false),
 		key,
-		reverse = false
+		reverse = false,
+		line = true
 	}: Props = $props();
 
 	$effect(() => {
@@ -125,7 +128,8 @@
 	tabindex="0"
 	title="Drag to resize, double-click to reset"
 	class={[
-		'group relative z-10 shrink-0 bg-line outline-none',
+		'group relative z-10 shrink-0 outline-none',
+		line && 'bg-line',
 		vertical ? 'h-full w-px cursor-col-resize' : 'h-px cursor-row-resize'
 	]}
 	onpointerdown={pointerdown}

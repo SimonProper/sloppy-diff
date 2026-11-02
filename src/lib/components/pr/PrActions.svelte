@@ -44,7 +44,7 @@
 			updatePrBranch({ repo: repo(), number: pr.number, pr: pr.id, head: pr.headRefOid })
 		);
 	const item =
-		'flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-subtle';
+		'flex w-full items-center rounded-xl px-2.5 py-1.5 text-left text-[12px] text-muted hover:bg-subtle';
 	const updatable = $derived(open && pr.canUpdateBranch && !!pr.behind);
 </script>
 
@@ -74,12 +74,12 @@
 				bind:open={menu}
 				align="end"
 				offset={6}
-				class="w-44 rounded-xl border border-line bg-surface p-1 shadow-float"
+				class="w-44 rounded-2xl border border-line bg-surface p-1 shadow-float"
 			>
 				{#snippet trigger(props)}
 					<button
 						{...props}
-						class="grid size-5 place-items-center rounded-md text-muted hover:bg-surface hover:text-fg"
+						class="grid size-5 place-items-center rounded-full text-muted hover:bg-surface hover:text-fg"
 						aria-label="More"
 					>
 						<svg viewBox="0 0 16 16" class="size-3" fill="currentColor"

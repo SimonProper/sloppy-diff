@@ -12,13 +12,13 @@
 		pressed?: boolean;
 	}
 
-	// cva style, as SegmentedControl's. Hovers are on a button that isn't disabled, :not
-	// rather than :enabled so an <a> gets them too
-	const sizes: Record<Size, { text: string; icon: string; round: string }> = {
-		xs: { text: 'h-5 px-1.5 text-[11px]', icon: 'size-5', round: 'rounded' },
-		sm: { text: 'h-6 px-2 text-[11.5px]', icon: 'size-6', round: 'rounded-md' },
-		md: { text: 'h-7 px-2.5 text-[12px]', icon: 'size-7', round: 'rounded-lg' },
-		lg: { text: 'h-8 px-3 text-[12px]', icon: 'size-8', round: 'rounded-lg' }
+	// cva style, as SegmentedControl's: pills, circles when drawn by an icon alone. Hovers are
+	// on a button that isn't disabled, :not rather than :enabled so an <a> gets them too
+	const sizes: Record<Size, { text: string; icon: string }> = {
+		xs: { text: 'h-5 px-2 text-[11px]', icon: 'size-5' },
+		sm: { text: 'h-6 px-2.5 text-[11.5px]', icon: 'size-6' },
+		md: { text: 'h-7 px-3 text-[12px]', icon: 'size-7' },
+		lg: { text: 'h-8 px-3.5 text-[12px]', icon: 'size-8' }
 	};
 
 	const variants = (pressed: boolean): Record<Variant, string> => ({
@@ -46,9 +46,8 @@
 	}: Look = {}) {
 		const s = sizes[size];
 		return [
-			'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap disabled:opacity-40',
+			'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full whitespace-nowrap disabled:opacity-40',
 			icon ? s.icon : s.text,
-			s.round,
 			variants(pressed)[variant]
 		];
 	}

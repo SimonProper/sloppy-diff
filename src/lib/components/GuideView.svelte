@@ -3,6 +3,8 @@
 	import SidebarLayout, { diffWidth } from './SidebarLayout.svelte';
 	import type { Snippet } from 'svelte';
 	import { tick } from 'svelte';
+	import { quintOut } from 'svelte/easing';
+	import { slide } from 'svelte/transition';
 	import { page } from '$app/state';
 	import type { Threads } from '$lib/ask/threads.svelte';
 	import type { Layout } from '$lib/diff/split';
@@ -18,7 +20,6 @@
 	import StatusBadge from './StatusBadge.svelte';
 	import StepChip, { type Step } from './StepChip.svelte';
 	import { displayPath, splitPath } from '$lib/diff/path';
-	import Popover from './Popover.svelte';
 	import type { ReviewThread } from '$lib/pr/types';
 
 	interface Props {
@@ -26,6 +27,10 @@
 		files: DiffFile[];
 		/** the shared page chrome above the guide and its sidebar */
 		stickyTop?: number;
+		/** where the sidebar and the panel stick, see SidebarLayout */
+		panelTop?: number;
+		/** the view navigation, between them */
+		toolbar?: Snippet;
 		layout?: Layout;
 		/** only render lines near the viewport, for big diffs */
 		virtualize?: boolean;
@@ -46,6 +51,8 @@
 		guide,
 		files,
 		stickyTop = 92,
+		panelTop,
+		toolbar,
 		layout = 'unified',
 		virtualize = false,
 		threads,
@@ -185,7 +192,7 @@
 	// gap between (4rem). Never at the cost of the diffs' room
 	const chars = $derived(columnsOf(files));
 	let mainWidth = $state(0);
-	const wide = $derived(mainWidth - 32 >= diffWidth(layout, chars) + 32 * 16);
+	const wide = $derived(mainWidth - 16 >= diffWidth(layout, chars) + 32 * 16);
 
 	// stuck, a step's column sits in the middle of the screen below the page's header,
 	// at the top once it's as tall as that
@@ -202,7 +209,7 @@
 	function trackPast(id: string) {
 		return (el: HTMLElement) => {
 			// the page header, the changes bar and the step's sticky title
-			const covered = 136;
+			const covered = 140;
 			const observer = new IntersectionObserver(
 				([entry]) => {
 					const top = entry.rootBounds?.top ?? covered;
@@ -222,15 +229,27 @@
 	// waits a moment so the pointer can cross from one to the other
 	let described = $state<string | null>(null);
 	let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+	/** opened by hovering, so the click that usually follows keeps it open */
+	let byHover = false;
 
 	function hover(event: PointerEvent, id: string | null) {
 		// touch has no hover, a tap toggles it like a click
 		if (event.pointerType === 'touch') return;
 		clearTimeout(hoverTimer);
-		hoverTimer = setTimeout(() => (described = id), id ? 120 : 200);
+		hoverTimer = setTimeout(
+			() => {
+				described = id;
+				byHover = id !== null;
+			},
+			id ? 120 : 200
+		);
 	}
 
 	$effect(() => () => clearTimeout(hoverTimer));
+
+	// the card opens down to its description quickly and from the start, closing faster still
+	const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const drop = (duration: number) => ({ duration: still() ? 0 : duration, easing: quintOut });
 
 	// its ⓘ is gone once the description is back in view, and
 	// the panel mustn't pop open again by itself when the ⓘ returns
@@ -245,6 +264,7 @@
 
 	// j / k step through sections
 	function onkeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape' && described) return (described = null);
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
 		if (typing(event)) return;
 		if (event.key !== 'j' && event.key !== 'k') return;
@@ -262,12 +282,21 @@
 	}
 </script>
 
-<svelte:window {onkeydown} bind:innerHeight />
+<!-- an open description closes on a click outside its card, as a popover would -->
+<svelte:window
+	{onkeydown}
+	onpointerdown={(e) => {
+		if (described && !(e.target as Element).closest('[data-described]')) described = null;
+	}}
+	bind:innerHeight
+/>
 
 <SidebarLayout
 	{layout}
 	{chars}
 	{stickyTop}
+	{panelTop}
+	{toolbar}
 	asideClass="overflow-y-auto"
 	{panel}
 	bind:panelWidth
@@ -308,7 +337,7 @@
 							{@const here = section.id === reading.current}
 							<div
 								class={[
-									'group relative flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-subtle',
+									'group relative flex items-start gap-2.5 rounded-[calc(var(--radius-2xl)-8px)] px-2 py-1.5 hover:bg-subtle',
 									here && 'current bg-subtle'
 								]}
 								data-step={section.id}
@@ -370,7 +399,7 @@
 								{#if !wide}
 									<button
 										type="button"
-										class="mt-px grid size-[18px] shrink-0 place-items-center rounded-md text-faint hover:bg-line hover:text-fg"
+										class="mt-px grid size-[18px] shrink-0 place-items-center rounded-full text-faint hover:bg-line hover:text-fg"
 										aria-expanded={listed(section)}
 										aria-label="{listed(section) ? 'Hide' : 'Show'} the files of {section.title}"
 										title={listed(section) ? 'Hide its files' : 'Show its files'}
@@ -435,13 +464,13 @@
 	{/snippet}
 
 	<main
-		class={['flex min-w-0 flex-col p-4 pb-40', wide ? 'gap-24' : 'gap-16']}
+		class={['flex min-w-0 flex-col px-2 pt-2 pb-40', wide ? 'gap-24' : 'gap-16']}
 		bind:clientWidth={mainWidth}
 	>
 		<!-- clipped to its corners, so a header band can run edge to edge -->
 		<div
 			class={[
-				'page-column overflow-clip rounded-xl border border-line bg-surface',
+				'page-column overflow-clip rounded-2xl border border-line bg-surface',
 				// as wide as the steps below it
 				wide ? ['two-col', layout] : layout === 'unified' && 'narrow'
 			]}
@@ -493,9 +522,16 @@
 
 		{#each sections as section (section.id)}
 			{@const done = isReviewed(section)}
-			{#if wide}
-				<!-- what the step is about in a column of its own, staying beside its diffs -->
-				<article id={section.id} class={['page-column two-col grid scroll-mt-23 gap-16', layout]}>
+			<!-- the id is on the step. Only what's around its diffs changes with the room there is,
+			     building them again as a panel opened and the page narrowed took a quarter second -->
+			<article
+				id={section.id}
+				class={wide
+					? ['page-column two-col grid scroll-mt-23 gap-16', layout]
+					: 'flex scroll-mt-23 flex-col'}
+			>
+				{#if wide}
+					<!-- what the step is about in a column of its own, staying beside its diffs -->
 					<div
 						class="sticky flex flex-col gap-3 self-start overflow-x-hidden overflow-y-auto pb-1"
 						style:top="{columnTop(section.id)}px"
@@ -514,93 +550,109 @@
 						<div class="-mx-1.5 flex flex-col">{@render fileRows(section)}</div>
 						<div>{@render reviewButton(section, done)}</div>
 					</div>
-					<div class="flex min-w-0 flex-col gap-4">{@render diffs(section, false)}</div>
-				</article>
-			{:else}
-				<!-- the id is on the step, its title sticks under the changes bar while the step is on screen -->
-				<article id={section.id} class="flex scroll-mt-23 flex-col">
-					<!-- a direct child of the step, so it stays stuck through all of the step's diffs -->
-					<header class="sticky top-23 z-[12] -mx-4 border-b border-line bg-canvas px-5">
-						<!-- the line runs across the page, what's on it stays in the step's column -->
+				{:else}
+					<!-- its title sticks under the changes bar while the step is on screen. A direct child of the step, so it stays stuck through all of the step's diffs. Over
+					     the bar's fade, its canvas taking the fade's place, and under the bar itself -->
+					<header class="sticky top-23 z-[16] -mx-2 h-12 bg-canvas px-2">
+						<!-- a card floating over the diffs, opening down over them for the description -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
-							class={[
-								'page-column flex h-11 items-center gap-2.5',
-								layout === 'unified' && 'narrow'
-							]}
+							class={['relative h-full', 'page-column', layout === 'unified' && 'narrow']}
+							onpointerenter={(e) => described === section.id && hover(e, section.id)}
+							onpointerleave={(e) => described === section.id && hover(e, null)}
 						>
-							<span
-								class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
-								>{number.get(section.id)}</span
+							<div
+								data-described={described === section.id || undefined}
+								class={[
+									'absolute inset-x-0 top-0 rounded-2xl border border-line bg-surface transition-shadow duration-150 ease-out',
+									described === section.id ? 'shadow-float' : 'shadow-card'
+								]}
 							>
-							<h2
-								class={['min-w-0 text-[15px] font-semibold tracking-tight', done && 'text-muted']}
-							>
-								<!-- back to the top of the step, for the description in place -->
-								<button
-									type="button"
-									class="block max-w-full truncate text-left"
-									title={section.title}
-									onclick={() =>
-										document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
-									>{section.title}</button
-								>
-							</h2>
-							{#if past[section.id]}
-								<!-- the description once it has scrolled away, over the diff rather than pushing it -->
-								<Popover
-									bind:open={
-										() => described === section.id, (open) => (described = open ? section.id : null)
-									}
-									onpointerenter={(e) => hover(e, section.id)}
-									onpointerleave={(e) => hover(e, null)}
-									class="max-h-[60vh] w-[min(40rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-line bg-surface p-4 shadow-float"
-								>
-									{#snippet trigger(props)}
+								<div class="flex h-10 items-center gap-2.5 px-2">
+									<span
+										class="grid size-6 shrink-0 place-items-center rounded-full border border-line text-[11px] font-medium text-muted tabular-nums"
+										>{number.get(section.id)}</span
+									>
+									<h2
+										class={[
+											'min-w-0 text-[15px] font-semibold tracking-tight',
+											done && 'text-muted'
+										]}
+									>
+										<!-- back to the top of the step, for the description in place -->
+										<button
+											type="button"
+											class="block max-w-full truncate text-left"
+											title={section.title}
+											onclick={() =>
+												document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' })}
+											>{section.title}</button
+										>
+									</h2>
+									{#if past[section.id]}
+										<!-- the description once it has scrolled away, over the diff rather than pushing it -->
 										<Button
-											{...props}
 											onpointerenter={(e) => hover(e, section.id)}
-											onpointerleave={(e) => hover(e, null)}
-											onclick={(e) => {
-												// already open from hovering, the click keeps it open rather than closing it
-												if (described === section.id) e.preventDefault();
+											// only calls off an opening, once open it's leaving the card that closes it
+											onpointerleave={(e) => described !== section.id && hover(e, null)}
+											onclick={() => {
+												clearTimeout(hoverTimer);
+												described = described === section.id && !byHover ? null : section.id;
+												byHover = false;
 											}}
 											variant="ghost"
 											size="sm"
 											icon
-											class="aria-expanded:bg-subtle aria-expanded:text-fg"
+											pressed={described === section.id}
+											aria-expanded={described === section.id}
+											aria-controls="{section.id}-described"
 											title="Show what this step is about"
 											aria-label="Show the description of {section.title}"
 										>
 											<svg
 												viewBox="0 0 16 16"
-												class="size-3.5"
+												class={[
+													'size-3.5 transition-transform',
+													described === section.id && 'rotate-180'
+												]}
 												fill="none"
 												stroke="currentColor"
 												stroke-width="1.5"
 												stroke-linecap="round"
-												><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+												stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
 											>
 										</Button>
-									{/snippet}
-									{@render description(section)}
-								</Popover>
-							{/if}
-							<span class="flex-1"></span>
-							{@render badges(section)}
-							{@render reviewButton(section, done)}
+									{/if}
+									<span class="flex-1"></span>
+									{@render badges(section)}
+									{@render reviewButton(section, done)}
+								</div>
+								{#if described === section.id}
+									<div
+										id="{section.id}-described"
+										class="max-h-[60vh] overflow-y-auto pr-4 pb-4 pl-[43px]"
+										in:slide={drop(180)}
+										out:slide={drop(120)}
+									>
+										{@render description(section)}
+									</div>
+								{/if}
+							</div>
 						</div>
 					</header>
-					<div class="flex flex-col gap-3 pt-3">
+				{/if}
+				<div class={wide ? 'flex min-w-0 flex-col gap-4' : 'flex flex-col gap-3 pt-1'}>
+					{#if !wide}
 						<div
-							class={['page-column pr-1 pl-[35px]', layout === 'unified' && 'narrow']}
+							class={['page-column pr-1 pl-[43px]', layout === 'unified' && 'narrow']}
 							{@attach trackPast(section.id)}
 						>
 							{@render description(section)}
 						</div>
-						{@render diffs(section, true)}
-					</div>
-				</article>
-			{/if}
+					{/if}
+					{@render diffs(section, !wide)}
+				</div>
+			</article>
 		{/each}
 	</main>
 </SidebarLayout>
@@ -627,7 +679,7 @@
 	<button
 		type="button"
 		class={[
-			'flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
+			'flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium shadow-raised active:shadow-pressed',
 			done
 				? 'border-add/40 bg-add/10 text-add'
 				: 'border-line bg-surface text-muted hover:border-muted hover:text-fg'
@@ -659,7 +711,7 @@
 			anchor="{section.id}-{group.file.id}"
 			href={fileHref(group.file)}
 			{inSection}
-			floating={!inSection}
+			floating
 			{layout}
 			{virtualize}
 			{threads}

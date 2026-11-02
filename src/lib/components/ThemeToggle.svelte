@@ -17,7 +17,7 @@
 	}
 
 	const item = (active: boolean) => [
-		'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] hover:bg-subtle',
+		'flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-[12px] hover:bg-subtle',
 		active ? 'font-medium text-fg' : 'text-muted hover:text-fg'
 	];
 </script>
@@ -58,7 +58,7 @@
 <Popover
 	bind:open
 	align="end"
-	class="w-40 rounded-xl border border-line bg-surface p-1 shadow-float"
+	class="w-40 rounded-2xl border border-line bg-surface p-1 shadow-float"
 >
 	{#snippet trigger(props)}
 		<Button {...props} size="lg" icon pressed={open} title="Theme" aria-label="Theme">
@@ -84,7 +84,7 @@
 		bind:open={themesOpen}
 		side="left"
 		offset={6}
-		class="max-h-[60vh] w-40 overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-float"
+		class="max-h-[60vh] w-40 overflow-y-auto rounded-2xl border border-line bg-surface p-1 shadow-float"
 	>
 		{#snippet trigger(props)}
 			<button {...props} class={item(themesOpen)}>

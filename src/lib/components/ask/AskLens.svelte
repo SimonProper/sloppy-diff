@@ -211,7 +211,7 @@
 		{:else}
 			<QuestionList {threads} {grouped} actions={closeButton}>
 				<!-- a new chat, about lines picked in the diff or the whole change -->
-				<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-ask-field>
+				<div class="shrink-0 px-2 pt-1 pb-2" data-ask-field>
 					<AddedLines {threads} id="" onjump={jumpTo} />
 					<AskField
 						bind:value={threads.newChat}

@@ -98,7 +98,7 @@
 </script>
 
 <!-- under the card it opened from, the commit as GitHub would write it, there to change -->
-<section class="rounded-xl border border-line bg-surface p-5">
+<section class="rounded-2xl border border-line bg-surface p-5">
 	<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px]">
 		<!-- on one baseline, the mono name is smaller than the label -->
 		<span class="flex min-w-0 items-baseline gap-2">

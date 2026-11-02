@@ -9,26 +9,20 @@
 		'relative flex shrink-0',
 		// navigation has no box, a setting does
 		!ghost && 'border border-line bg-surface',
-		{ sm: 'rounded-md p-px', md: 'rounded-lg p-0.5', lg: 'rounded-lg p-0.5' }[size]
+		['rounded-full', { sm: 'p-px', md: 'p-0.5', lg: 'p-0.5' }[size]]
 	];
 
 	const itemVariants = ({ size, text, active }: { size: Size; text: Text; active: boolean }) => [
 		'relative flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors duration-200',
-		{ sm: 'h-5 rounded-[calc(var(--radius-md)-1px)]', md: 'h-6 rounded-md', lg: 'h-7 rounded-md' }[
-			size
-		],
+		['rounded-full', { sm: 'h-5', md: 'h-6', lg: 'h-7' }[size]],
 		{ sm: 'px-2 text-[11.5px]', md: 'px-2.5 text-[12px]', icon: 'px-1.5' }[text],
 		active ? 'text-fg' : 'text-muted hover:text-fg'
 	];
 
 	/** the active option's background, sliding between them */
 	const pillVariants = ({ size }: { size: Size }) => [
-		'absolute left-0 bg-subtle transition-[translate,width] duration-200 ease-out motion-reduce:transition-none',
-		{
-			sm: 'inset-y-px rounded-[calc(var(--radius-md)-1px)]',
-			md: 'inset-y-0.5 rounded-md',
-			lg: 'inset-y-0.5 rounded-md'
-		}[size]
+		'absolute left-0 rounded-full bg-subtle transition-[translate,width] duration-200 ease-out motion-reduce:transition-none',
+		{ sm: 'inset-y-px', md: 'inset-y-0.5', lg: 'inset-y-0.5' }[size]
 	];
 </script>
 

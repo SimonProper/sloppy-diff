@@ -1,8 +1,14 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { Layout } from '$lib/diff/split';
 	import SidebarLayout from './SidebarLayout.svelte';
 
-	let { layout }: { layout: Layout } = $props();
+	let {
+		layout,
+		stickyTop,
+		panelTop,
+		toolbar
+	}: { layout: Layout; stickyTop?: number; panelTop?: number; toolbar?: Snippet } = $props();
 
 	// fixed shapes, so it reads as code and doesn't jump between renders. A line is its
 	// width in percent, marked as added or removed by its sign
@@ -15,7 +21,7 @@
 </script>
 
 <div role="status" aria-label="Loading the diff" aria-busy="true">
-	<SidebarLayout {layout}>
+	<SidebarLayout {layout} {stickyTop} {panelTop} {toolbar}>
 		{#snippet aside()}
 			<div class="flex flex-col gap-2.5 px-4 pt-4">
 				<div class="bone h-2.5 w-12 rounded-full"></div>
@@ -32,14 +38,14 @@
 				<div class="bone size-4 shrink-0 rounded-sm"></div>
 			{/each}
 		{/snippet}
-		<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
+		<main class="flex min-w-0 flex-col gap-4 px-2 pt-2 pb-24">
 			<!-- where the changes bar sits -->
-			<div class="-mx-4 -mt-4 flex h-11 items-center gap-2 border-b border-line px-4">
+			<div class="-mx-2 -mt-2 flex h-11 items-center gap-2 border-b border-line px-2">
 				<div class="bone h-6 w-40 rounded-lg"></div>
 				<div class="bone ml-auto h-6 w-24 rounded-lg"></div>
 			</div>
 			{#each FILES as file, i (i)}
-				<section class="overflow-clip rounded-xl border border-line bg-surface">
+				<section class="overflow-clip rounded-2xl border border-line bg-surface">
 					<header class="flex h-10 items-center gap-2.5 border-b border-line px-3">
 						<div class="bone size-3.5 rounded-sm"></div>
 						<div class="bone h-3 rounded-full {file.path}"></div>

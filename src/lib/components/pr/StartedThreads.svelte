@@ -41,7 +41,7 @@
 <ul class="mt-3 flex flex-col gap-2">
 	{#each shown as thread (thread.id)}
 		{@const { first, skipped, last } = excerpt(thread)}
-		<li class="group overflow-hidden rounded-md border border-line">
+		<li class="group overflow-hidden rounded-xl border border-line">
 			<!-- resolved says so in a pill, a faded thread would only look disabled -->
 			<p
 				class="flex items-center gap-1.5 border-b border-line bg-subtle px-3 py-1.5 text-[11px] text-faint"

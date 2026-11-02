@@ -16,7 +16,7 @@
 </script>
 
 {#if items.length}
-	<ul class="flex flex-wrap gap-1 pb-1.5">
+	<ul class="flex flex-wrap gap-1.5 pb-2">
 		{#each items as item, n (n)}
 			<li class="min-w-0">
 				<LinesChip anchor={item} {onjump} onremove={() => threads.attached[id].splice(n, 1)} />

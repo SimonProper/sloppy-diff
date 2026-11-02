@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { buttonClass } from '$lib/components/Button.svelte';
 	import { afterNavigate } from '$app/navigation';
 	import FileDiff from '$lib/components/FileDiff.svelte';
 	import { readText, writeText } from '$lib/storage';
@@ -216,7 +217,7 @@ Fill in this template, its values are the current ${current?.label || 'theme'}'s
 ${template}
 
 What they're for:
-- --canvas is the page, --surface panels and the code, --subtle hovers and code blocks, --line borders, --sidebar the lists beside the diff (the page's colour unless set).
+- --canvas is the page, --surface panels and the code, --subtle hovers and code blocks, --line borders, --sidebar the panels beside the diff (the surface unless set).
 - --fg is text, --muted secondary text, --faint the quietest (line numbers, hints). --fg and --muted have to stay readable on --surface.
 - --add, --del, --mod and --move mark added, removed, modified and moved code. Line backgrounds are mixed from them over --surface, so pick hues that stay clear there.
 - --twp-* colour the syntax. Any other --twp-<token> can be set too, such as --twp-constant, --twp-variable, --twp-parameter, --twp-builtin, --twp-attribute or --twp-regex.
@@ -243,7 +244,7 @@ The theme I want: `;
 	<button
 		type="button"
 		class={[
-			'grid size-5 shrink-0 place-items-center rounded-sm text-faint hover:text-fg',
+			'grid size-5 shrink-0 place-items-center rounded-full text-faint hover:text-fg',
 			!tweaked.includes(name) && 'invisible'
 		]}
 		title={theme.isBuiltIn(editing) ? `Back to ${current?.label}'s` : 'Back to how it was copied'}
@@ -268,12 +269,7 @@ The theme I want: `;
 <header
 	class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 shadow-strip"
 >
-	<a
-		href={back}
-		class="grid size-8 place-items-center rounded-lg border border-line bg-control text-muted shadow-raised hover:border-muted hover:text-fg active:shadow-pressed"
-		title="Back"
-		aria-label="Back"
-	>
+	<a href={back} class={buttonClass({ size: 'lg', icon: true })} title="Back" aria-label="Back">
 		<svg
 			viewBox="0 0 16 16"
 			class="size-3.5"

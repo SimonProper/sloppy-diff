@@ -20,7 +20,7 @@
 
 <Popover
 	bind:open
-	class="w-[32rem] overflow-hidden rounded-xl border border-line bg-surface shadow-float"
+	class="w-[32rem] overflow-hidden rounded-2xl border border-line bg-surface shadow-float"
 >
 	{#snippet trigger(props)}
 		<Button {...props} size="lg" class="max-w-44" pressed={open} title={repo}>

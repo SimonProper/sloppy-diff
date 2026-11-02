@@ -415,11 +415,11 @@
 		// rounded bottom still under it, the padding taken back by the lines: any less and
 		// the corners would be cut, as it is it ends like a folded file
 		floating
-			? ['relative rounded-xl shadow-card', open && 'pb-[var(--radius-xl)]']
-			: 'relative overflow-clip rounded-xl border border-line bg-surface shadow-card',
+			? ['relative rounded-2xl shadow-card', open && 'pb-[var(--radius-2xl)]']
+			: 'relative overflow-clip rounded-2xl border border-line bg-surface shadow-card',
 		'page-column',
 		layout === 'unified' && 'narrow',
-		inSection ? 'scroll-mt-38' : floating ? 'scroll-mt-32' : 'scroll-mt-28',
+		inSection ? 'scroll-mt-39' : floating ? 'scroll-mt-32' : 'scroll-mt-28',
 		threads && 'ask',
 		threads && !picked && 'unpicked'
 	]}
@@ -436,17 +436,17 @@
 			floating
 				? 'bg-canvas shadow-[0_-1rem_0_var(--canvas)]'
 				: ['bg-surface shadow-strip', open && 'border-b border-line'],
-			// below the header and the sticky changes bar, and a guide step's title (44px)
+			// below the header and the sticky changes bar, and a guide step's title (48px)
 			sticky && 'sticky z-10',
-			sticky && (inSection ? 'top-34' : floating ? 'top-27' : 'top-23')
+			sticky && (inSection ? 'top-35' : floating ? 'top-27' : 'top-23')
 		]}
 	>
 		<div
 			class={[
 				'flex h-10 items-center gap-2.5 px-3 text-[13px]',
 				floating && [
-					'rounded-t-xl border border-line bg-surface shadow-strip',
-					!open && 'rounded-b-xl'
+					'rounded-t-2xl border border-line bg-surface shadow-strip',
+					!open && 'rounded-b-2xl'
 				]
 			]}
 		>
@@ -534,7 +534,7 @@
 					<button
 						type="button"
 						class={[
-							'grid size-6 place-items-center rounded-md hover:bg-subtle hover:text-fg',
+							'grid size-6 place-items-center rounded-full hover:bg-subtle hover:text-fg',
 							showWhole ? 'bg-subtle text-fg' : 'text-muted',
 							reading && 'animate-pulse'
 						]}
@@ -572,7 +572,7 @@
 				{#if href}
 					<a
 						{href}
-						class="grid size-6 place-items-center rounded-md text-muted hover:bg-subtle hover:text-fg"
+						class="grid size-6 place-items-center rounded-full text-muted hover:bg-subtle hover:text-fg"
 						aria-label="View file"
 						title="View the file in the diff"
 					>
@@ -611,7 +611,7 @@
 		<div
 			class={[
 				floating &&
-					'-mb-[var(--radius-xl)] overflow-clip rounded-b-xl border border-t-0 border-line bg-surface'
+					'-mb-[var(--radius-2xl)] overflow-clip rounded-b-2xl border border-t-0 border-line bg-surface'
 			]}
 		>
 			{#if file.binary}
@@ -769,7 +769,7 @@
 			{#each offers as intent (intent)}
 				<button
 					type="button"
-					class="flex h-[26px] items-center gap-1.5 rounded-lg border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
+					class="flex h-[26px] items-center gap-1.5 rounded-full border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
 					onpointerdown={(e) => e.preventDefault()}
 					title={intent === 'ask' ? '⇧ for a new chat' : undefined}
 					onclick={(e) => acceptOffer(threads?.review ? intent : undefined, e.shiftKey)}
@@ -965,12 +965,6 @@
 {/snippet}
 
 <style>
-	/* only the section centres itself on the panels' edges. Set again under it, so a panel
-	   opening restyles the section, not every line in it */
-	section > :global(*) {
-		--left: 0px;
-		--right: 0px;
-	}
 	/* the gutter says a line was added or removed, with a bar against the code: solid
 	   when added, dashed when removed, so it tells apart without the colour. The code
 	   itself stays on the surface so the changed tokens are the only colour in it, and

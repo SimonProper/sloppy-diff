@@ -25,7 +25,7 @@
 <Popover
 	bind:open
 	align="end"
-	class="max-h-[60vh] w-[26rem] overflow-y-auto rounded-xl border border-line bg-surface p-1 shadow-float"
+	class="max-h-[60vh] w-[26rem] overflow-y-auto rounded-2xl border border-line bg-surface p-1 shadow-float"
 >
 	{#snippet trigger(props)}
 		<Button {...props} class="ml-3" pressed={open} title="Go to a review comment">
@@ -38,7 +38,7 @@
 		<button
 			type="button"
 			class={[
-				'flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-1.5 text-left hover:bg-subtle',
+				'flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-1.5 text-left hover:bg-subtle',
 				thread.isResolved && 'opacity-60'
 			]}
 			onclick={() => go(thread)}

@@ -764,7 +764,7 @@
 			{/if}
 			<button
 				type="button"
-				class="flex h-8 items-center gap-1.5 rounded-lg border border-faint bg-accent/8 px-2.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
+				class="flex h-8 items-center gap-1.5 rounded-full border border-faint bg-accent/8 px-3.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
 				title={guideJob.running
 					? 'Writing a guide, open to follow or cancel it'
 					: guideJob.failure || 'Generate or open review guides'}
@@ -805,72 +805,82 @@
 		</div>
 	</header>
 
-	{#if hasViewNavigation}
-		{@render viewToolbar()}
-	{/if}
-
+	<!-- Every comparison view shares this position, including views without saved content: a
+	     band of the page's own colour, the controls floating in it lined up with the diffs and
+	     what scrolls under it fading in. Between the panels in a view that has them (toolbar on
+	     SidebarLayout), over the whole page in one that doesn't (band) -->
 	{#snippet viewToolbar()}
-		<!-- Every comparison view shares this position, including views without saved content. -->
-		<nav
-			aria-label="Review views"
-			class="sticky top-12 z-[19] flex h-11 items-center border-b border-line bg-canvas px-4 shadow-strip"
-		>
-			{@render viewTabs()}
-			<div class="ml-auto flex shrink-0 items-center">
-				{#if view === 'overview' && pr}
-					<a
-						class="text-[12px] text-muted hover:text-fg"
-						href={pr.url}
-						target="_blank"
-						rel="noopener noreferrer">Open on GitHub ↗</a
-					>
-				{:else if view === 'files' || (view === 'guide' && diff.guide)}
-					<ChangesToolbar
-						mode={data.changeMode}
-						summary={diff.changes}
-						onchange={setChanges}
-						bind:layout={
-							() => shownLayout,
-							(next) => {
-								layout = next;
-								splitAnyway = next === 'split';
+		<nav aria-label="Review views" class="h-full bg-canvas px-2">
+			<div class="page-column flex h-full items-center">
+				{@render viewTabs()}
+				<div class="ml-auto flex shrink-0 items-center">
+					{#if view === 'overview' && pr}
+						<a
+							class="text-[12px] text-muted hover:text-fg"
+							href={pr.url}
+							target="_blank"
+							rel="noopener noreferrer">Open on GitHub ↗</a
+						>
+					{:else if view === 'files' || (view === 'guide' && diff.guide)}
+						<ChangesToolbar
+							mode={data.changeMode}
+							summary={diff.changes}
+							onchange={setChanges}
+							bind:layout={
+								() => shownLayout,
+								(next) => {
+									layout = next;
+									splitAnyway = next === 'split';
+								}
 							}
-						}
-						bind:width
-					/>
+							bind:width
+						/>
+					{/if}
+				</div>
+				{#if view === 'files' && pr?.threads.length}
+					<ReviewNav threads={pr.threads} files={diff.files} />
+				{/if}
+				{#if asking && (view === 'files' || view === 'overview' || (view === 'guide' && diff.guide))}
+					<!-- the agent panel: every chat about this diff, and a new one about the whole change -->
+					<Button
+						class="ml-3"
+						pressed={threads.panel}
+						title="{threads.panel ? 'Close' : 'Open'} the agent panel  q"
+						aria-pressed={threads.panel}
+						onclick={() => (threads.panel ? threads.close() : threads.show())}
+					>
+						{#if threads.running}
+							<span class="spin size-3 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
+							></span>
+							{threads.running} answering
+						{:else}
+							Agent
+							{#if threads.list.length}
+								<span class="text-faint tabular-nums">{threads.list.length}</span>
+							{/if}
+						{/if}
+					</Button>
 				{/if}
 			</div>
-			{#if view === 'files' && pr?.threads.length}
-				<ReviewNav threads={pr.threads} files={diff.files} />
-			{/if}
-			{#if asking && (view === 'files' || view === 'overview' || (view === 'guide' && diff.guide))}
-				<!-- the agent panel: every chat about this diff, and a new one about the whole change -->
-				<Button
-					class="ml-3"
-					pressed={threads.panel}
-					title="{threads.panel ? 'Close' : 'Open'} the agent panel  q"
-					aria-pressed={threads.panel}
-					onclick={() => (threads.panel ? threads.close() : threads.show())}
-				>
-					{#if threads.running}
-						<span class="spin size-3 rounded-full border-[1.5px] border-ink-soft/40 border-t-ink"
-						></span>
-						{threads.running} answering
-					{:else}
-						Agent
-						{#if threads.list.length}
-							<span class="text-faint tabular-nums">{threads.list.length}</span>
-						{/if}
-					{/if}
-				</Button>
-			{/if}
 		</nav>
+	{/snippet}
+
+	{#snippet band()}
+		{#if hasViewNavigation}
+			<div class="sticky top-12 z-[19] h-11">
+				{@render viewToolbar()}
+				<!-- what scrolls under the bar fades into it rather than being cut off -->
+				<div
+					class="pointer-events-none absolute inset-x-0 top-full h-4 bg-linear-to-b from-canvas to-transparent"
+				></div>
+			</div>
+		{/if}
 	{/snippet}
 
 	<!-- tabs are a way around, no box: the settings beside them have one -->
 	{#snippet viewTabs()}
 		{#if tabs.length > 1}
-			<SegmentedControl ghost options={tabs} value={urlView} onchange={switchView} label="View">
+			<SegmentedControl options={tabs} value={urlView} onchange={switchView} label="View">
 				{#snippet after(option)}
 					{#if option.value === 'guide' && diff.guide}
 						<span class="size-1.5 rounded-full bg-accent" title="A guide exists for this range"
@@ -914,7 +924,7 @@
 
 	{#snippet saved()}
 		{#if data.guides.length}
-			<div class="mt-6 w-full max-w-md rounded-xl border border-line bg-surface p-2 text-left">
+			<div class="mt-6 w-full max-w-md rounded-2xl border border-line bg-surface p-2 text-left">
 				<p class="px-2 pt-1 pb-1.5 text-[10.5px] font-medium tracking-wide text-faint uppercase">
 					Saved guides
 				</p>
@@ -947,10 +957,15 @@
 		</div>
 	{:else if !ready || (loading.current && !keepPrList)}
 		<!-- the next diff streaming in, once it takes long enough to notice -->
-		<DiffSkeleton layout={shownLayout} />
+		<DiffSkeleton
+			layout={shownLayout}
+			{stickyTop}
+			panelTop={48}
+			toolbar={hasViewNavigation ? viewToolbar : undefined}
+		/>
 	{:else if diff.error}
 		<div class="flex flex-col items-center px-4 py-24">
-			<div class="w-full max-w-md rounded-xl border border-line bg-surface p-5">
+			<div class="w-full max-w-md rounded-2xl border border-line bg-surface p-5">
 				<p class="flex items-center gap-2 text-[13px] font-medium">
 					<span class="size-1.5 rounded-full bg-del"></span>
 					Couldn't read a diff
@@ -962,7 +977,7 @@
 			</div>
 			{#if !data.branches.length}
 				<div
-					class="mt-3 w-full max-w-md overflow-hidden rounded-xl border border-line bg-surface text-left"
+					class="mt-3 w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface text-left"
 				>
 					<RepoList
 						current={data.repo}
@@ -974,6 +989,7 @@
 			{@render saved()}
 		</div>
 	{:else if diff.mode === 'pr' && !pr}
+		{@render band()}
 		<!-- the list left for another comparison, before the skeleton shows -->
 		<PrList
 			prs={diff.prs}
@@ -981,6 +997,7 @@
 			href={(number) => url({ pr: String(number), view: null }, true)}
 		/>
 	{:else if view === 'explainer'}
+		{@render band()}
 		{#if range}
 			{#key JSON.stringify([data.repo, range.from, range.to])}
 				<ExplainerView
@@ -1000,6 +1017,7 @@
 			</div>
 		{/if}
 	{:else if view === 'map' && range}
+		{@render band()}
 		{#key JSON.stringify([data.repo, range.from, range.to])}
 			<ChangeMapView
 				repo={data.repo}
@@ -1015,6 +1033,8 @@
 			guide={diff.guide}
 			files={diff.files}
 			{stickyTop}
+			panelTop={48}
+			toolbar={viewToolbar}
 			layout={shownLayout}
 			{virtualize}
 			threads={asking}
@@ -1025,6 +1045,7 @@
 			onregenerate={guideHere}
 		/>
 	{:else if view === 'guide' && guidingHere && (guideJob.running || guideJob.done)}
+		{@render band()}
 		<div class="mx-auto flex w-[36rem] max-w-full flex-col gap-4 px-4 py-12">
 			<GuideRunning />
 			<div class="flex items-center justify-between gap-2">
@@ -1035,6 +1056,7 @@
 			</div>
 		</div>
 	{:else if view === 'guide'}
+		{@render band()}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			{#if pr}
 				<p class="text-[13px] font-medium">No guide for this pull request yet</p>
@@ -1058,6 +1080,7 @@
 			{#if !pr}{@render saved()}{/if}
 		</div>
 	{:else if diff.files.length === 0 && !sidebar}
+		{@render band()}
 		<div class="flex flex-col items-center px-4 py-24 text-center">
 			{@render nothing()}
 			{@render saved()}
@@ -1105,7 +1128,7 @@
 				<a
 					href="#{file.id}"
 					class={[
-						'grid shrink-0 place-items-center rounded-md p-0.5 hover:bg-subtle',
+						'grid shrink-0 place-items-center rounded-full p-1 hover:bg-subtle',
 						here && 'bg-subtle ring-1 ring-muted'
 					]}
 					aria-current={here ? 'location' : undefined}
@@ -1129,6 +1152,8 @@
 			layout={view === 'overview' ? 'unified' : shownLayout}
 			chars={columnsOf(diff.files)}
 			{stickyTop}
+			panelTop={48}
+			toolbar={viewToolbar}
 			aside={view === 'overview' ? prSidebar : fileSidebar}
 			rail={view === 'overview' ? undefined : fileRail}
 			sizeKey={view === 'overview' ? 'pr-sidebar-width' : undefined}
@@ -1137,7 +1162,7 @@
 			onpanelclose={() => asking?.close()}
 			bind:panelWidth
 		>
-			<main class="flex min-w-0 flex-col gap-4 p-4 pb-24">
+			<main class="flex min-w-0 flex-col gap-4 px-2 pt-2 pb-24">
 				{#if view === 'overview' && pr}
 					{#if loading.current}
 						<PrSkeleton />

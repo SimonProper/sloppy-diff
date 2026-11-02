@@ -33,7 +33,7 @@
 	<button
 		type="button"
 		class={[
-			'shrink-0 rounded-sm px-1 text-[11px] hover:bg-subtle hover:text-fg disabled:opacity-50',
+			'shrink-0 rounded-full px-1.5 text-[11px] hover:bg-subtle hover:text-fg disabled:opacity-50',
 			failure ? 'text-del' : 'text-muted'
 		]}
 		title={failure || undefined}

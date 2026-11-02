@@ -130,7 +130,7 @@ const UI = [
 ] as const;
 
 type Syntax = Exclude<(typeof TOKENS)[keyof typeof TOKENS], (typeof UI)[number]>;
-/** a theme can leave these out: moved keeps its default hue, the sidebar takes the canvas */
+/** a theme can leave these out: moved keeps its default hue, the sidebar takes the surface */
 type Optional = 'move' | 'sidebar';
 export type Roles = Record<Exclude<(typeof UI)[number], Optional> | Syntax, string> &
 	Partial<Record<Optional, string>>;

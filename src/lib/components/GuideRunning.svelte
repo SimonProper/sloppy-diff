@@ -60,7 +60,7 @@
 	<!-- the detail, flat and readable: what the agent looked at, latest last -->
 	{#if tools.length}
 		<ul
-			class="mt-2 flex h-36 flex-col justify-end gap-0.5 overflow-hidden rounded-xl border border-line bg-subtle/60 px-3 py-2.5 text-left"
+			class="mt-2 flex h-36 flex-col justify-end gap-0.5 overflow-hidden rounded-2xl border border-line bg-subtle/60 px-3 py-2.5 text-left"
 		>
 			{#each tools as tool, i (i)}
 				<li

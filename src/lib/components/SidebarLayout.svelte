@@ -26,7 +26,8 @@
 
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
+	import { quintOut } from 'svelte/easing';
 	import { typing } from '$lib/keys';
 	import { readText, writeText } from '$lib/storage';
 	import ResizeHandle, { storedSize } from './ResizeHandle.svelte';
@@ -34,6 +35,13 @@
 	interface Props {
 		/** combined height of the page header and shared view navigation, in pixels */
 		stickyTop?: number;
+		/** where the panels stick, the page header alone when the navigation is `toolbar` */
+		panelTop?: number;
+		/**
+		 * The view navigation, floating in the column between the panels rather than over the
+		 * whole page: the band from `panelTop` to `stickyTop`, the diffs scrolling under it
+		 */
+		toolbar?: Snippet;
 		/** how diffs are shown, split needs room for two sides */
 		layout: Layout;
 		/** columns of code the diffs always have room for, per side when split */
@@ -61,6 +69,8 @@
 
 	let {
 		stickyTop = 48,
+		panelTop = stickyTop,
+		toolbar,
 		layout,
 		chars = 100,
 		aside,
@@ -98,13 +108,15 @@
 	// read again for another kind of sidebar, dragging sets it until then
 	let stored = $derived<number | null>(storedSize(sizeKey));
 	let panel = $state<HTMLElement>();
+	/** the sidebar's column, which its width is dragged by */
+	let column = $state<HTMLElement>();
 	let toggleButton = $state<HTMLButtonElement>();
 	let probe: HTMLElement;
 	/** width of a character of code, measured since it depends on the font */
 	let char = $state(7.5);
 
 	/** the diffs and the page's padding around them */
-	const diffMin = $derived(diffWidth(layout, chars, char) + 32);
+	const diffMin = $derived(diffWidth(layout, chars, char) + 16);
 	/** no room for even the narrowest sidebar beside the diff */
 	const narrow = $derived(total > 0 && room - diffMin < MIN);
 
@@ -117,8 +129,10 @@
 	const max = $derived(Math.max(MIN, room - diffMin));
 	const width = $derived(Math.min(Math.max(stored ?? defaultWidth, MIN), max));
 
-	/** the rail's width */
-	const RAIL = 40;
+	/** the rail's width, its column's with the gap */
+	const RAIL = 48;
+	/** the panels are cards floating this far from the page's edges and its header */
+	const GAP = 8;
 	const FOLDED_KEY = 'sidebar-folded';
 	/** folded into the rail by hand, where there's room for it */
 	let folded = $state(readText(FOLDED_KEY) === 'true');
@@ -234,22 +248,47 @@
 		tip = null;
 	}
 
-	/** the right panel opening or closing, its column eases like the sidebar's */
-	let panelMoving = $state(false);
-	let panelTimer: ReturnType<typeof setTimeout> | undefined;
-	let panelWasOpen: boolean | null = null;
-	// before the DOM updates, so the transition is on when the column's width changes
-	$effect.pre(() => {
-		const isOpen = !!panelContent;
-		if (panelWasOpen !== null && isOpen !== panelWasOpen) {
-			panelMoving = true;
-			clearTimeout(panelTimer);
-			panelTimer = setTimeout(() => (panelMoving = false), 220);
-		}
-		panelWasOpen = isOpen;
+	/*
+	 * The columns change width at once: easing them laid out and restyled the page on every
+	 * frame. What moves is only moved, on the GPU: the right panel slides in and out over its
+	 * edge, and the diffs glide from where they were to where they are now
+	 */
+	const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+	const EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
+
+	const slide = (_node: Element) => ({
+		duration: reduced() ? 0 : 200,
+		easing: quintOut,
+		css: (t: number) => `transform: translateX(calc(${(1 - t) * 100}% + ${(1 - t) * 2 * GAP}px))`
 	});
 
-	$effect(() => () => (clearTimeout(tipTimer), clearTimeout(moveTimer), clearTimeout(panelTimer)));
+	const left = $derived(aside ? (rail ? RAIL : width) : 0);
+	/** the diffs, the page's column between the panels */
+	const middle = () => column?.nextElementSibling as HTMLElement | null | undefined;
+	const sample = () => middle()?.querySelector('.page-column') ?? middle();
+	let was: number | undefined;
+	// a panel or the sidebar opening or closing, not an edge dragged
+	const opening = () => void [!!panelContent, !!aside, rail];
+	// where they were, before the columns change
+	$effect.pre(() => {
+		opening();
+		untrack(() => (was = sample()?.getBoundingClientRect().left));
+	});
+	// and from there to where they are
+	$effect(() => {
+		opening();
+		untrack(() => {
+			const now = sample()?.getBoundingClientRect().left;
+			const shift = was === undefined || now === undefined ? 0 : was - now;
+			if (Math.abs(shift) < 1 || reduced()) return;
+			middle()?.animate([{ transform: `translateX(${shift}px)` }, { transform: 'none' }], {
+				duration: 200,
+				easing: EASE
+			});
+		});
+	});
+
+	$effect(() => () => (clearTimeout(tipTimer), clearTimeout(moveTimer)));
 
 	$effect(() => {
 		const measure = () => (char = probe.getBoundingClientRect().width / PROBE || char);
@@ -263,22 +302,24 @@
 
 <!-- resizing live is cheap, diffs off screen aren't laid out (see LazyBlock) -->
 <div
-	class={['columns relative grid', (moving || panelMoving) && 'moving-column']}
-	style:--left="{aside ? (rail ? RAIL : width) : 0}px"
+	class="columns relative grid overflow-x-clip"
+	style:--left="{left}px"
 	style:--right="{right}px"
 	bind:clientWidth={total}
 >
 	<!-- holds the sidebar's column, as a rail the sidebar floats over the diffs from here,
 	     above their sticky headers and below the page's -->
 	<div
+		bind:this={column}
 		class={[
 			'sticky',
 			floating && 'z-[18]',
 			// still a grid cell, so the diffs keep theirs
 			!aside && 'invisible overflow-hidden'
 		]}
-		style:top="{stickyTop}px"
-		style:height="calc(100dvh - {stickyTop}px)"
+		style:top="{panelTop}px"
+		style:height="calc(100dvh - {panelTop}px)"
+		style:padding={aside ? `${GAP}px 0 ${GAP}px ${GAP}px` : null}
 	>
 		<!-- as a rail the panel stays laid out at its open width, hidden under the rail's
 		     column, so opening only moves its edge and keeps its scroll and state. Docked in a
@@ -287,25 +328,35 @@
 		<aside
 			bind:this={panel}
 			class={[
-				'flex h-full flex-col border-r border-line bg-sidebar',
-				floating && 'rail absolute inset-y-0 left-0 overflow-hidden',
-				open && 'open shadow-float',
+				'flex flex-col overflow-hidden rounded-2xl border border-line bg-sidebar shadow-float',
+				floating ? 'rail absolute' : 'h-full',
+				open && 'open',
 				moving && 'moving',
 				instant && 'instant'
 			]}
-			style:width={rail ? `${open ? expanded : RAIL}px` : `${width}px`}
+			style:width="{(rail ? (open ? expanded : RAIL) : width) - GAP}px"
+			style:inset="{GAP}px auto {GAP}px {GAP}px"
 			{onclick}
 			onpointerover={rail ? onpointerover : undefined}
 			onpointerleave={rail ? hideTip : undefined}
 			onscrollcapture={rail ? hideTip : undefined}
 		>
-			<div class="flex h-full min-h-0 flex-col" style:width={floating ? `${expanded}px` : null}>
+			<div
+				class="flex h-full min-h-0 flex-col"
+				style:width={floating ? `${expanded - GAP}px` : null}
+			>
+				<!-- as a rail, centred on the toggle in its corner (19px down) rather than on itself -->
 				<div
-					class="flex h-11 shrink-0 items-center justify-between border-b border-line pr-2 pl-1 shadow-strip"
+					class={[
+						'flex h-11 shrink-0 items-center justify-between border-b border-line pr-2 pl-1 shadow-strip',
+						rail && 'pb-[5px]'
+					]}
 				>
 					{#if rail}
+						<!-- in the rail's rounded top, as far from its sides as from its top -->
 						<Button
 							bind:ref={toggleButton}
+							class="absolute top-[3px] left-[3px]"
 							variant="ghost"
 							size="lg"
 							icon
@@ -326,9 +377,8 @@
 								><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M6 2.5v11" /></svg
 							>
 						</Button>
-					{:else}
-						<span></span>
 					{/if}
+					<span></span>
 					{#if !collapsed}
 						<Button
 							variant="ghost"
@@ -377,42 +427,70 @@
 			{/if}
 		</aside>
 	</div>
-	{@render children()}
+	<div class="columns-middle min-w-0">
+		{#if toolbar}
+			<!-- above the diffs' sticky headers, below the rail opened over them -->
+			<div class="sticky z-[17]" style:top="{panelTop}px" style:height="{stickyTop - panelTop}px">
+				{@render toolbar()}
+			</div>
+			<!-- what scrolls under the bar fades into it rather than being cut off. Apart from the
+			     bar, so a guide step's title can stick over it and still go under the bar -->
+			<div
+				class="pointer-events-none sticky z-[15] -mb-4 h-4 bg-linear-to-b from-canvas to-transparent"
+				style:top="{stickyTop}px"
+			></div>
+		{/if}
+		{@render children()}
+	</div>
 
 	<!-- the question panel, a column of the page like the sidebar, resized from its left edge.
 	     Laid out at its full width, so opening only moves its edge and nothing in it reflows -->
 	<div
 		bind:this={rightPanel}
-		class="sticky overflow-x-clip"
-		style:top="{stickyTop}px"
-		style:height="calc(100dvh - {stickyTop}px)"
+		class="sticky"
+		style:top="{panelTop}px"
+		style:height="calc(100dvh - {panelTop}px)"
 	>
-		<div class="relative flex h-full flex-col" style:width="{panelSize}px">
+		<!-- held at the page's right edge, so closed it slides out over the diffs from where it
+		     was, the page clipping it there -->
+		<div
+			class="pointer-events-none absolute flex flex-col"
+			style:inset="{GAP}px {GAP}px {GAP}px auto"
+			style:width="{panelSize - GAP}px"
+		>
 			{#if panelContent}
-				<div class="absolute inset-y-0 left-0 w-px">
-					<ResizeHandle
-						bind:size={panelWidth}
-						key={PANEL_KEY}
-						panel={rightPanel}
-						orientation="vertical"
-						reverse
-						label="Resize the question panel"
-						min={PANEL_MIN}
-						max={PANEL_MAX}
-					/>
+				<div transition:slide class="pointer-events-auto relative flex min-h-0 flex-1 flex-col">
+					<div class="absolute inset-y-0 left-0 z-10 w-px">
+						<ResizeHandle
+							bind:size={panelWidth}
+							key={PANEL_KEY}
+							panel={rightPanel}
+							orientation="vertical"
+							reverse
+							label="Resize the question panel"
+							min={PANEL_MIN}
+							max={PANEL_MAX}
+							line={false}
+						/>
+					</div>
+					<div
+						class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line bg-sidebar shadow-float"
+					>
+						{@render panelContent()}
+					</div>
 				</div>
-				{@render panelContent()}
 			{/if}
 		</div>
 	</div>
 
 	{#if aside && !rail}
-		<!-- over the sidebar's border, the length of the page so it can be grabbed anywhere -->
+		<!-- over the sidebar's edge, the length of the page so it can be grabbed anywhere -->
 		<div class="absolute inset-y-0 w-px" style:left="{width - 1}px">
 			<ResizeHandle
 				bind:size={stored}
 				key={sizeKey}
-				{panel}
+				panel={column}
+				line={false}
 				orientation="vertical"
 				label="Resize the sidebar"
 				min={MIN}
@@ -453,32 +531,16 @@
 	.rail.instant {
 		transition: none;
 	}
-	/* registered so they ease, the diffs centre on the page with them (see FileDiff) */
-	@property --left {
-		syntax: '<length>';
-		inherits: true;
-		initial-value: 0px;
-	}
-	@property --right {
-		syntax: '<length>';
-		inherits: true;
-		initial-value: 0px;
-	}
+	/* the diffs centre on the page with them (see .page-column). They change at once, not
+	   eased: easing restyled the page on every frame */
 	.columns {
 		grid-template-columns: var(--left) minmax(0, 1fr) var(--right);
-	}
-	/* docking and folding: the column moves the diffs along with the panel's edge */
-	.moving-column {
-		transition:
-			--left 200ms cubic-bezier(0.23, 1, 0.32, 1),
-			--right 200ms cubic-bezier(0.23, 1, 0.32, 1);
 	}
 	.rail.moving {
 		transition-duration: 200ms, 150ms;
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.rail,
-		.moving-column {
+		.rail {
 			transition: box-shadow 150ms ease;
 		}
 	}

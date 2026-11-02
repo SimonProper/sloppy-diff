@@ -110,7 +110,7 @@
 		<p
 			class={[
 				'animate-pulse px-4 py-6 text-center text-[12.5px] text-muted',
-				!compact && 'rounded-xl border border-line bg-surface'
+				!compact && 'rounded-2xl border border-line bg-surface'
 			]}
 		>
 			Loading pull requests…
@@ -119,7 +119,7 @@
 		<p
 			class={[
 				'px-4 py-3.5 text-[12.5px] text-muted',
-				!compact && 'rounded-xl border border-line bg-surface'
+				!compact && 'rounded-2xl border border-line bg-surface'
 			]}
 		>
 			Couldn't list pull requests. They need
@@ -135,7 +135,7 @@
 		<p
 			class={[
 				'px-4 py-6 text-center text-[12.5px] text-muted',
-				!compact && 'rounded-xl border border-line bg-surface'
+				!compact && 'rounded-2xl border border-line bg-surface'
 			]}
 		>
 			No open pull requests
@@ -143,14 +143,14 @@
 	{:else}
 		<!-- not overflow-hidden, that would keep the filter from sticking -->
 		<div
-			class={compact ? 'flex min-h-0 flex-1 flex-col' : 'rounded-xl border border-line bg-surface'}
+			class={compact ? 'flex min-h-0 flex-1 flex-col' : 'rounded-2xl border border-line bg-surface'}
 		>
 			<!-- stays under the page's header while the list scrolls. Narrow, the views go under
 			     the filter -->
 			<div
 				class={compact
 					? 'flex flex-col gap-2 border-b border-line px-3 pb-3'
-					: 'sticky top-12 z-10 flex items-center gap-2 rounded-t-xl border-b border-line bg-surface p-2'}
+					: 'sticky top-12 z-10 flex items-center gap-2 rounded-t-2xl border-b border-line bg-surface p-2'}
 			>
 				<!-- the filter keeps focus, arrows move the active row -->
 				<input
@@ -177,7 +177,7 @@
 					class={[
 						'h-7 min-w-0 text-[12.5px] outline-none placeholder:text-faint',
 						compact
-							? 'w-full rounded-md border border-line bg-surface px-2 focus:border-muted'
+							? 'w-full rounded-full border border-line bg-surface px-3 focus:border-muted'
 							: 'flex-1 bg-transparent px-1.5'
 					]}
 				/>
@@ -218,7 +218,7 @@
 						class={[
 							'flex items-start gap-3',
 							// narrow, the text lines up with the filter's edge
-							compact ? 'rounded-md px-2 py-1.5 hover:bg-subtle' : 'rounded-lg px-3 py-2',
+							compact ? 'rounded-xl px-2 py-1.5 hover:bg-subtle' : 'rounded-xl px-3 py-2',
 							((marking && i === active) || (!filtering && pr.number === current)) && 'bg-subtle'
 						]}
 						onpointermove={() => {

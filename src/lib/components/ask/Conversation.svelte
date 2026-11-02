@@ -191,7 +191,7 @@
 	{#if confirming}
 		<button
 			type="button"
-			class="rounded-md bg-del/10 px-1.5 font-medium text-del hover:bg-del/15"
+			class="rounded-full bg-del/10 px-2 font-medium text-del hover:bg-del/15"
 			onclick={remove}
 			onblur={() => (confirming = false)}
 			{@attach (el) => el.focus()}>Delete question</button
@@ -447,7 +447,7 @@
 	</div>
 
 	<!-- the follow-up field, send turns to stop while the agent answers -->
-	<div class="shrink-0 px-3.5 pt-1 pb-3.5" data-followup data-ask-field>
+	<div class="shrink-0 px-2 pt-1 pb-2" data-followup data-ask-field>
 		<AddedLines {threads} id={thread.id} {onjump} />
 		<AskField
 			bind:value={() => threads.replies[thread.id] ?? '', (v) => (threads.replies[thread.id] = v)}

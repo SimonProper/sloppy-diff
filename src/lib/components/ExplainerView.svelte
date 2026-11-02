@@ -254,7 +254,7 @@
 	}
 </script>
 
-<main class="min-w-0 p-4 pb-12">
+<main class="min-w-0 px-2 pt-2 pb-12">
 	{#if loading}
 		<div class="flex items-center justify-center gap-2 py-24 text-[12px] text-muted" role="status">
 			<span
@@ -271,7 +271,7 @@
 			open
 			class={[
 				'explainer m-0 min-w-0 overflow-hidden border border-line bg-surface p-0 text-fg',
-				expanded ? 'expanded min-h-0 flex-col' : 'rounded-xl',
+				expanded ? 'expanded min-h-0 flex-col' : 'rounded-2xl',
 				explainer ? 'max-w-none' : 'mx-auto max-w-2xl'
 			]}
 			aria-label={explainer ? undefined : 'Visual explainer'}
@@ -358,7 +358,7 @@
 			{:else}
 				<div class="px-6 pt-8 pb-6 sm:px-8">
 					<div
-						class="mb-5 grid size-12 place-items-center rounded-xl border border-line bg-subtle text-accent"
+						class="mb-5 grid size-12 place-items-center rounded-2xl border border-line bg-subtle text-accent"
 						aria-hidden="true"
 					>
 						<svg
@@ -420,7 +420,7 @@
 					</div>
 					{#if tools.length}
 						<ul
-							class="mt-3 flex max-h-28 flex-col gap-1 overflow-hidden rounded-lg border border-line bg-surface px-3 py-2"
+							class="mt-3 flex max-h-28 flex-col gap-1 overflow-hidden rounded-xl border border-line bg-surface px-3 py-2"
 							aria-label="Recent generation activity"
 						>
 							{#each tools as tool, i (i)}
