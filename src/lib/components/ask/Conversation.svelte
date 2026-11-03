@@ -131,6 +131,14 @@
 		return suggestion.side === 'old' ? `${lines}, old side` : lines;
 	}
 
+	/** A suggestion to paste into an agent: where it's about, as `path:12-14`, above it. */
+	function copyText(suggestion: ShownSuggestion): string {
+		if (suggestion.kind === 'reply') return suggestion.body;
+		const { path, line, startLine, side } = suggestion;
+		const at = line === undefined ? '' : `:${startLine ? `${startLine}-` : ''}${line}`;
+		return `${path}${at}${side === 'old' ? ' (old side)' : ''}\n\n${suggestion.body}`;
+	}
+
 	/** The answer being written, in the place its message will take, so it stays the same element. */
 	type Item = Message & { live?: Live };
 	const items = $derived<Item[]>(
@@ -362,7 +370,7 @@
 																	<button
 																		type="button"
 																		class="hover:text-fg"
-																		onclick={() => copy(suggestion.body, key)}
+																		onclick={() => copy(copyText(suggestion), key)}
 																		>{copied === key ? 'Copied' : 'Copy'}</button
 																	>
 																	<span class="flex-1"></span>
