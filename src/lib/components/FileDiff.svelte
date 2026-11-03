@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import type { DiffFile, DiffLine, Hunk } from '$lib/diff/types';
 	import type { GuideNote } from '$lib/guide/types';
 	import { selectedSpan, span } from '$lib/ask/rows';
@@ -16,6 +16,8 @@
 	import { errorText } from '$lib/errors';
 	import { placeThreads, type ReviewMark } from '$lib/pr/marks';
 	import { chunk } from '$lib/chunk';
+	import { highlight, register } from '$lib/find.svelte';
+	import { watch } from '$lib/lazy';
 	import type { ReviewThread } from '$lib/pr/types';
 	import StatusBadge from './StatusBadge.svelte';
 	import StepChip, { type Step } from './StepChip.svelte';
@@ -94,7 +96,8 @@
 		!reviewed && ((remember ? storedOpen(remember, displayPath(file)) : undefined) ?? startsOpen)
 	);
 
-	let header: HTMLElement;
+	// only on the page while the file is near it, read from its own buttons
+	let header = $state<HTMLElement>() as HTMLElement;
 
 	/**
 	 * Collapsing a file read partway down would leave the page where the shorter file
@@ -122,6 +125,9 @@
 	const BLOCK = 100;
 	/** height of a row, leading-5; split rows can wrap so theirs is a guess until rendered */
 	const ROW = 20;
+	/** a file's header and a hunk's, for guessing a file's height before it's rendered */
+	const HEADER = 42;
+	const HUNK_TOP = 28;
 
 	// the longest line of each hunk sets its scroll width, which otherwise only counts
 	// the blocks that happen to be rendered and jumps as others come and go
@@ -180,6 +186,32 @@
 	// down the right edge of its lines
 
 	let root: HTMLElement;
+
+	/** the block a found line is in, rendered whether it's near the screen or not */
+	let revealing = $state<{ hunk: string; block: number } | null>(null);
+
+
+	$effect(() =>
+		register({
+			el: root,
+			hunks: () => hunks,
+			reveal: async (id, index) => {
+				const hunk = hunks.find((h) => h.id === id)!;
+				const line = hunk.lines[index];
+				const row =
+					layout === 'split'
+						? splitRows(hunk).findIndex((r) => r.left === line || r.right === line)
+						: index;
+				open = true;
+				near = true;
+				revealing = { hunk: id, block: Math.floor(row / BLOCK) };
+				await tick();
+				// a line on both sides of a split diff is found on the new one
+				const at = `[data-hunk="${id}"][data-index="${index}"]`;
+				return root.querySelector(`${at}:not([data-side="old"])`) ?? root.querySelector(at);
+			}
+		})
+	);
 
 	/** where each line sits in its hunk */
 	const lineIndex = $derived(
@@ -293,6 +325,39 @@
 
 	/** the review threads open in their card, and the marker it opened from */
 	let reviewOpen = $state<{ threads: ReviewThread[]; at: DOMRect } | null>(null);
+
+	// virtualised, a file far from the screen is only its section, as tall as it was: the
+	// component stays, with what it knows, the search and links still find it
+	// svelte-ignore state_referenced_locally
+	let near = $state(!virtualize);
+	/** its height when it was put away, for the layout it was in */
+	let measured = $state<{ px: number; layout: Layout } | null>(null);
+	/** what it's busy with stays on the page, a card open or lines offered for asking */
+	const busy = $derived(!!reviewOpen || !!offer || !!drag);
+	const estimate = $derived(
+		HEADER +
+			(open
+				? hunks.reduce(
+						(px, h) =>
+							px + HUNK_TOP + (layout === 'split' ? splitRows(h).length : h.lines.length) * ROW,
+						0
+					)
+				: 0)
+	);
+
+	$effect(() => {
+		if (!virtualize) {
+			near = true;
+			return;
+		}
+		return watch(root, (now) => {
+			if (now) near = true;
+			else if (near && !untrack(() => busy)) {
+				measured = { px: root.offsetHeight, layout };
+				near = false;
+			}
+		});
+	});
 	const openIds = $derived(new Set(reviewOpen?.threads.map((t) => t.id)));
 
 	/** Hovering a dot for a moment peeks at its answer. */
@@ -409,6 +474,7 @@
 	id={anchor ?? file.id}
 	data-path={file.newPath}
 	bind:this={root}
+	style:height={near ? null : `${measured?.layout === layout ? measured.px : estimate}px`}
 	class={[
 		// floating, the header and the lines are boxes of their own, so the header keeps its
 		// border and corners once it's stuck apart from the rest. It lets go with the lines'
@@ -428,359 +494,370 @@
 		if (threads && !drag) setTimeout(offerSelection);
 	}}
 >
-	<header
-		bind:this={header}
-		class={[
-			// floating, square behind its rounded box so what scrolls under doesn't show at the
-			// corners, and over the space above it once stuck, where its own lines would
-			floating
-				? 'bg-canvas shadow-[0_-1rem_0_var(--canvas)]'
-				: ['bg-surface shadow-strip', open && 'border-b border-line'],
-			// below the header and the sticky changes bar, and a guide step's title (48px)
-			sticky && 'sticky z-10',
-			sticky && (inSection ? 'top-35' : floating ? 'top-27' : 'top-23')
-		]}
-	>
-		<div
+	{#if near}
+		<header
+			bind:this={header}
 			class={[
-				'flex h-10 items-center gap-2.5 px-3 text-[13px]',
-				floating && [
-					'rounded-t-2xl border border-line bg-surface shadow-strip',
-					!open && 'rounded-b-2xl'
-				]
+				// floating, square behind its rounded box so what scrolls under doesn't show at the
+				// corners, and over the space above it once stuck, where its own lines would
+				floating
+					? 'bg-canvas shadow-[0_-1rem_0_var(--canvas)]'
+					: ['bg-surface shadow-strip', open && 'border-b border-line'],
+				// below the header and the sticky changes bar, and a guide step's title (48px)
+				sticky && 'sticky z-10',
+				sticky && (inSection ? 'top-35' : floating ? 'top-27' : 'top-23')
 			]}
 		>
-			<Button
-				variant="ghost"
-				size="sm"
-				icon
-				class="-ml-1"
-				aria-expanded={open}
-				aria-label={open ? 'Collapse file' : 'Expand file'}
-				onclick={toggle}
+			<div
+				class={[
+					'flex h-10 items-center gap-2.5 px-3 text-[13px]',
+					floating && [
+						'rounded-t-2xl border border-line bg-surface shadow-strip',
+						!open && 'rounded-b-2xl'
+					]
+				]}
 			>
-				<svg
-					viewBox="0 0 16 16"
-					class={['size-3.5 transition-transform', !open && '-rotate-90']}
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					stroke-linecap="round"
-					stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
+				<Button
+					variant="ghost"
+					size="sm"
+					icon
+					class="-ml-1"
+					aria-expanded={open}
+					aria-label={open ? 'Collapse file' : 'Expand file'}
+					onclick={toggle}
 				>
-			</Button>
-			<StatusBadge status={file.status} />
-			<span class="min-w-0 truncate font-mono text-[12.5px]">
-				{#if file.status === 'renamed' || file.status === 'copied'}
-					<span class="text-muted">{file.oldPath}</span>
-					<span class="px-1 text-faint">→</span>
-				{/if}
-				<span class="text-muted">{path.dir}</span><span class="font-medium">{path.name}</span>
-			</span>
-			{#if file.changes?.formattingOnly}
-				<span
-					class="shrink-0 rounded-md bg-mod/10 px-1.5 py-0.5 text-[10.5px] font-medium text-mod"
-					title="Only reformatted: the same code with different whitespace or line breaks"
-					>formatting only</span
-				>
-			{/if}
-			{#if only && hunks.length < file.hunks.length}
-				<span
-					class="shrink-0 text-[11px] text-faint tabular-nums"
-					title="{hunks.length} of the file's {file.hunks.length} hunks are in this step"
-					>{hunks.length}/{file.hunks.length}</span
-				>
-			{/if}
-			{#if also.length}
-				<span class="flex shrink-0 items-center gap-1 text-[11px] text-faint">
-					also in
-					{#each also as step (step.n)}<StepChip {...step} />{/each}
+					<svg
+						viewBox="0 0 16 16"
+						class={['size-3.5 transition-transform', !open && '-rotate-90']}
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d="m4 6 4 4 4-4" /></svg
+					>
+				</Button>
+				<StatusBadge status={file.status} />
+				<span class="min-w-0 truncate font-mono text-[12.5px]">
+					{#if file.status === 'renamed' || file.status === 'copied'}
+						<span class="text-muted">{file.oldPath}</span>
+						<span class="px-1 text-faint">→</span>
+					{/if}
+					<span class="text-muted">{path.dir}</span><span class="font-medium">{path.name}</span>
 				</span>
-			{/if}
-			<span class="ml-auto flex shrink-0 items-center gap-3">
-				{#if threads}
-					<!-- a question about the whole file, the composer floats under this -->
-					<Button
-						id="ask-{anchor ?? file.id}"
-						variant="ghost"
-						size="sm"
-						title="Ask AI about this whole file"
-						onclick={() => threads.selectWhole(file.newPath, section, `ask-${anchor ?? file.id}`)}
-						>Ask</Button
+				{#if file.changes?.formattingOnly}
+					<span
+						class="shrink-0 rounded-md bg-mod/10 px-1.5 py-0.5 text-[10.5px] font-medium text-mod"
+						title="Only reformatted: the same code with different whitespace or line breaks"
+						>formatting only</span
 					>
 				{/if}
-				{#if headerThreads.length}
-					<Button
-						variant="ghost"
-						size="sm"
-						title="{headerThreads.length} {headerThreads.length === 1
-							? 'question'
-							: 'questions'} to AI in this file, open the first"
-						onclick={() => threads?.openLens(headerThreads[0].id)}
+				{#if only && hunks.length < file.hunks.length}
+					<span
+						class="shrink-0 text-[11px] text-faint tabular-nums"
+						title="{hunks.length} of the file's {file.hunks.length} hunks are in this step"
+						>{hunks.length}/{file.hunks.length}</span
 					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" /></svg
-						>{headerThreads.length}
-					</Button>
 				{/if}
-				{#if canShowWhole && open}
-					{@const reading = showWhole && !wholeHere}
-					<button
-						type="button"
-						class={[
-							'grid size-6 place-items-center rounded-full hover:bg-subtle hover:text-fg',
-							showWhole ? 'bg-subtle text-fg' : 'text-muted',
-							reading && 'animate-pulse'
-						]}
-						aria-pressed={showWhole}
-						aria-busy={reading}
-						aria-label="Show the whole file"
-						title={showWhole ? 'Show only the changed lines' : 'Show the whole file'}
-						onclick={toggleWhole}
-					>
-						<!-- arrows apart to unfold the unchanged lines, together to fold them away -->
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path
-								d={showWhole
-									? 'M3 8h10M8 1.5v4M5.5 3 8 5.5 10.5 3M8 14.5v-4M5.5 13 8 10.5 10.5 13'
-									: 'M3 8h10M8 5.5v-4M5.5 4 8 1.5 10.5 4M8 10.5v4M5.5 12 8 14.5 10.5 12'}
-							/></svg
+				{#if also.length}
+					<span class="flex shrink-0 items-center gap-1 text-[11px] text-faint">
+						also in
+						{#each also as step (step.n)}<StepChip {...step} />{/each}
+					</span>
+				{/if}
+				<span class="ml-auto flex shrink-0 items-center gap-3">
+					{#if threads}
+						<!-- a question about the whole file, the composer floats under this -->
+						<Button
+							id="ask-{anchor ?? file.id}"
+							variant="ghost"
+							size="sm"
+							title="Ask AI about this whole file"
+							onclick={() => threads.selectWhole(file.newPath, section, `ask-${anchor ?? file.id}`)}
+							>Ask</Button
 						>
-					</button>
-				{/if}
-				{#if file.language}
-					<span class="text-[11px] text-faint">{file.language}</span>
-				{/if}
-				<span class="font-mono text-[11px] tabular-nums">
-					<span class="text-add">+{counts.additions}</span>
-					<span class="text-del">−{counts.deletions}</span>
-				</span>
-				<ChangeBar additions={counts.additions} deletions={counts.deletions} />
-				{#if href}
-					<a
-						{href}
-						class="grid size-6 place-items-center rounded-full text-muted hover:bg-subtle hover:text-fg"
-						aria-label="View file"
-						title="View the file in the diff"
-					>
-						<!-- arrows out to the corners, the file opened up in the full diff -->
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" /></svg
-						>
-					</a>
-				{/if}
-				{#if onreviewed}
-					<label class="flex h-6 cursor-pointer items-center gap-1.5 text-[11.5px] text-muted">
-						<input
-							type="checkbox"
-							class="size-3.5 accent-add"
-							checked={reviewed}
-							onchange={(e) => {
-								const next = e.currentTarget.checked;
-								keepHeader(() => onreviewed(next));
-							}}
-						/>
-						Reviewed
-					</label>
-				{/if}
-			</span>
-		</div>
-	</header>
-
-	{#if open}
-		<div
-			class={[
-				floating &&
-					'-mb-[var(--radius-2xl)] overflow-clip rounded-b-2xl border border-t-0 border-line bg-surface'
-			]}
-		>
-			{#if file.binary}
-				<p class="px-4 py-6 text-center text-xs text-muted">Binary file not shown</p>
-			{:else if hunks.length === 0}
-				<p class="px-4 py-6 text-center text-xs text-muted">No content changes</p>
-			{:else}
-				{#if wholeHere && !gaps}
-					<p class="border-b border-line px-4 py-2 text-xs text-muted">
-						{wholeHere.error ?? 'The file changed since the diff was read, reload to see it whole'}
-					</p>
-				{/if}
-				{#each hunks as hunk, h (hunk.id)}
-					{@const lead = gaps?.before[h] ?? []}
-					{@render gap(lead)}
-					{#each notes.filter((n) => n.hunk === hunk.id) as note, n (n)}
-						<div
-							class={[
-								'flex gap-2.5 border-l-2 border-accent bg-accent/6 px-4 py-2.5 text-[12.5px] leading-relaxed',
-								(h > 0 || lead.length > 0) && 'border-t border-t-line'
-							]}
+					{/if}
+					{#if headerThreads.length}
+						<Button
+							variant="ghost"
+							size="sm"
+							title="{headerThreads.length} {headerThreads.length === 1
+								? 'question'
+								: 'questions'} to AI in this file, open the first"
+							onclick={() => threads?.openLens(headerThreads[0].id)}
 						>
 							<svg
 								viewBox="0 0 16 16"
-								class="mt-0.5 size-3.5 shrink-0 text-accent"
+								class="size-3"
 								fill="none"
 								stroke="currentColor"
 								stroke-width="1.5"
 								stroke-linecap="round"
-								><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
-							>
-							<p class="whitespace-pre-wrap">{note.text}</p>
-						</div>
-					{/each}
-					{#if gaps}
-						<!-- the whole file reads on unbroken, its numbers already say where a hunk
-					     starts; left only for jumping to the hunk -->
-						<div data-hunk-top={hunk.id}></div>
-					{:else}
-						<div
-							class={[
-								'flex h-7 items-center bg-subtle font-mono text-[11.5px] text-muted',
-								h > 0 && 'border-t border-line'
-							]}
-							data-hunk-top={hunk.id}
-						>
-							<span
-								class={[
-									'whitespace-pre text-accent/80',
-									layout === 'split' ? 'pl-[4.25rem]' : 'pl-[7.25rem]'
-								]}>@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span
-							>
-							{#if hunk.section}
-								<span class="truncate pr-6 pl-3 whitespace-pre">{hunk.section.trim()}</span>
-							{/if}
-						</div>
+								stroke-linejoin="round"><path d="M3 3.5h10v7H7.5L4.5 13v-2.5H3z" /></svg
+							>{headerThreads.length}
+						</Button>
 					{/if}
-					{#if layout === 'split'}
-						<!-- long lines wrap so both sides of a row stay aligned -->
-						<div class="twinkleplop font-mono text-[12.5px] leading-5">
-							{#each chunk(splitRows(hunk), BLOCK) as rows, b (b)}
-								<LazyBlock estimate={rows.length * ROW} lazy={virtualize}>
-									{#each rows as row, i (i)}
-										<div class="grid grid-cols-2">
-											{@render cell(hunk, row.left, 'old')}
-											{@render cell(hunk, row.right, 'new')}
-										</div>
-									{/each}
-								</LazyBlock>
-							{/each}
-						</div>
-					{:else}
-						<div class="twinkleplop overflow-x-auto font-mono text-[12.5px] leading-5">
-							<!-- gutter (6rem), left padding (0.75rem), right padding (2rem) and the
-						     question marker's slot (0.875rem) around the code -->
-							<div
-								class="w-max min-w-full"
-								style:min-width="max(100%, calc({widths.get(hunk.id)}ch + 9.625rem))"
+					{#if canShowWhole && open}
+						{@const reading = showWhole && !wholeHere}
+						<button
+							type="button"
+							class={[
+								'grid size-6 place-items-center rounded-full hover:bg-subtle hover:text-fg',
+								showWhole ? 'bg-subtle text-fg' : 'text-muted',
+								reading && 'animate-pulse'
+							]}
+							aria-pressed={showWhole}
+							aria-busy={reading}
+							aria-label="Show the whole file"
+							title={showWhole ? 'Show only the changed lines' : 'Show the whole file'}
+							onclick={toggleWhole}
+						>
+							<!-- arrows apart to unfold the unchanged lines, together to fold them away -->
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path
+									d={showWhole
+										? 'M3 8h10M8 1.5v4M5.5 3 8 5.5 10.5 3M8 14.5v-4M5.5 13 8 10.5 10.5 13'
+										: 'M3 8h10M8 5.5v-4M5.5 4 8 1.5 10.5 4M8 10.5v4M5.5 12 8 14.5 10.5 12'}
+								/></svg
 							>
-								{#each chunk(hunk.lines, BLOCK) as lines, b (b)}
-									<LazyBlock estimate={lines.length * ROW} lazy={virtualize}>
-										{#each lines as line, i (i)}
-											{@const index = b * BLOCK + i}
-											{@const on = isPicked(hunk.id, index, line)}
-											<div
-												class={[
-													'row flex',
-													line.kind,
-													tinted(line) && 'tinted',
-													line.reformatted && 'reformatted',
-													on && 'picked',
-													!on && isAdded(hunk.id, index, line) && 'added',
-													cursor?.hunk === hunk.id && cursor.head === index && 'cursor'
-												]}
-												title={line.reformatted ? REFORMATTED : undefined}
-												data-hunk={hunk.id}
-												data-index={index}
-											>
-												<!-- svelte-ignore a11y_no_static_element_interactions -->
-												<span
-													class="gutter sticky left-0 flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
-													title={threads ? PICK : undefined}
-													onpointerdown={(e) => pick(e, hunk.id, index)}
-												>
-													{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}`))}
-													{@render draftMark(`${hunk.id}:${index}`)}
-													<span class="w-12 pr-2">{line.old ?? ''}</span>
-													<span class="w-12 pr-2">{line.new ?? ''}</span>
-												</span>
-												<span class="text pr-8 pl-3 whitespace-pre">{@render code(line)}</span>
-												<!-- pinned to the visible right edge while the hunk scrolls sideways -->
-												{@render slot(
-													marks.get(`${hunk.id}:${index}`),
-													on,
-													'sticky right-0 ml-auto'
-												)}
+						</button>
+					{/if}
+					{#if file.language}
+						<span class="text-[11px] text-faint">{file.language}</span>
+					{/if}
+					<span class="font-mono text-[11px] tabular-nums">
+						<span class="text-add">+{counts.additions}</span>
+						<span class="text-del">−{counts.deletions}</span>
+					</span>
+					<ChangeBar additions={counts.additions} deletions={counts.deletions} />
+					{#if href}
+						<a
+							{href}
+							class="grid size-6 place-items-center rounded-full text-muted hover:bg-subtle hover:text-fg"
+							aria-label="View file"
+							title="View the file in the diff"
+						>
+							<!-- arrows out to the corners, the file opened up in the full diff -->
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" /></svg
+							>
+						</a>
+					{/if}
+					{#if onreviewed}
+						<label class="flex h-6 cursor-pointer items-center gap-1.5 text-[11.5px] text-muted">
+							<input
+								type="checkbox"
+								class="size-3.5 accent-add"
+								checked={reviewed}
+								onchange={(e) => {
+									const next = e.currentTarget.checked;
+									keepHeader(() => onreviewed(next));
+								}}
+							/>
+							Reviewed
+						</label>
+					{/if}
+				</span>
+			</div>
+		</header>
+
+		{#if open}
+			<div
+				class={[
+					floating &&
+						'-mb-[var(--radius-2xl)] overflow-clip rounded-b-2xl border border-t-0 border-line bg-surface'
+				]}
+			>
+				{#if file.binary}
+					<p class="px-4 py-6 text-center text-xs text-muted">Binary file not shown</p>
+				{:else if hunks.length === 0}
+					<p class="px-4 py-6 text-center text-xs text-muted">No content changes</p>
+				{:else}
+					{#if wholeHere && !gaps}
+						<p class="border-b border-line px-4 py-2 text-xs text-muted">
+							{wholeHere.error ??
+								'The file changed since the diff was read, reload to see it whole'}
+						</p>
+					{/if}
+					{#each hunks as hunk, h (hunk.id)}
+						{@const lead = gaps?.before[h] ?? []}
+						{@render gap(lead)}
+						{#each notes.filter((n) => n.hunk === hunk.id) as note, n (n)}
+							<div
+								class={[
+									'flex gap-2.5 border-l-2 border-accent bg-accent/6 px-4 py-2.5 text-[12.5px] leading-relaxed',
+									(h > 0 || lead.length > 0) && 'border-t border-t-line'
+								]}
+							>
+								<svg
+									viewBox="0 0 16 16"
+									class="mt-0.5 size-3.5 shrink-0 text-accent"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="round"
+									><circle cx="8" cy="8" r="6" /><path d="M8 7.5v3.5M8 5v.01" /></svg
+								>
+								<p class="whitespace-pre-wrap">{note.text}</p>
+							</div>
+						{/each}
+						{#if gaps}
+							<!-- the whole file reads on unbroken, its numbers already say where a hunk
+					     starts; left only for jumping to the hunk -->
+							<div data-hunk-top={hunk.id}></div>
+						{:else}
+							<div
+								class={[
+									'flex h-7 items-center bg-subtle font-mono text-[11.5px] text-muted',
+									h > 0 && 'border-t border-line'
+								]}
+								data-hunk-top={hunk.id}
+							>
+								<span
+									class={[
+										'whitespace-pre text-accent/80',
+										layout === 'split' ? 'pl-[4.25rem]' : 'pl-[7.25rem]'
+									]}>@@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@</span
+								>
+								{#if hunk.section}
+									<span class="truncate pr-6 pl-3 whitespace-pre">{hunk.section.trim()}</span>
+								{/if}
+							</div>
+						{/if}
+						{#if layout === 'split'}
+							<!-- long lines wrap so both sides of a row stay aligned -->
+							<div class="twinkleplop font-mono text-[12.5px] leading-5">
+								{#each chunk(splitRows(hunk), BLOCK) as rows, b (b)}
+									<LazyBlock
+										estimate={rows.length * ROW}
+										lazy={virtualize && !(revealing?.hunk === hunk.id && revealing.block === b)}
+									>
+										{#each rows as row, i (i)}
+											<div class="grid grid-cols-2">
+												{@render cell(hunk, row.left, 'old')}
+												{@render cell(hunk, row.right, 'new')}
 											</div>
 										{/each}
 									</LazyBlock>
 								{/each}
 							</div>
-						</div>
-					{/if}
-				{/each}
-				{@render gap(gaps?.after ?? [])}
-			{/if}
-			{#if unplaced.length && !only}
-				<UnplacedThreads threads={unplaced} {reply} />
-			{/if}
-		</div>
-	{/if}
+						{:else}
+							<div class="twinkleplop overflow-x-auto font-mono text-[12.5px] leading-5">
+								<!-- gutter (6rem), left padding (0.75rem), right padding (2rem) and the
+						     question marker's slot (0.875rem) around the code -->
+								<div
+									class="w-max min-w-full"
+									style:min-width="max(100%, calc({widths.get(hunk.id)}ch + 9.625rem))"
+								>
+									{#each chunk(hunk.lines, BLOCK) as lines, b (b)}
+										<LazyBlock
+											estimate={lines.length * ROW}
+											lazy={virtualize && !(revealing?.hunk === hunk.id && revealing.block === b)}
+										>
+											{#each lines as line, i (i)}
+												{@const index = b * BLOCK + i}
+												{@const on = isPicked(hunk.id, index, line)}
+												<div
+													class={[
+														'row flex',
+														line.kind,
+														tinted(line) && 'tinted',
+														line.reformatted && 'reformatted',
+														on && 'picked',
+														!on && isAdded(hunk.id, index, line) && 'added',
+														cursor?.hunk === hunk.id && cursor.head === index && 'cursor'
+													]}
+													title={line.reformatted ? REFORMATTED : undefined}
+													data-hunk={hunk.id}
+													data-index={index}
+												>
+													<!-- svelte-ignore a11y_no_static_element_interactions -->
+													<span
+														class="gutter sticky left-0 flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
+														title={threads ? PICK : undefined}
+														onpointerdown={(e) => pick(e, hunk.id, index)}
+													>
+														{@render reviewMark(reviewMarks.get(`${hunk.id}:${index}`))}
+														{@render draftMark(`${hunk.id}:${index}`)}
+														<span class="w-12 pr-2">{line.old ?? ''}</span>
+														<span class="w-12 pr-2">{line.new ?? ''}</span>
+													</span>
+													<span class="text pr-8 pl-3 whitespace-pre" {@attach highlight}
+														>{@render code(line)}</span
+													>
+													<!-- pinned to the visible right edge while the hunk scrolls sideways -->
+													{@render slot(
+														marks.get(`${hunk.id}:${index}`),
+														on,
+														'sticky right-0 ml-auto'
+													)}
+												</div>
+											{/each}
+										</LazyBlock>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					{/each}
+					{@render gap(gaps?.after ?? [])}
+				{/if}
+				{#if unplaced.length && !only}
+					<UnplacedThreads threads={unplaced} {reply} />
+				{/if}
+			</div>
+		{/if}
 
-	{#if reviewOpen}
-		<ReviewCard
-			threads={reviewOpen.threads.map((t) => review.find((r) => r.id === t.id) ?? t)}
-			at={reviewOpen.at}
-			onclose={() => (reviewOpen = null)}
-			{reply}
-		/>
-	{/if}
+		{#if reviewOpen}
+			<ReviewCard
+				threads={reviewOpen.threads.map((t) => review.find((r) => r.id === t.id) ?? t)}
+				at={reviewOpen.at}
+				onclose={() => (reviewOpen = null)}
+				{reply}
+			/>
+		{/if}
 
-	{#if offer}
-		<!-- on a pull request, to comment as well -->
-		<div
-			data-offer
-			popover="manual"
-			{@attach (el) => {
-				el.showPopover();
-				return () => el.hidePopover();
-			}}
-			class="absolute flex gap-1"
-			style:top="{offer.top}px"
-			style:left="{offer.left}px"
-		>
-			{#each offers as intent (intent)}
-				<button
-					type="button"
-					class="flex h-[26px] items-center gap-1.5 rounded-full border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
-					onpointerdown={(e) => e.preventDefault()}
-					title={intent === 'ask' ? '⇧ for a new chat' : undefined}
-					onclick={(e) => acceptOffer(threads?.review ? intent : undefined, e.shiftKey)}
-				>
-					{intent === 'ask' ? 'Ask AI' : 'Comment'}
-					<kbd class="font-mono text-[10.5px] font-normal text-faint"
-						>{intent === 'ask' ? 'a' : 'c'}</kbd
+		{#if offer}
+			<!-- on a pull request, to comment as well -->
+			<div
+				data-offer
+				popover="manual"
+				{@attach (el) => {
+					el.showPopover();
+					return () => el.hidePopover();
+				}}
+				class="absolute flex gap-1"
+				style:top="{offer.top}px"
+				style:left="{offer.left}px"
+			>
+				{#each offers as intent (intent)}
+					<button
+						type="button"
+						class="flex h-[26px] items-center gap-1.5 rounded-full border border-line bg-surface pr-2 pl-2.5 text-[12px] font-medium text-fg shadow-float hover:border-muted"
+						onpointerdown={(e) => e.preventDefault()}
+						title={intent === 'ask' ? '⇧ for a new chat' : undefined}
+						onclick={(e) => acceptOffer(threads?.review ? intent : undefined, e.shiftKey)}
 					>
-				</button>
-			{/each}
-		</div>
+						{intent === 'ask' ? 'Ask AI' : 'Comment'}
+						<kbd class="font-mono text-[10.5px] font-normal text-faint"
+							>{intent === 'ask' ? 'a' : 'c'}</kbd
+						>
+					</button>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </section>
 
@@ -952,7 +1029,7 @@
 					`${hunk.id}:${index}:${side}`
 				)}{side === 'old' ? line.old : line.new}</span
 			>
-			<span class="text min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap"
+			<span class="text min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap" {@attach highlight}
 				>{@render code(line)}</span
 			>
 			<!-- on the edge of the side the question was asked on -->

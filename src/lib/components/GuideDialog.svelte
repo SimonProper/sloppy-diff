@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { modal } from '$lib/modal';
 	import Button from '$lib/components/Button.svelte';
 	import { cubicOut } from 'svelte/easing';
 	import { fade, slide } from 'svelte/transition';
@@ -170,7 +171,7 @@
 </script>
 
 <dialog
-	{@attach (el) => el.showModal()}
+	{@attach modal}
 	oncancel={(e) => {
 		e.preventDefault();
 		onclose();

@@ -211,10 +211,15 @@ export const COPIED = [
 	...Object.keys(TOKENS).map((token) => `--twp-${token}`)
 ];
 
-/** Each token's colour for code coloured in place, as in the fields typed in, through the CSS Custom Highlight API. */
+/**
+ * Each token's colour for code coloured in place, as in the fields typed in, through the CSS
+ * Custom Highlight API. Only under an editor: a highlight rule is tried on every element the
+ * page restyles, a hundred of them on every line of every diff, where under a class all but
+ * the editor's are ruled out at a glance
+ */
 export const highlightCss = () =>
 	Object.keys(TOKENS)
-		.map((token) => `::highlight(twp-${token}) { color: var(--twp-${token}); }`)
+		.map((token) => `.ProseMirror ::highlight(twp-${token}) { color: var(--twp-${token}); }`)
 		.join('\n');
 
 /** One theme's variables, under its class. */

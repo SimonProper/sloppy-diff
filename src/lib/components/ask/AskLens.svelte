@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { modal } from '$lib/modal';
 	import Button from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import { groupThreads, sectionLabel } from '$lib/ask/groups';
@@ -234,10 +235,7 @@
 	</aside>
 {:else if !docked && thread && threads.expanded}
 	<dialog
-		{@attach (el) => {
-			el.showModal();
-			return () => el.close();
-		}}
+		{@attach modal}
 		class={['lens', flipped && 'flip']}
 		aria-label="Questions to AI"
 		oncancel={(event) => {

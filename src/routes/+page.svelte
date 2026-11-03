@@ -13,6 +13,7 @@
 	import { repoName } from '$lib/repos';
 	import { Threads } from '$lib/ask/threads.svelte';
 	import AskLayer from '$lib/components/ask/AskLayer.svelte';
+	import FindBar from '$lib/components/FindBar.svelte';
 	import ChangesToolbar from '$lib/components/ChangesToolbar.svelte';
 	import CommitCard from '$lib/components/CommitCard.svelte';
 	import DiffSkeleton from '$lib/components/DiffSkeleton.svelte';
@@ -133,11 +134,10 @@
 	}
 
 	const totals = $derived(lineStats(diff.files.flatMap((f) => f.hunks)));
-	// below this many lines everything renders, so the browser's find sees all of it.
-	// Beyond, only lines near the viewport exist: every line in the page is restyled when the
-	// layout switches beside the agent panel, and when Chrome reads the page for its AI features
-	const VIRTUALIZE_LINES = 1000;
-	const virtualize = $derived(totals.lines > VIRTUALIZE_LINES);
+	// only lines near the screen exist: a layout switched beside the agent panel restyles
+	// only those, as does Chrome reading the page for its AI features. Finding text in them is
+	// our own (FindBar), the browser's can't see the rest
+	const virtualize = true;
 	// the file on screen, for the sidebar. The guide follows its own steps. Read from
 	// a little below where a file jumped to lands (scroll-mt-32 in FileDiff, its header
 	// stuck a gap below the bars), so the one jumped to is the one marked
@@ -811,8 +811,11 @@
 	     SidebarLayout), over the whole page in one that doesn't (band) -->
 	{#snippet viewToolbar()}
 		<nav aria-label="Review views" class="h-full bg-canvas px-2">
-			<div class="page-column flex h-full items-center">
+			<div class="page-column relative flex h-full items-center">
 				{@render viewTabs()}
+				{#if view === 'files' || (view === 'guide' && diff.guide)}
+					<FindBar />
+				{/if}
 				<div class="ml-auto flex shrink-0 items-center">
 					{#if view === 'overview' && pr}
 						<a

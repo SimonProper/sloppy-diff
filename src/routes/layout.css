@@ -147,8 +147,8 @@ html {
 	scrollbar-gutter: stable;
 }
 
-/* showModal() already makes the page behind inert, this keeps it from scrolling too */
-html:has(dialog:modal) {
+/* showModal() already makes the page behind inert, this keeps it from scrolling too ($lib/modal) */
+html.modal-open {
 	overflow: hidden;
 }
 

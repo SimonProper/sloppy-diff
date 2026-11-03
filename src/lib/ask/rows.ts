@@ -1,3 +1,4 @@
+import { revealLine } from '$lib/find.svelte';
 import type { Cursor } from './threads.svelte';
 import { linesOf, type Anchor, type LineSpan, type Side } from './types';
 
@@ -120,12 +121,9 @@ export function switchSide(cursor: Cursor): Cursor {
 export async function reveal(target: LineSpan) {
 	let row = rowOf(target.hunk, target.start, target.side);
 	if (!row) {
-		// a virtualised diff renders the lines once their hunk is near
-		document.querySelector(`[data-hunk-top="${target.hunk}"]`)?.scrollIntoView({ block: 'center' });
-		for (let i = 0; i < 20 && !row; i++) {
-			await new Promise(requestAnimationFrame);
-			row = rowOf(target.hunk, target.start, target.side);
-		}
+		// a virtualised diff renders a file and its lines only near the screen
+		await revealLine(target.hunk, target.start);
+		row = rowOf(target.hunk, target.start, target.side);
 	}
 	if (!row) return;
 	row.scrollIntoView({ block: 'center' });
