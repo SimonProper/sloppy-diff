@@ -1,10 +1,11 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
+	import DiffRows from '$lib/components/DiffRows.svelte';
 	import { inSpan } from '$lib/ask/span';
 	import { linesOf, type Thread } from '$lib/ask/types';
 	import type { DiffFile, DiffLine } from '$lib/diff/types';
 	import { displayPath } from '$lib/diff/path';
-	import { findHunk, tinted } from '$lib/diff/hunks';
+	import { findHunk } from '$lib/diff/hunks';
 
 	interface Props {
 		thread: Thread;
@@ -116,32 +117,7 @@
 							>{found.hunk.section.trim()}</span
 						>{/if}
 				</div>
-				<div class="twinkleplop font-mono text-[12.5px] leading-5">
-					{#each shown as { line, index } (index)}
-						{@const on = asked(index, line)}
-						<div
-							class={[
-								'row flex',
-								line.kind,
-								tinted(line) && 'tinted',
-								on && 'asked',
-								dimmed(line) && 'dim'
-							]}
-							data-asked={on && index === anchor.start ? '' : undefined}
-						>
-							<span
-								class="gutter relative flex w-24 shrink-0 text-right text-[11px] text-faint tabular-nums select-none"
-							>
-								<span class="w-12 pr-2">{line.old ?? ''}</span>
-								<span class="w-12 pr-2">{line.new ?? ''}</span>
-							</span>
-							<span class="min-w-0 flex-1 pr-4 pl-3 break-all whitespace-pre-wrap"
-								>{@html line.html}</span
-							>
-							<span class={['mark w-3.5 shrink-0 self-stretch', on && 'on']}></span>
-						</div>
-					{/each}
-				</div>
+				<DiffRows rows={shown} {asked} {dimmed} first={anchor.start} />
 				{#if compact && found.hunk.lines.length > shown.length && !whole}
 					<button
 						type="button"
@@ -153,76 +129,3 @@
 		{/if}
 	</div>
 </section>
-
-<style>
-	.gutter {
-		background: var(--surface);
-		border-right: 1px solid var(--line);
-	}
-	/* drawn like the diff: a tinted gutter with a bar against the code, the code only
-	   tinted when no tokens in it are marked */
-	.row.add {
-		--hue: var(--add);
-		--gutter-bg: var(--add-gutter);
-		--number: var(--add-number);
-		--row-bg: var(--add-bg);
-	}
-	.row.del {
-		--hue: var(--del);
-		--gutter-bg: var(--del-gutter);
-		--number: var(--del-number);
-		--row-bg: var(--del-bg);
-	}
-	.row:is(.add, .del) .gutter {
-		background: var(--gutter-bg);
-		color: var(--number);
-	}
-	.row:is(.add, .del) .gutter::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		right: -1px;
-		width: 3px;
-		background: var(--hue);
-	}
-	.row.del .gutter::after {
-		background: repeating-linear-gradient(var(--hue) 0 1px, transparent 1px 2px);
-	}
-	.row.tinted {
-		background: var(--row-bg);
-	}
-	.row.add :global(.novel) {
-		background: var(--add-novel);
-		border-radius: calc(var(--radius-sm) - 1px);
-	}
-	.row.del :global(.novel) {
-		background: var(--del-novel);
-		border-radius: calc(var(--radius-sm) - 1px);
-	}
-	.row.asked {
-		box-shadow: inset 0 0 0 100vmax var(--ink-wash);
-	}
-	.row.asked .gutter {
-		background: color-mix(in oklab, var(--fg) 10%, var(--surface));
-		color: var(--fg);
-	}
-	.row.asked:is(.add, .del) .gutter {
-		background: color-mix(in oklab, var(--fg) 8%, var(--gutter-bg));
-	}
-	.row.dim {
-		opacity: 0.38;
-	}
-	.mark {
-		position: relative;
-	}
-	.mark.on::before {
-		content: '';
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		right: 6px;
-		width: 2px;
-		background: var(--ink-mark);
-	}
-</style>

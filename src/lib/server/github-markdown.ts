@@ -1,6 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import sanitizeHtml from 'sanitize-html';
-import { fenceLanguage, highlightBlock, isLanguage } from './highlight';
+import { detectLanguage, fenceLanguage, highlightBlock, isLanguage } from './highlight';
 
 // images and videos only from GitHub's own hosts: its image proxy, attachments, avatars. One from
 // anywhere else would load as soon as the page opens, telling that host who's looking
@@ -41,6 +41,9 @@ type Known = {
 	commits: string[];
 	// `tada` to 🎉
 	emoji: Map<string, string>;
+	// the lines each ```suggestion replaces, in order, as they were when it was made: once
+	// it's applied the diff has what it put instead
+	replaced: (string | null)[];
 };
 
 const UPLOAD = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -51,7 +54,14 @@ function known(html: string): Known {
 		proxied: new Map(),
 		refs: new Map(),
 		commits: [],
-		emoji: new Map()
+		emoji: new Map(),
+		replaced: html
+			.split(/class="[^"]*\bjs-suggested-changes-blob\b/)
+			.slice(1)
+			.map((blob) => {
+				const rows = [...blob.matchAll(/<td\b[^>]*\bblob-code-deletion\b[^>]*>([\s\S]*?)<\/td>/g)];
+				return rows.length ? rows.map(([, code]) => codeText(code)).join('\n') : null;
+			})
 	};
 	for (const [, tag, rest] of html.matchAll(/<(img|video)\b([^>]*)>/g)) {
 		const { src, 'data-canonical-src': original } = attributes(rest);
@@ -97,7 +107,7 @@ const md = new MarkdownIt({ html: true, breaks: true, linkify: true });
 // marked with its language to highlight once it's clean, the sanitizer would drop the colours
 md.set({
 	highlight: (code, name) => {
-		const lang = fenceLanguage(name);
+		const lang = name === 'suggestion' ? name : fenceLanguage(name);
 		return lang ? `<pre lang="${lang}"><code>${md.utils.escapeHtml(code)}</code></pre>` : '';
 	}
 });
@@ -229,17 +239,38 @@ const clean = (html: string, k: Known): string =>
 	});
 
 /**
+ * A ```suggestion as GitHub shows it: the lines it replaces, then what it puts in their place.
+ * Without the lines, on a comment that isn't on any, just what it puts.
+ */
+function suggested(code: string, old: string | null, path: string | undefined): string {
+	const lang = path && detectLanguage(path);
+	const block = (text: string) =>
+		(lang && highlightBlock(lang, text)) || `<pre><code>${md.utils.escapeHtml(text)}</code></pre>`;
+	return [
+		'<div class="suggested"><p class="suggested-title">Suggested change</p>',
+		// a blank line replaced is still one
+		old !== null ? `<div class="suggested-old">${block(old)}</div>` : '',
+		// an empty one deletes the lines
+		code ? `<div class="suggested-new">${block(code)}</div>` : '',
+		'</div>'
+	].join('');
+}
+
+/**
  * A comment's markdown, rendered the app's way: GitHub's own rendering (`bodyHTML`) only
  * says what it alone knows, the signed URLs uploads load from, which mentions, issues and
- * commits exist, and emoji. Raw HTML goes through the sanitizer: no ids or styles and no
+ * commits exist, emoji, and the lines a suggestion replaces. Raw HTML goes through the sanitizer: no ids or styles and no
  * classes but the callouts', to reach the app's own CSS or DOM, links open in a new tab
  * like ours do. Code is highlighted by the grammars and theme the diff has.
  */
-export function githubMarkdown(markdown: string, githubHtml: string): string {
+export function githubMarkdown(markdown: string, githubHtml: string, path?: string): string {
 	const k = known(githubHtml);
+	let n = 0;
 	return clean(md.render(markdown, k), k).replace(
 		/<pre lang="([^"]*)">([\s\S]*?)<\/pre>/g,
 		(_, lang: string, code: string) =>
-			(isLanguage(lang) && highlightBlock(lang, codeText(code))) || `<pre>${code}</pre>`
+			lang === 'suggestion'
+				? suggested(codeText(code).replace(/\n$/, ''), k.replaced[n++] ?? null, path)
+				: (isLanguage(lang) && highlightBlock(lang, codeText(code))) || `<pre>${code}</pre>`
 	);
 }

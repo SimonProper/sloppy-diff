@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { where } from '$lib/pr/jump';
 	import { timeAgo } from '$lib/refs';
+	import type { DiffFile } from '$lib/diff/types';
 	import type { PrComment, ReviewThread, Replying } from '$lib/pr/types';
 	import Comment from './Comment.svelte';
 	import CommentField from './CommentField.svelte';
+	import HunkPeek from './HunkPeek.svelte';
 	import ResolveButton from './ResolveButton.svelte';
 
 	interface Props {
@@ -15,9 +17,11 @@
 		reply?: Replying;
 		/** yours, beside the reply field */
 		avatar?: string;
+		/** the diff, to peek at a thread's lines as it draws them */
+		files?: DiffFile[];
 	}
 
-	let { ids, threads, onjump, reply, avatar = '' }: Props = $props();
+	let { ids, threads, onjump, reply, avatar = '', files }: Props = $props();
 
 	// the first few, the rest a click away. Hiding two or fewer isn't worth a button
 	const FIRST = 5;
@@ -33,9 +37,9 @@
 	}
 </script>
 
-<!-- each thread whole, replies and all, framed: its path in a quiet strip on top, the
-     comments under it on the card's own colour with a line between each. A way to it in
-     the diff on hover -->
+<!-- each thread whole, replies and all, framed: its path in a quiet strip on top, the last
+     lines of the code it's on, the comments under it on the card's own colour with a line
+     between each. A way to it in the diff on hover -->
 <ul class="mt-3 flex flex-col gap-2">
 	{#each shown as thread (thread.id)}
 		{@const { first, skipped, last } = excerpt(thread)}
@@ -60,6 +64,7 @@
 					<ResolveButton {thread} />
 				</span>
 			</p>
+			<HunkPeek {thread} {files} lines={4} />
 			<div class="divide-y divide-line bg-surface">
 				{#each first as comment (comment.id)}{@render said(comment)}{/each}
 				{#if skipped}

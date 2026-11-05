@@ -1182,7 +1182,7 @@
 					{#if loading.current}
 						<PrSkeleton />
 					{:else}
-						<PrOverview {pr} onjump={jump} reply={threads.replying} />
+						<PrOverview {pr} onjump={jump} reply={threads.replying} files={diff.files} />
 					{/if}
 				{:else}
 					{#if commit}

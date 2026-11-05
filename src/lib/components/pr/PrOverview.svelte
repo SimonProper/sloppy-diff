@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import type { DiffFile } from '$lib/diff/types';
 	import { addComment, finishReview } from '$lib/pr/pr.remote';
 	import { refresh } from '$lib/pr/refresh';
 	import type {
@@ -23,9 +24,11 @@
 		onjump: (thread: ReviewThread) => void;
 		/** replying to review threads, without it they're read-only */
 		reply?: Replying;
+		/** the diff, to peek at a thread's lines as it draws them */
+		files?: DiffFile[];
 	}
 
-	let { pr, onjump, reply }: Props = $props();
+	let { pr, onjump, reply, files }: Props = $props();
 
 	async function post(body: string) {
 		await addComment({ repo: page.data.repo, number: pr.number, pr: pr.id, body });
@@ -317,6 +320,7 @@
 								{onjump}
 								{reply}
 								avatar={pr.viewerAvatar}
+								{files}
 							/>
 						</div>
 					{/if}

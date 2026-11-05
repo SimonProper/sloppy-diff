@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ReviewThread, Replying } from '$lib/pr/types';
+	import HunkPeek from './HunkPeek.svelte';
 	import ResolveButton from './ResolveButton.svelte';
 	import ReviewComments from './ReviewComments.svelte';
 
@@ -10,9 +11,6 @@
 	}
 
 	let { threads, reply }: Props = $props();
-
-	/** the end of the code a thread was started on, where its lines were */
-	const excerpt = (thread: ReviewThread) => thread.diffHunk.split('\n').slice(-6);
 
 	const where = (thread: ReviewThread) =>
 		thread.file
@@ -31,17 +29,7 @@
 				{#if thread.isResolved}<span>· resolved</span>{/if}
 				<span class="ml-auto"><ResolveButton {thread} /></span>
 			</p>
-			{#if thread.diffHunk && !thread.file}
-				<pre
-					class="overflow-x-auto border-b border-line px-3 py-2 font-mono text-[11.5px] leading-5">{#each excerpt(thread) as line, i (i)}<span
-							class={[
-								'block',
-								line.startsWith('+') && 'text-add',
-								line.startsWith('-') && 'text-del',
-								line.startsWith('@@') && 'text-faint'
-							]}>{line || ' '}</span
-						>{/each}</pre>
-			{/if}
+			<HunkPeek {thread} />
 			<div class="p-3">
 				<ReviewComments {thread} {reply} />
 			</div>

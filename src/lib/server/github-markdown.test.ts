@@ -102,3 +102,39 @@ test("code is highlighted with the diff's grammars, a language without one stays
 	expect(githubMarkdown('```diff\n-a < b\n```', '')).toBe('<pre><code>-a &lt; b\n</code></pre>\n');
 	expect(githubMarkdown('<pre lang="constructor">x</pre>', '')).toBe('<pre>x</pre>');
 });
+
+// GitHub's box for a suggestion, its rows as it draws them
+const blob = (removed: string[], added: string[]) =>
+	`<div class="my-2 border rounded-2 js-suggested-changes-blob diff-view" id=""><table><tbody>${[
+		...removed.map(
+			(l) =>
+				`<tr><td class="blob-num blob-num-deletion" data-line-number="1"></td><td class="blob-code-inner blob-code-deletion js-blob-code-deletion">${l}</td></tr>`
+		),
+		...added.map((l) => `<tr><td class="blob-code-inner blob-code-addition">${l}</td></tr>`)
+	].join('')}</tbody></table></div>`;
+
+test('a suggestion shows the lines it replaced, as GitHub has them, then what it puts', () => {
+	const html = githubMarkdown(
+		'Shorter:\n\n```suggestion\nb, c := 3, 4\n```\n\nAnd:\n\n```suggestion\n```',
+		// applied since: the diff has the new lines, GitHub's box still the old ones
+		blob(
+			['<span class="pl-s1">b</span> := <span class="x">2</span>', 'c := &quot;4&quot;'],
+			['b, c := 3, 4']
+		) + blob([''], []),
+		'a.go'
+	);
+	expect(html.replace(/<(?!\/?div)[^>]*>/g, '')).toBe(
+		[
+			'Shorter:\n',
+			'<div class="suggested">Suggested change<div class="suggested-old">b := 2\nc := &quot;4&quot;</div><div class="suggested-new">b, c := 3, 4</div></div>\n',
+			'And:\n',
+			// deleting a blank line
+			'<div class="suggested">Suggested change<div class="suggested-old"></div></div>\n'
+		].join('')
+	);
+	expect(html).toContain('<span class="tok number">3</span>');
+	// on no lines, a comment on the pull request: just what it puts, plain
+	expect(githubMarkdown('```suggestion\n<b>\n```', '')).toBe(
+		'<div class="suggested"><p class="suggested-title">Suggested change</p><div class="suggested-new"><pre><code>&lt;b&gt;</code></pre></div></div>\n'
+	);
+});

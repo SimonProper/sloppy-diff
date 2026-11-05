@@ -228,13 +228,14 @@ export interface RawPullRequest {
 
 /** What GitHub's GraphQL answers, as a PullRequest. */
 export function toPullRequest(raw: RawPullRequest): PullRequest {
-	const comment = (c: RawComment, kind?: PrComment['deletable']): PrComment => ({
+	// a thread's file names the language of its ```suggestions
+	const comment = (c: RawComment, kind?: PrComment['deletable'], path?: string): PrComment => ({
 		id: c.id,
 		// a deleted account has no author
 		author: c.author?.login ?? 'ghost',
 		avatar: c.author?.avatarUrl ?? '',
 		body: c.body,
-		html: githubMarkdown(c.body, c.bodyHTML),
+		html: githubMarkdown(c.body, c.bodyHTML, path),
 		createdAt: c.createdAt,
 		url: c.url,
 		pending: c.state === 'PENDING',
@@ -252,7 +253,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		isOutdated: t.isOutdated,
 		canResolve: !!(t.isResolved ? t.viewerCanUnresolve : t.viewerCanResolve),
 		diffHunk: t.comments.nodes[0]?.diffHunk ?? '',
-		comments: t.comments.nodes.map((c) => comment(c, 'thread'))
+		comments: t.comments.nodes.map((c) => comment(c, 'thread', t.path))
 	}));
 	// a thread belongs to the review that started it, replies and all: answering with
 	// "Add single comment" makes a review of each reply, it says nothing on its own

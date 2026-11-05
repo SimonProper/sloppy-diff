@@ -401,6 +401,36 @@ html.modal-open {
 .markdown-alert-caution {
 	--alert: var(--del);
 }
+/* a review comment's ```suggestion: the lines it replaces over what it puts in their place */
+.prose .suggested {
+	margin-top: 0.5em;
+	overflow: hidden;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-lg);
+}
+.prose .suggested-title {
+	padding: 0.3em 0.75em;
+	border-bottom: 1px solid var(--line);
+	font-size: 0.9em;
+	color: var(--muted);
+}
+.prose .suggested pre {
+	margin: 0;
+	border-radius: 0;
+}
+/* a blank line replaced is still a line high */
+.prose .suggested code {
+	display: block;
+	min-height: 1lh;
+}
+.prose .suggested-old pre {
+	background: var(--del-bg);
+	box-shadow: inset 3px 0 var(--del-gutter);
+}
+.prose .suggested-new pre {
+	background: var(--add-bg);
+	box-shadow: inset 3px 0 var(--add-gutter);
+}
 
 ::selection {
 	background: color-mix(in oklab, var(--accent) 22%, transparent);
