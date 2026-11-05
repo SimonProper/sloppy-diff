@@ -158,6 +158,11 @@ html.desktop
 	:is(a, button, input, select, textarea, label, summary, [role], [tabindex]) {
 	-webkit-app-region: no-drag;
 }
+/* a click on a drag region never reaches the page, so while one of the header's popovers is
+   open the header doesn't drag: a click on it then closes the popover, as it does elsewhere */
+html.desktop .title-bar:has(:popover-open) {
+	-webkit-app-region: no-drag;
+}
 /* and the page's scrollbar starts below it, as it would below a title bar. Only a styled
    one takes a margin: the text fields' slim one, in the base layer so a theme's still wins */
 @layer base {
