@@ -114,10 +114,10 @@
 }
 
 :root.dark {
-	--canvas: #0a0a0a;
-	--surface: #111111;
-	--subtle: #191919;
-	--line: #252525;
+	--canvas: #080808;
+	--surface: #0d0d0d;
+	--subtle: #1a1a1a;
+	--line: #1a1a1a;
 	--fg: #ececec;
 	--muted: #8c8c8c;
 	--faint: #555555;
