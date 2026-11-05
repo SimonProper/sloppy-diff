@@ -80,6 +80,7 @@
 		"files": [
 			"build/**",
 			"electron/main.ts",
+			"electron/server.ts",
 			"package.json"
 		],
 		"asarUnpack": [
