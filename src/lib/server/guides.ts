@@ -5,7 +5,7 @@ import type { DiffFile } from '$lib/diff/types';
 import type { Guide, GuideDraft, GuideListing, GuideSection } from '$lib/guide/types';
 import { markdown } from './markdown';
 
-function guidesDir(): string {
+export function guidesDir(): string {
 	return resolve(env.GUIDES_DIR || join(process.cwd(), '.guides'));
 }
 

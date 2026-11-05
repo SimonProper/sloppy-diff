@@ -11,9 +11,14 @@
 		html?: string;
 		/** what comes after the text, told whether all of it is on screen */
 		after?: Snippet<[boolean]>;
+		/**
+		 * arrived while it's on screen, whole or not: fades in even when all of it came at once,
+		 * a short answer and its turn's end in one update
+		 */
+		fresh?: boolean;
 	}
 
-	let { text, streaming, html, after }: Props = $props();
+	let { text, streaming, html, after, fresh: arrived = false }: Props = $props();
 
 	/** how long a word takes to fade in */
 	const FADE = 240;
@@ -21,10 +26,11 @@
 	const reduced =
 		typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	// mounted with the stream over, it's an answer loaded with the thread, shown at once
-	let reveal = $state.raw(untrack(() => startReveal(text, !streaming)));
+	// mounted with the stream over, it's an answer loaded with the thread, shown at once,
+	// unless it only just arrived
+	let reveal = $state.raw(untrack(() => startReveal(text, !streaming && !arrived)));
 	/** the last words have faded in too */
-	let faded = $state(untrack(() => !streaming));
+	let faded = $state(untrack(() => !streaming && !arrived));
 	const settled = $derived(
 		faded && !streaming && reveal.source === text && reveal.shown === text.length
 	);

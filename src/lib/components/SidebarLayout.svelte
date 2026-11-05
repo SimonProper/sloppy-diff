@@ -63,6 +63,8 @@
 		panel?: Snippet;
 		/** its width as dragged, null for the default */
 		panelWidth?: number | null;
+		/** where its width is remembered, one per kind of panel */
+		panelKey?: string;
 		/** closes the panel, for the sidebar kept open where there's no room for both */
 		onpanelclose?: () => void;
 	}
@@ -81,6 +83,7 @@
 		asideClass = '',
 		panel: panelContent,
 		panelWidth = $bindable(null),
+		panelKey = PANEL_KEY,
 		onpanelclose
 	}: Props = $props();
 
@@ -463,7 +466,7 @@
 					<div class="absolute inset-y-0 left-0 z-10 w-px">
 						<ResizeHandle
 							bind:size={panelWidth}
-							key={PANEL_KEY}
+							key={panelKey}
 							panel={rightPanel}
 							orientation="vertical"
 							reverse

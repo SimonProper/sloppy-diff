@@ -9,6 +9,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"prepare": "svelte-kit sync || echo ''",
+		"postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check .",
@@ -40,6 +41,7 @@
 		"vitest": "^5.0.2"
 	},
 	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.3.318",
 		"@twinkleplop/bash": "^0.1.4",
 		"@twinkleplop/core": "^0.2.1",
 		"@twinkleplop/css": "^0.1.4",
@@ -57,7 +59,10 @@
 		"@twinkleplop/tsx": "^0.1.4",
 		"@twinkleplop/typescript": "^0.1.4",
 		"@twinkleplop/yaml": "^0.1.4",
+		"@xterm/addon-fit": "^0.11.0",
+		"@xterm/xterm": "^6.0.0",
 		"markdown-it": "^15.0.2",
+		"node-pty": "^1.1.0",
 		"prosemirror-commands": "^1.7.2",
 		"prosemirror-history": "^1.5.1",
 		"prosemirror-inputrules": "^1.5.1",
@@ -81,13 +86,15 @@
 			"build/**",
 			"electron/main.ts",
 			"electron/server.ts",
-			"package.json"
+			"package.json",
+			"!**/node_modules/@anthropic-ai/claude-agent-sdk-*/**"
 		],
 		"asarUnpack": [
 			"node_modules/typescript/**",
 			"node_modules/typescript-language-server/**",
 			"node_modules/svelte-language-server/**",
-			"node_modules/typescript-svelte-plugin/**"
+			"node_modules/typescript-svelte-plugin/**",
+			"node_modules/node-pty/**"
 		],
 		"directories": {
 			"buildResources": "electron",

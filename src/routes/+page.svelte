@@ -33,6 +33,8 @@
 	import ChangeMapView from '$lib/components/ChangeMapView.svelte';
 	import RefPicker from '$lib/components/RefPicker.svelte';
 	import RepoButton from '$lib/components/RepoButton.svelte';
+	import Logo from '$lib/components/Logo.svelte';
+	import { TABS, type Tab } from '$lib/tabs';
 	import RepoList from '$lib/components/RepoList.svelte';
 	import ResizeHandle, { storedSize } from '$lib/components/ResizeHandle.svelte';
 	import SidebarLayout, { PANEL_DEFAULT, PANEL_KEY } from '$lib/components/SidebarLayout.svelte';
@@ -456,13 +458,6 @@
 	}
 
 	// a single commit is part of Branch, reached from the branch's commit list
-	type Tab = 'worktree' | 'branch' | 'range' | 'pr';
-	const MODES: { value: Tab; label: string }[] = [
-		{ value: 'worktree', label: 'Uncommitted' },
-		{ value: 'branch', label: 'Branch' },
-		{ value: 'range', label: 'Range' },
-		{ value: 'pr', label: 'Pull request' }
-	];
 	/** PR mode without one picked, the list of open ones to pick from */
 	const pickingPr = $derived(data.mode === 'pr' && !data.inputs.pr);
 	const hasViewNavigation = $derived(ready && !pickingPr && !loadingList && !diff.error);
@@ -482,7 +477,8 @@
 	function setMode(mode: Tab) {
 		// a picked pull request's tab still goes back to the list of them
 		if (mode === tab && mode !== 'pr') return;
-		if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
+		if (mode === 'agents') goto(`/agents?${new URLSearchParams({ repo: data.repo })}`);
+		else if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
 		else if (mode === 'pr') goto(prList(), { keepFocus: true });
 		else if (mode === 'range')
 			navigate({ from: range?.from ?? 'HEAD~1', to: range?.to ?? 'HEAD', view: null }, true);
@@ -523,28 +519,18 @@
 	<header
 		class="title-bar sticky top-0 z-20 flex h-12 items-center gap-1.5 border-b border-line bg-canvas px-3 shadow-strip min-[1351px]:gap-2 min-[1351px]:px-4"
 	>
-		<!-- the s of the app's icon, electron/icon.svg, in the text's colour, its strokes on
-		     whole pixels at 24px -->
-		<svg
-			viewBox="100 100 824 824"
-			class="mr-1 size-6 shrink-0 text-fg"
-			role="img"
-			aria-label="sloppy diff"
-		>
-			<title>sloppy diff</title>
-			<path
-				d="M597.83 237.33A85.83 85.83 0 0 1 512 323.17A85.83 85.83 0 0 0 426.17 409A85.83 85.83 0 0 0 512 494.83A85.83 85.83 0 0 1 597.83 580.67A85.83 85.83 0 0 1 512 666.5A85.83 85.83 0 0 0 426.17 752.33"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="103"
-			/>
-		</svg>
+		<Logo />
 
 		<RepoButton repo={data.repo} />
 
 		{#if data.branches.length}
 			<div class="ml-1 shrink-0">
-				<SegmentedControl options={MODES} value={tab} onchange={setMode} label="Compare" />
+				<SegmentedControl
+					options={TABS}
+					value={tab}
+					onchange={setMode}
+					label="Agents and comparisons"
+				/>
 			</div>
 
 			<div class="flex min-w-0 flex-1 items-center gap-1.5">
