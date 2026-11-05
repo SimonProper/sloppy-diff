@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { where } from '$lib/pr/jump';
-	import { glance } from '$lib/pr/text';
 	import { timeAgo } from '$lib/refs';
 	import type { PrComment, ReviewThread, Replying } from '$lib/pr/types';
-	import Avatar from './Avatar.svelte';
-	import CommentMenu from './CommentMenu.svelte';
+	import Comment from './Comment.svelte';
 	import CommentField from './CommentField.svelte';
 	import ResolveButton from './ResolveButton.svelte';
 
@@ -37,7 +35,7 @@
 
 <!-- each thread whole, replies and all, framed: its path in a quiet strip on top, the
      comments under it on the card's own colour with a line between each. A way to it in
-     the diff on hover, where the card shows every comment in full -->
+     the diff on hover -->
 <ul class="mt-3 flex flex-col gap-2">
 	{#each shown as thread (thread.id)}
 		{@const { first, skipped, last } = excerpt(thread)}
@@ -91,21 +89,5 @@
 </ul>
 
 {#snippet said(comment: PrComment)}
-	<div class="group/comment px-3 py-2.5">
-		<span class="flex items-center gap-2 text-[11px] text-faint">
-			<Avatar src={comment.avatar} />
-			<span class="text-[11.5px] font-medium text-fg">{comment.author}</span>
-			{#if comment.pending}
-				<span
-					class="rounded-sm border border-line bg-subtle px-1 text-[10px] font-medium text-fg"
-					title="In your pending review, not posted yet">Pending</span
-				>
-			{/if}
-			{timeAgo(comment.createdAt)} ago
-			{#if comment.deletable}<CommentMenu {comment} />{/if}
-		</span>
-		<span class="mt-0.5 line-clamp-3 pl-6 text-[12px] leading-relaxed text-fg"
-			>{glance(comment.html)}</span
-		>
-	</div>
+	<div class="px-3 py-2.5"><Comment {comment} /></div>
 {/snippet}

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Button from '$lib/components/Button.svelte';
+	import { lossless } from '$lib/ask/editor';
+	import Editor from '../ask/Editor.svelte';
 	interface Props {
 		/** what's there to edit: the comment's markdown, or a send that failed */
 		body: string;
@@ -17,6 +19,10 @@
 
 	// svelte-ignore state_referenced_locally
 	let text = $state(body);
+	// edited where it's shown, as it reads. One the field would change, its raw HTML, tables or
+	// images, as its markdown
+	// svelte-ignore state_referenced_locally
+	const rich = lossless(body);
 	const typed = $derived(text.trim().length > 0);
 
 	function onkeydown(event: KeyboardEvent) {
@@ -39,13 +45,25 @@
 </script>
 
 <div class="flex flex-col gap-1.5">
-	<textarea
-		bind:value={text}
-		rows="2"
-		class="min-w-0 resize-none rounded-md border border-line bg-surface px-2 py-1.5 text-[12.5px] leading-relaxed text-fg outline-none focus:border-muted"
-		{onkeydown}
-		{@attach grow}
-		{@attach (el) => el.focus({ preventScroll: true })}></textarea>
+	{#if rich}
+		<Editor
+			bind:value={text}
+			placeholder="Comment"
+			people
+			onsend={() => typed && onsave(text.trim())}
+			onescape={oncancel}
+			autofocus
+			class="min-w-0 text-[12.5px] leading-relaxed text-fg"
+		/>
+	{:else}
+		<textarea
+			bind:value={text}
+			rows="2"
+			class="min-w-0 resize-none rounded-md border border-line bg-surface px-2 py-1.5 text-[12.5px] leading-relaxed text-fg outline-none focus:border-muted"
+			{onkeydown}
+			{@attach grow}
+			{@attach (el) => el.focus({ preventScroll: true })}></textarea>
+	{/if}
 	<div class="flex items-center gap-2 text-[11.5px]">
 		{#if failure}<span class="min-w-0 flex-1 text-del">{failure}</span>{:else}<span
 				class="flex-1 text-faint">⌘↵ to {action.toLowerCase()}, esc to {cancel.toLowerCase()}</span

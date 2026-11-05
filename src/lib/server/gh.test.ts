@@ -66,7 +66,7 @@ test('maps the GraphQL response to a PullRequest', () => {
 		'',
 		'https://avatars.githubusercontent.com/u/pkg-svelte-dev?s=40'
 	]);
-	expect(pr.comments[2].html).toBe('<p>The redirects need a test.</p>');
+	expect(pr.comments[2].html).toBe('<p>The redirects need a test.</p>\n');
 
 	const [placed, outdated] = pr.threads;
 	expect(placed).toMatchObject({

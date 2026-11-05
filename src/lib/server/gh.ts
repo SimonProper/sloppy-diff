@@ -16,7 +16,7 @@ import type {
 import { sameSha } from '$lib/refs';
 import { prsKey, recentRead, revalidatePr } from './cache';
 import { mergeBase, resolveCommit } from './git';
-import { cleanGithubHtml } from './github-html';
+import { githubMarkdown } from './github-markdown';
 import { logged } from './log';
 
 const exec = promisify(execFile);
@@ -234,7 +234,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		author: c.author?.login ?? 'ghost',
 		avatar: c.author?.avatarUrl ?? '',
 		body: c.body,
-		html: cleanGithubHtml(c.bodyHTML),
+		html: githubMarkdown(c.body, c.bodyHTML),
 		createdAt: c.createdAt,
 		url: c.url,
 		pending: c.state === 'PENDING',
@@ -285,7 +285,7 @@ export function toPullRequest(raw: RawPullRequest): PullRequest {
 		number: raw.number,
 		title: raw.title,
 		body: raw.body,
-		bodyHtml: cleanGithubHtml(raw.bodyHTML),
+		bodyHtml: githubMarkdown(raw.body, raw.bodyHTML),
 		url: raw.url,
 		author: raw.author?.login ?? 'ghost',
 		avatar: raw.author?.avatarUrl ?? '',

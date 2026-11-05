@@ -35,6 +35,19 @@
 	/** saved and shown already, until GitHub's rendering of it is in */
 	let saving = $state<string | null>(null);
 
+	/** a long comment cut to about a dozen lines, the rest a click away */
+	let long = $state(false);
+	let expanded = $state(false);
+
+	// measured as it renders and again as its images load in
+	function clamp(box: HTMLElement) {
+		const observer = new ResizeObserver(() => {
+			if (!expanded) long = box.scrollHeight > box.clientHeight + 1;
+		});
+		observer.observe(box.firstElementChild!);
+		return () => observer.disconnect();
+	}
+
 	async function save(body: string) {
 		const kind = comment.editable;
 		editing = null;
@@ -93,7 +106,7 @@
 		{/if}
 	</p>
 	{#if editing}
-		<div class="mt-1 pl-7">
+		<div class="mt-0.5 pl-7">
 			<CommentEditor
 				body={editing.body}
 				failure={editing.failure}
@@ -106,6 +119,22 @@
 			{saving}
 		</p>
 	{:else if comment.html}
-		<div class="prose mt-0.5 pl-7 text-[12.5px] leading-relaxed">{@html comment.html}</div>
+		<div
+			class={[
+				'mt-0.5 pl-7',
+				!expanded && 'max-h-60 overflow-hidden',
+				long && !expanded && '[mask-image:linear-gradient(to_bottom,black_70%,transparent)]'
+			]}
+			{@attach clamp}
+		>
+			<div class="prose text-[12.5px] leading-relaxed">{@html comment.html}</div>
+		</div>
+		{#if long}
+			<button
+				type="button"
+				class="mt-0.5 pl-7 text-[11.5px] text-faint hover:text-fg"
+				onclick={() => (expanded = !expanded)}>{expanded ? 'Show less' : 'Show more'}</button
+			>
+		{/if}
 	{/if}
 </div>

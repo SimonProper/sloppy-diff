@@ -108,6 +108,20 @@ const serializer = new MarkdownSerializer(
 export const parse = (markdown: string): Node => parser.parse(markdown);
 export const serialize = (doc: Node): string => serializer.serialize(doc);
 
+// markdown as GitHub reads it, raw HTML and all
+const github = new MarkdownIt({ html: true, breaks: true, linkify: true });
+
+/**
+ * Whether markdown reads the same in the field and comes back out of it as it went in:
+ * tables and images don't, raw HTML shows as its tags. A comment that has them is edited
+ * as its markdown instead.
+ */
+export const lossless = (markdown: string): boolean =>
+	!github
+		.parse(markdown, {})
+		.some((t) => t.type === 'html_block' || t.children?.some((c) => c.type === 'html_inline')) &&
+	github.render(markdown) === github.render(serialize(parse(markdown)));
+
 /** A path's extension, what a fence names its language by: `ts` for `src/a.ts`. */
 export function extensionOf(path: string | undefined) {
 	const name = path?.split('/').pop() ?? '';

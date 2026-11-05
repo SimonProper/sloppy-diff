@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { firstLine } from '$lib/markdown';
-import { createState, parse, serialize } from './editor';
+import { createState, lossless, parse, serialize } from './editor';
 import { insertMention, mentionAt, mentionsFor } from './mentions';
 import { modeOf } from './vim';
 
@@ -274,4 +274,14 @@ test('vim: normal mode rests on the last character, a goes after it', () => {
 	f.keys('a');
 	f.type('o!');
 	expect(f.doc.textContent).toBe('one two!');
+});
+
+test('a comment is edited in the field only when it comes back out as it went in', () => {
+	expect(lossless('Fine, *really*.\nA new line\n\n- [x] done\n- `code`')).toBe(true);
+	expect(lossless('<img width="300" src="https://github.com/user-attachments/assets/1">')).toBe(
+		false
+	);
+	expect(lossless('<!-- a template -->\nText')).toBe(false);
+	expect(lossless('| a | b |\n| - | - |\n| 1 | 2 |')).toBe(false);
+	expect(lossless('![shot](https://github.com/user-attachments/assets/1)')).toBe(false);
 });
