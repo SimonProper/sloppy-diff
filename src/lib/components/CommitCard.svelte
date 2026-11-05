@@ -4,7 +4,7 @@
 	let { commit }: { commit: CommitInfo } = $props();
 </script>
 
-<div class="rounded-2xl border border-line bg-surface px-4 py-3.5">
+<div class="page-column rounded-2xl border border-line bg-surface px-4 py-3.5">
 	<h2 class="text-[14.5px] leading-snug font-semibold tracking-tight">{commit.subject}</h2>
 	{#if commit.body}
 		<p class="mt-2 max-w-3xl text-[12.5px] leading-relaxed whitespace-pre-wrap text-muted">
