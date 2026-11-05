@@ -15,22 +15,27 @@
 		"test": "vitest run",
 		"format": "prettier --write .",
 		"build": "vite build",
-		"preview": "vite preview"
+		"preview": "vite preview",
+		"app": "vite build && electron .",
+		"app:dev": "electron . --dev",
+		"dist": "vite build && electron-builder --mac --dir"
 	},
 	"devDependencies": {
+		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/vite": "^4.3.0",
 		"@types/markdown-it": "^14.2.0",
 		"@types/node": "^26.6.2",
 		"@types/sanitize-html": "^2.16.2",
+		"electron": "^45.2.1",
+		"electron-builder": "^26.18.0",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"prettier-plugin-tailwindcss": "^0.8.0",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
-		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
 		"vitest": "^5.0.2"
 	},
@@ -64,7 +69,28 @@
 		"prosemirror-view": "^1.42.8",
 		"sanitize-html": "^2.18.0",
 		"svelte-language-server": "^0.18.4",
+		"typescript": "^6.0.3",
 		"typescript-language-server": "^6.0.2",
 		"typescript-svelte-plugin": "^0.3.52"
+	},
+	"main": "electron/main.ts",
+	"build": {
+		"appId": "dev.sloppy-diff",
+		"productName": "sloppy-diff",
+		"files": [
+			"build/**",
+			"electron/main.ts",
+			"package.json"
+		],
+		"asarUnpack": [
+			"node_modules/typescript/**",
+			"node_modules/typescript-language-server/**",
+			"node_modules/svelte-language-server/**",
+			"node_modules/typescript-svelte-plugin/**"
+		],
+		"directories": {
+			"buildResources": "electron",
+			"output": "dist"
+		}
 	}
 }

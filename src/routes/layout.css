@@ -147,6 +147,43 @@ html {
 	scrollbar-gutter: stable;
 }
 
+/* the desktop app's window has no title bar (electron/main.ts), the header stands in for it:
+   it moves the window, and leaves the traffic lights their room */
+html.desktop .title-bar {
+	-webkit-app-region: drag;
+	padding-left: 92px;
+}
+html.desktop
+	.title-bar
+	:is(a, button, input, select, textarea, label, summary, [role], [tabindex]) {
+	-webkit-app-region: no-drag;
+}
+/* and the page's scrollbar starts below it, as it would below a title bar. Only a styled
+   one takes a margin: the text fields' slim one, in the base layer so a theme's still wins */
+@layer base {
+	/* the page's content can't reach into the scrollbar's strip, so the header's own bottom
+	   border is drawn across it: both stay put as the page scrolls */
+	html.desktop::-webkit-scrollbar {
+		width: 12px;
+		background: linear-gradient(
+			var(--canvas) calc(var(--spacing) * 12 - 1px),
+			var(--line) 0 calc(var(--spacing) * 12),
+			transparent 0
+		);
+	}
+	html.desktop::-webkit-scrollbar-track {
+		margin-top: calc(var(--spacing) * 12);
+	}
+	html.desktop::-webkit-scrollbar-thumb {
+		border: 3px solid transparent;
+		border-radius: 999px;
+		background: color-mix(in oklab, var(--fg) 22%, transparent) padding-box;
+	}
+	html.desktop::-webkit-scrollbar-thumb:hover {
+		background-color: color-mix(in oklab, var(--fg) 40%, transparent);
+	}
+}
+
 /* showModal() already makes the page behind inert, this keeps it from scrolling too ($lib/modal) */
 html.modal-open {
 	overflow: hidden;

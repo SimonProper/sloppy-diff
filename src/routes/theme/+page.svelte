@@ -267,7 +267,7 @@ The theme I want: `;
 </svelte:head>
 
 <header
-	class="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 shadow-strip"
+	class="title-bar sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 shadow-strip"
 >
 	<a href={back} class={buttonClass({ size: 'lg', icon: true })} title="Back" aria-label="Back">
 		<svg

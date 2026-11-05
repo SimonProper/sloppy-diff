@@ -11,6 +11,9 @@
 			// tweaks, and the reader's own rules for it in a <style>. sloppy-diff:theme has it
 			// applied again
 			(() => {
+				// the desktop app on a Mac, whose window has no title bar, see layout.css
+				if (/Electron/.test(navigator.userAgent) && /Mac/.test(navigator.platform))
+					document.documentElement.classList.add('desktop');
 				const query = matchMedia('(prefers-color-scheme: dark)');
 				const read = (key) => {
 					try {

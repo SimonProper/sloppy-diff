@@ -45,6 +45,9 @@ export function startLsp(options: {
 	log('lsp', `starting ${[options.command, ...options.args].join(' ')} in ${options.cwd}`);
 	const child = spawn(options.command, options.args, {
 		cwd: options.cwd,
+		// the servers run on process.execPath, which in the desktop app is Electron, this
+		// makes it Node. Node itself ignores it
+		env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
 		stdio: ['pipe', 'pipe', 'pipe']
 	});
 	let stderr = '';

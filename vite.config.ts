@@ -1,3 +1,4 @@
+import adapter from '@sveltejs/adapter-node';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import type { Plugin } from 'vite';
@@ -20,6 +21,9 @@ export default defineConfig({
 		themes(),
 		tailwindcss(),
 		sveltekit({
+			// a Node server, run by `pnpm preview` or inside the Electron app
+			adapter: adapter(),
+
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
 				runes: ({ filename }) =>
@@ -27,7 +31,10 @@ export default defineConfig({
 			},
 
 			// the page talks to the server through remote functions, *.remote.ts
-			experimental: { remoteFunctions: true }
+			experimental: { remoteFunctions: true },
+
+			// `pnpm check` checks the desktop app's main process too
+			typescript: { config: (config) => void config.include.push('../electron/**/*.ts') }
 		})
 	],
 	server: {

@@ -29,6 +29,10 @@ The repo picker scans your home folder for git repositories. Its "Choose folder�
 
 `pnpm build` then `pnpm preview` runs a built copy on its own port, so it stays put while `pnpm dev` changes underneath it. Rebuild and restart the preview to pick up changes. There's nothing to deploy. sloppy-diff refuses requests from other websites, since any page you visit can reach localhost.
 
+### 🖥️ Desktop app
+
+`pnpm app` builds and opens sloppy-diff in its own window with Electron, `pnpm app:dev` opens it on the dev server, with hot reload. `pnpm dist` packages it as `dist/mac-arm64/sloppy-diff.app`, unsigned. git and the agents still come from your machine: the app reads your shell's `PATH` when it starts. The packaged app keeps its guides in `~/Library/Application Support/sloppy-diff/guides`.
+
 ## ⌨️ Keys
 
 | Key     | Where              | What it does                                 |
