@@ -190,7 +190,6 @@
 	/** the block a found line is in, rendered whether it's near the screen or not */
 	let revealing = $state<{ hunk: string; block: number } | null>(null);
 
-
 	$effect(() =>
 		register({
 			el: root,
