@@ -3,7 +3,15 @@
 // With --dev it's Vite's dev server instead, with hot reload, as `pnpm dev` runs it.
 // TypeScript that Electron's Node runs as it is, its types stripped, so only types Node can
 // erase: no enums, namespaces or parameter properties.
-import { app, BrowserWindow, dialog, shell, utilityProcess, type UtilityProcess } from 'electron';
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	Menu,
+	shell,
+	utilityProcess,
+	type UtilityProcess
+} from 'electron';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -87,6 +95,33 @@ function open() {
 	});
 }
 
+/**
+ * The default menus, but ⌘W closes the page's tab as a browser's does: the worktree's, or a pull
+ * request's. The window closes with ⌘⇧W.
+ */
+function menu() {
+	const closeTab = async () => {
+		const win = BrowserWindow.getFocusedWindow();
+		// the main checkout's and the pull requests' don't close, nor does the window then
+		await win?.webContents.executeJavaScript('window.closeTab?.()').catch(() => {});
+	};
+	Menu.setApplicationMenu(
+		Menu.buildFromTemplate([
+			{ role: 'appMenu' },
+			{
+				label: 'File',
+				submenu: [
+					{ label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: closeTab },
+					{ role: 'close', accelerator: 'CmdOrCtrl+Shift+W' }
+				]
+			},
+			{ role: 'editMenu' },
+			{ role: 'viewMenu' },
+			{ role: 'windowMenu' }
+		])
+	);
+}
+
 // empty until the server is up
 let ORIGIN = '';
 // not a top-level await: Electron holds back ready until the main module has run
@@ -96,6 +131,7 @@ app
 		// a packaged app has its own, from electron/icon.png
 		if (!app.isPackaged) app.dock?.setIcon(join(import.meta.dirname, 'icon.png'));
 		ORIGIN = await serve();
+		menu();
 		open();
 	})
 	.catch((error) => {
