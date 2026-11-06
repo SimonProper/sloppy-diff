@@ -17,9 +17,18 @@
 		compact?: boolean;
 		/** the pull request on screen */
 		current?: number;
+		/** the worktree a pull request is checked out in, its name */
+		worktree?: (number: number) => string | null;
 	}
 
-	let { prs, href, view = $bindable(), compact = false, current }: Props = $props();
+	let {
+		prs,
+		href,
+		view = $bindable(),
+		compact = false,
+		current,
+		worktree = () => null
+	}: Props = $props();
 
 	const VIEWS: { value: PrView; label: string; empty: string; keep: (p: PrSummary) => boolean }[] =
 		[
@@ -150,7 +159,7 @@
 			<div
 				class={compact
 					? 'flex flex-col gap-2 border-b border-line px-3 pb-3'
-					: 'sticky top-12 z-10 flex items-center gap-2 rounded-t-2xl border-b border-line bg-surface p-2'}
+					: 'sticky top-23 z-10 flex items-center gap-2 rounded-t-2xl border-b border-line bg-surface p-2'}
 			>
 				<!-- the filter keeps focus, arrows move the active row -->
 				<input
@@ -207,6 +216,7 @@
 				aria-label="Pull requests"
 			>
 				{#each shown as pr, i (pr.number)}
+					{@const tree = worktree(pr.number)}
 					<a
 						href={href(pr.number)}
 						id="{listId}-{i}"
@@ -270,6 +280,12 @@
 								class="mt-0.5 shrink-0 text-[11px] text-faint tabular-nums"
 								title="Updated {new Date(pr.updatedAt).toLocaleString()}"
 								>{timeAgo(pr.updatedAt)}</span
+							>
+						{/if}
+						{#if tree}
+							<span
+								class="mt-0.5 max-w-40 shrink-0 truncate rounded-sm border border-line px-1 font-mono text-[10.5px] text-muted"
+								title="Checked out in {tree}, opens there">⎇ {tree}</span
 							>
 						{/if}
 					</a>

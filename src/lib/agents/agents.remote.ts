@@ -94,39 +94,43 @@ const FETCH_EVERY_MS = 60_000;
 /**
  * The repo's worktrees and sessions, wherever in the repo `repo` is: now, then again each time
  * something about them changes, rather than asked for every few seconds. Watched while followed:
- * the sessions, fetches, each worktree's git and its files, see Watchers.
+ * the sessions, fetches, each worktree's git and its files, see Watchers. With `fetch`, the remote
+ * is fetched every minute meanwhile, for the Agents page: the diff only follows along.
  */
-export const followWorktrees = query.live('unchecked', async function* (repo: string) {
-	const main = await badRequestOnError(() => mainCheckout(repo));
-	const signal = getRequestEvent().request.signal;
-	const watchers = new Watchers(main);
-	let dirty = false;
-	let wake: (() => void) | undefined;
-	const stopListening = listen(main, () => {
-		dirty = true;
-		wake?.();
-	});
-	signal.addEventListener('abort', () => wake?.());
-	let now = await snapshot(main);
-	const fetchSoon = () => fetchIfDue(main, () => autoPull(now.worktrees, now.base));
-	const fetching = setInterval(fetchSoon, FETCH_EVERY_MS);
-	try {
-		fetchSoon();
-		for (;;) {
-			await watchers.follow(now.worktrees.map((t) => t.path));
-			yield now;
-			if (!dirty) await new Promise<void>((resolve) => (wake = resolve));
-			if (signal.aborted) return;
-			await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-			dirty = false;
-			now = await snapshot(main);
+export const followWorktrees = query.live(
+	'unchecked',
+	async function* ({ repo, fetch: fetches }: { repo: string; fetch: boolean }) {
+		const main = await badRequestOnError(() => mainCheckout(repo));
+		const signal = getRequestEvent().request.signal;
+		const watchers = new Watchers(main);
+		let dirty = false;
+		let wake: (() => void) | undefined;
+		const stopListening = listen(main, () => {
+			dirty = true;
+			wake?.();
+		});
+		signal.addEventListener('abort', () => wake?.());
+		let now = await snapshot(main);
+		const fetchSoon = () => fetchIfDue(main, () => autoPull(now.worktrees, now.base));
+		const fetching = fetches ? setInterval(fetchSoon, FETCH_EVERY_MS) : undefined;
+		try {
+			if (fetches) fetchSoon();
+			for (;;) {
+				await watchers.follow(now.worktrees.map((t) => t.path));
+				yield now;
+				if (!dirty) await new Promise<void>((resolve) => (wake = resolve));
+				if (signal.aborted) return;
+				await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+				dirty = false;
+				now = await snapshot(main);
+			}
+		} finally {
+			clearInterval(fetching);
+			stopListening();
+			watchers.close();
 		}
-	} finally {
-		clearInterval(fetching);
-		stopListening();
-		watchers.close();
 	}
-});
+);
 
 /**
  * After a fetch, with the setting on: the main checkout pulled when it's on the default branch,

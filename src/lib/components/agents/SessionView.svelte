@@ -449,7 +449,7 @@
 {/snippet}
 
 <!-- as tall as the page under its header, the field at its foot when there's little above it -->
-<section class="flex min-h-[calc(100dvh-48px)] flex-col">
+<section class="flex min-h-[calc(100dvh-92px)] flex-col">
 	<Band>
 		<div class="flex min-w-0 flex-col text-[12px]">
 			<span class="truncate leading-4 font-medium">{session?.title ?? '…'}</span>

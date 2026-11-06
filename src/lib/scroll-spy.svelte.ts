@@ -1,3 +1,4 @@
+import { HEADER } from '$lib/tabs';
 /**
  * Which of a list of elements is being read: the last one whose top has
  * scrolled up to `line`, just under the sticky bars, the first until one
@@ -25,7 +26,7 @@ export function currentIndex(
 }
 
 /** The id of the element being read, following the window's scroll. */
-export function scrollSpy(ids: () => string[], line = 120) {
+export function scrollSpy(ids: () => string[], line = HEADER + 72) {
 	let current = $state<string | null>(null);
 
 	$effect(() => {

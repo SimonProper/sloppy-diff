@@ -3,10 +3,10 @@
 	import { page } from '$app/state';
 	import Button from '$lib/components/Button.svelte';
 	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
-	import Logo from '$lib/components/Logo.svelte';
-	import RepoButton from '$lib/components/RepoButton.svelte';
-	import { TABS, type Tab } from '$lib/tabs';
+	import WorktreeStrip from '$lib/components/WorktreeStrip.svelte';
+	import { HEADER, modes, type Tab } from '$lib/tabs';
+	import { linkedPr, signal } from '$lib/agents/places';
+	import { getPullRequests } from '$lib/pr/pr.remote';
 	import AskField from '$lib/components/ask/AskField.svelte';
 	import SessionView from '$lib/components/agents/SessionView.svelte';
 	import Band from '$lib/components/agents/Band.svelte';
@@ -16,6 +16,7 @@
 	import { getScripts, setScripts } from '$lib/agents/terminals.remote';
 	import { readJson, readText, writeJson, writeText } from '$lib/storage';
 	import { drafts } from '$lib/agents/drafts.svelte';
+	import { inTabOrder } from '$lib/agents/tabs.svelte';
 	import { slugOf } from '$lib/agents/branch';
 	import { cyclesMode, nextMode } from '$lib/agents/types';
 	import AgentPickers from '$lib/components/agents/AgentPickers.svelte';
@@ -48,8 +49,12 @@
 	let { data } = $props();
 
 	// the worktrees and their sessions as they change, told by the server rather than asked for
-	const live = $derived(followWorktrees(data.repo));
-	const trees = $derived({ current: live.current?.worktrees, error: live.error });
+	const live = $derived(followWorktrees({ repo: data.repo, fetch: true }));
+	// in the title strip's order, the ones without a tab after them
+	const trees = $derived({
+		current: live.current && inTabOrder(data.repo, live.current.worktrees),
+		error: live.error
+	});
 	const sessionId = $derived(page.url.searchParams.get('session'));
 	const cwd = $derived(page.url.searchParams.get('cwd') ?? data.here);
 	/** the new session goes in a worktree of its own, from the sidebar's New worktree */
@@ -62,12 +67,18 @@
 		goto(`?${new URLSearchParams({ repo: data.repo, ...params })}`, { keepFocus: true });
 	}
 
+	// the worktree's pull request, when it has one checked out
+	const prsQuery = $derived(getPullRequests(data.repo));
+	const ownPr = $derived(
+		(tree && linkedPr(tree, prsQuery.error ? null : prsQuery.current)?.number) || null
+	);
+
 	/** The diff of the worktree picked here, compared the way the tab says. */
 	function compare(to: Tab) {
 		const params = new URLSearchParams({ repo: cwd });
 		if (to === 'branch' && tree?.branch) params.set('branch', tree.branch);
 		else if (to === 'range') (params.set('from', 'HEAD~1'), params.set('to', 'HEAD'));
-		else if (to === 'pr') params.set('pr', '');
+		else if (to === 'pr' && ownPr) params.set('pr', String(ownPr));
 		if (to !== 'agents') goto(`/?${params}`);
 	}
 
@@ -331,18 +342,6 @@
 		}
 	}
 
-	/** who has to act next: you (an approval), it (working), you again (done, unread), nobody */
-	const signal = (s: SessionSummary) =>
-		s.waiting
-			? { glyph: 'dot', class: 'bg-mod', title: 'Needs you' }
-			: s.status === 'running' || s.status === 'starting'
-				? { glyph: 'dot', class: 'bg-accent animate-pulse', title: 'Working' }
-				: s.unread && s.failed
-					? { glyph: 'dot', class: 'bg-del', title: 'Stopped or failed, not looked at yet' }
-					: s.unread
-						? { glyph: 'check', class: 'text-accent', title: 'Done, not looked at yet' }
-						: { glyph: 'dot', class: 'bg-muted/50', title: 'Idle' };
-
 	/** sessions waiting on you, in the tab's title for a window in the background */
 	const needed = $derived(
 		(trees.current ?? []).flatMap((t) => t.sessions).filter((s) => s.open && s.waiting).length
@@ -370,46 +369,44 @@
 {/if}
 
 <div class="min-h-screen font-sans">
-	<header
-		class="title-bar sticky top-0 z-20 flex h-12 items-center gap-1.5 border-b border-line bg-canvas px-3 shadow-strip min-[1351px]:gap-2 min-[1351px]:px-4"
-	>
-		<Logo />
-		<RepoButton repo={data.repo} />
-		<div class="ml-1 shrink-0">
-			<SegmentedControl
-				options={TABS}
-				value="agents"
-				onchange={compare}
-				label="Agents and comparisons"
-			/>
+	<header class="sticky top-0 z-20 bg-canvas">
+		<WorktreeStrip main={data.repo} place={{ kind: 'tree', path: cwd }} fetch />
+		<div class="flex h-11 items-center gap-1.5 px-3 min-[1351px]:gap-2 min-[1351px]:px-4">
+			<div class="shrink-0">
+				<SegmentedControl
+					options={modes(ownPr)}
+					value="agents"
+					onchange={compare}
+					label="Agents and comparisons"
+				/>
+			</div>
+			<span class="flex-1"></span>
+			<Button
+				size="lg"
+				pressed={terminal}
+				title="The worktree's terminals  ⌘J"
+				onclick={toggleTerminal}>Terminal</Button
+			>
+			<Button
+				size="lg"
+				pressed={!!editing}
+				onclick={() => {
+					editingScripts = { setup: '', run: '', ...scripts.current };
+					editing = editing
+						? null
+						: {
+								...(settings.current ?? {
+									wrapper: '',
+									sandbox: true,
+									mode: 'auto',
+									model: 'default',
+									effort: 'default',
+									autoPull: false
+								})
+							};
+				}}>Settings</Button
+			>
 		</div>
-		<span class="flex-1"></span>
-		<Button
-			size="lg"
-			pressed={terminal}
-			title="The worktree's terminals  ⌘J"
-			onclick={toggleTerminal}>Terminal</Button
-		>
-		<Button
-			size="lg"
-			pressed={!!editing}
-			onclick={() => {
-				editingScripts = { setup: '', run: '', ...scripts.current };
-				editing = editing
-					? null
-					: {
-							...(settings.current ?? {
-								wrapper: '',
-								sandbox: true,
-								mode: 'auto',
-								model: 'default',
-								effort: 'default',
-								autoPull: false
-							})
-						};
-			}}>Settings</Button
-		>
-		<ThemeToggle />
 	</header>
 
 	<!-- the repo's worktrees and the sessions in each, the sidebar's card as the diff's files are -->
@@ -678,7 +675,7 @@
 	{#if failure}
 		<!-- an action's error where it's seen, the actions are in the sidebar and the palette -->
 		<div
-			class="fixed top-[100px] left-1/2 z-30 flex max-w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded-xl border border-del/40 bg-surface px-3 py-2 text-[12.5px] shadow-float"
+			class="fixed top-[144px] left-1/2 z-30 flex max-w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 items-start gap-3 rounded-xl border border-del/40 bg-surface px-3 py-2 text-[12.5px] shadow-float"
 			role="alert"
 		>
 			<span class="mt-1.5 size-1.5 shrink-0 rounded-full bg-del"></span>
@@ -695,8 +692,8 @@
 	<SidebarLayout
 		layout="unified"
 		chars={70}
-		stickyTop={48}
-		panelTop={48}
+		stickyTop={HEADER}
+		panelTop={HEADER}
 		aside={worktrees}
 		{rail}
 		sizeKey="agents-sidebar-width"
@@ -811,7 +808,7 @@
 				<span class="text-[13px] font-medium">New session</span>
 			</Band>
 			<div
-				class="page-column flex min-h-[calc(100dvh-148px)] flex-col justify-center gap-3 px-3 pb-24"
+				class="page-column flex min-h-[calc(100dvh-192px)] flex-col justify-center gap-3 px-3 pb-24"
 				style:--cap="42rem"
 			>
 				<p class="text-[15px] font-medium">What should the agent do?</p>

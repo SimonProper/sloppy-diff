@@ -155,7 +155,7 @@ html.desktop .title-bar {
 }
 html.desktop
 	.title-bar
-	:is(a, button, input, select, textarea, label, summary, [role], [tabindex]) {
+	:is(a, button, input, select, textarea, label, summary, [role], [tabindex], [data-tab]) {
 	-webkit-app-region: no-drag;
 }
 /* a click on a drag region never reaches the page, so while one of the header's popovers is
@@ -174,11 +174,12 @@ html.desktop .title-bar:has(:popover-open) {
 		background: linear-gradient(
 			var(--canvas) calc(var(--spacing) * 12 - 1px),
 			var(--line) 0 calc(var(--spacing) * 12),
+			var(--canvas) 0 calc(var(--spacing) * 23),
 			transparent 0
 		);
 	}
 	html::-webkit-scrollbar-track {
-		margin-top: calc(var(--spacing) * 12);
+		margin-top: calc(var(--spacing) * 23);
 	}
 	html::-webkit-scrollbar-thumb {
 		border: 3px solid transparent;

@@ -484,7 +484,7 @@
 			: 'relative overflow-clip rounded-2xl border border-line bg-surface shadow-card',
 		'page-column',
 		layout === 'unified' && 'narrow',
-		inSection ? 'scroll-mt-39' : floating ? 'scroll-mt-32' : 'scroll-mt-28',
+		inSection ? 'scroll-mt-50' : floating ? 'scroll-mt-43' : 'scroll-mt-39',
 		threads && 'ask',
 		threads && !picked && 'unpicked'
 	]}
@@ -504,7 +504,7 @@
 					: ['bg-surface shadow-strip', open && 'border-b border-line'],
 				// below the header and the sticky changes bar, and a guide step's title (48px)
 				sticky && 'sticky z-10',
-				sticky && (inSection ? 'top-35' : floating ? 'top-27' : 'top-23')
+				sticky && (inSection ? 'top-46' : floating ? 'top-38' : 'top-34')
 			]}
 		>
 			<div
@@ -1160,7 +1160,7 @@
 	}
 	[data-index] {
 		/* the keyboard cursor scrolls rows into view clear of the sticky bars */
-		scroll-margin: 150px 0 40px;
+		scroll-margin: 194px 0 40px;
 	}
 
 	/* a question's marker down the right edge of its lines */

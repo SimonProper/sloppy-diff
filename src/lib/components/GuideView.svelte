@@ -16,6 +16,7 @@
 	import { timeAgo } from '$lib/refs';
 	import { reveal, scrollSpy } from '$lib/scroll-spy.svelte';
 	import { readJson, writeJson } from '$lib/storage';
+	import { HEADER } from '$lib/tabs';
 	import FileDiff from './FileDiff.svelte';
 	import StatusBadge from './StatusBadge.svelte';
 	import StepChip, { type Step } from './StepChip.svelte';
@@ -50,7 +51,7 @@
 	let {
 		guide,
 		files,
-		stickyTop = 92,
+		stickyTop = HEADER + 44,
 		panelTop,
 		toolbar,
 		layout = 'unified',
@@ -209,7 +210,7 @@
 	function trackPast(id: string) {
 		return (el: HTMLElement) => {
 			// the page header, the changes bar and the step's sticky title
-			const covered = 140;
+			const covered = HEADER + 92;
 			const observer = new IntersectionObserver(
 				([entry]) => {
 					const top = entry.rootBounds?.top ?? covered;
@@ -527,8 +528,8 @@
 			<article
 				id={section.id}
 				class={wide
-					? ['page-column two-col grid scroll-mt-23 gap-16', layout]
-					: 'flex scroll-mt-23 flex-col'}
+					? ['page-column two-col grid scroll-mt-34 gap-16', layout]
+					: 'flex scroll-mt-34 flex-col'}
 			>
 				{#if wide}
 					<!-- what the step is about in a column of its own, staying beside its diffs -->
@@ -553,7 +554,7 @@
 				{:else}
 					<!-- its title sticks under the changes bar while the step is on screen. A direct child of the step, so it stays stuck through all of the step's diffs. Over
 					     the bar's fade, its canvas taking the fade's place, and under the bar itself -->
-					<header class="sticky top-23 z-[16] -mx-2 h-12 bg-canvas px-2">
+					<header class="sticky top-34 z-[16] -mx-2 h-12 bg-canvas px-2">
 						<!-- a card floating over the diffs, opening down over them for the description -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div

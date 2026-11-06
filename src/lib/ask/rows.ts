@@ -1,4 +1,5 @@
 import { revealLine } from '$lib/find.svelte';
+import { HEADER } from '$lib/tabs';
 import type { Cursor } from './threads.svelte';
 import { linesOf, type Anchor, type LineSpan, type Side } from './types';
 
@@ -62,7 +63,7 @@ export function selectedSpan(within?: Element): { span: LineSpan; rect: DOMRect 
 }
 
 /** What the page header and the sticky bars cover at the top. */
-const COVERED = 140;
+const COVERED = HEADER + 92;
 
 /** The rows the cursor moves over, in page order: every line, or one side's. */
 function rows(side?: Side): HTMLElement[] {

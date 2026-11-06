@@ -31,6 +31,7 @@
 	import { typing } from '$lib/keys';
 	import { readText, writeText } from '$lib/storage';
 	import ResizeHandle, { storedSize } from './ResizeHandle.svelte';
+	import { HEADER } from '$lib/tabs';
 
 	interface Props {
 		/** combined height of the page header and shared view navigation, in pixels */
@@ -70,7 +71,7 @@
 	}
 
 	let {
-		stickyTop = 48,
+		stickyTop = HEADER,
 		panelTop = stickyTop,
 		toolbar,
 		layout,

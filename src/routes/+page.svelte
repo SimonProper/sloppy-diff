@@ -1,5 +1,5 @@
 <script lang="ts">
-	import Button from '$lib/components/Button.svelte';
+	import Button, { buttonClass } from '$lib/components/Button.svelte';
 	import { tick } from 'svelte';
 	import { beforeNavigate, goto, preloadData } from '$app/navigation';
 	import { navigating, page } from '$app/state';
@@ -32,9 +32,12 @@
 	import ExplainerView from '$lib/components/ExplainerView.svelte';
 	import ChangeMapView from '$lib/components/ChangeMapView.svelte';
 	import RefPicker from '$lib/components/RefPicker.svelte';
-	import RepoButton from '$lib/components/RepoButton.svelte';
-	import Logo from '$lib/components/Logo.svelte';
-	import { TABS, type Tab } from '$lib/tabs';
+	import WorktreeStrip from '$lib/components/WorktreeStrip.svelte';
+	import { HEADER, modes, type Tab } from '$lib/tabs';
+	import { checkoutPr, followWorktrees } from '$lib/agents/agents.remote';
+	import { linkedPr, loudest, signal, worktreeOfPr, type Place } from '$lib/agents/places';
+	import { checkedOut } from '$lib/agents/tabs.svelte';
+	import { errorText } from '$lib/errors';
 	import RepoList from '$lib/components/RepoList.svelte';
 	import ResizeHandle, { storedSize } from '$lib/components/ResizeHandle.svelte';
 	import SidebarLayout, { PANEL_DEFAULT, PANEL_KEY } from '$lib/components/SidebarLayout.svelte';
@@ -46,7 +49,6 @@
 	import { lineStats } from '$lib/diff/hunks';
 	import SavedGuides from '$lib/components/SavedGuides.svelte';
 	import SegmentedControl from '$lib/components/SegmentedControl.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import AgentPicker from '$lib/components/AgentPicker.svelte';
 	import { getPullRequests } from '$lib/pr/pr.remote';
 	import { keepFresh } from '$lib/pr/refresh';
@@ -89,7 +91,7 @@
 	// coming back. A pull request, or the list of them, moves on GitHub meanwhile too
 	const onGitHub = $derived(data.mode === 'pr');
 	// the open pull requests beside one follow along
-	$effect(() => keepFresh(onGitHub, () => prsQuery?.refresh().catch(() => {})));
+	$effect(() => keepFresh(onGitHub, () => prsQuery.refresh().catch(() => {})));
 	let awaited: PageData['diff'] | undefined;
 	let awaitedAt = '';
 	$effect(() => {
@@ -141,9 +143,12 @@
 	// our own (FindBar), the browser's can't see the rest
 	const virtualize = true;
 	// the file on screen, for the sidebar. The guide follows its own steps. Read from
-	// a little below where a file jumped to lands (scroll-mt-32 in FileDiff, its header
+	// a little below where a file jumped to lands (scroll-mt-43 in FileDiff, its header
 	// stuck a gap below the bars), so the one jumped to is the one marked
-	const reading = scrollSpy(() => (view === 'files' ? diff.files.map((f) => f.id) : []), 136);
+	const reading = scrollSpy(
+		() => (view === 'files' ? diff.files.map((f) => f.id) : []),
+		HEADER + 88
+	);
 	const headLabel = $derived(
 		data.branch && data.branch !== 'HEAD' ? `HEAD · ${data.branch}` : 'HEAD'
 	);
@@ -198,11 +203,79 @@
 		else switchView('files', () => jumpToThread(thread, diff.files));
 	}
 
-	// the repo's open pull requests for the picker on a pull request, asked of gh after
-	// the page is up, it takes a moment. Undefined till then, null without gh, a sign in
-	// or a GitHub remote. Held while it's on screen, so a page loaded again asks again
-	const prsQuery = $derived(pr ? getPullRequests(data.repo) : null);
-	const prs = $derived<PrSummary[] | null | undefined>(prsQuery?.error ? null : prsQuery?.current);
+	// the repo's open pull requests, for the picker on a pull request and to tell which worktree
+	// has which checked out, asked of gh after the page is up, it takes a moment. Undefined till
+	// then, null without gh, a sign in or a GitHub remote. Held while it's on screen, so a page
+	// loaded again asks again
+	const main = $derived(data.main ?? data.repo);
+	const prsQuery = $derived(getPullRequests(main));
+	const prs = $derived<PrSummary[] | null | undefined>(prsQuery.error ? null : prsQuery.current);
+	const trees = $derived(followWorktrees({ repo: main, fetch: false }).current?.worktrees);
+
+	/** where the page is, for the title strip's tabs */
+	const place = $derived<Place>(
+		data.mode !== 'pr'
+			? { kind: 'tree', path: data.repo }
+			: /^[1-9]\d*$/.test(data.inputs.pr)
+				? { kind: 'pr', number: Number(data.inputs.pr), root: data.repo }
+				: { kind: 'prs' }
+	);
+	/** the worktree's own pull request, the last of its modes */
+	const ownPr = $derived.by(() => {
+		const tree = trees?.find((t) => t.path === data.repo);
+		const linked = tree ? linkedPr(tree, prs) : null;
+		// read in a worktree, a pull request is that worktree's, before the list says so too
+		return linked?.number ?? (place.kind === 'pr' && data.repo !== main ? place.number : null);
+	});
+	/** a pull request read without a worktree: nothing to run, no modes but its own */
+	const readOnly = $derived(place.kind === 'pr' && ownPr !== place.number);
+
+	/** the worktree's session that needs you, works, or is done unread */
+	const speaking = $derived.by(() => {
+		const tree =
+			place.kind !== 'prs' && !readOnly ? trees?.find((t) => t.path === data.repo) : null;
+		return tree ? loudest(tree.sessions) : null;
+	});
+
+	const worktreeName = (number: number) => worktreeOfPr(number, trees, prs)?.branch ?? null;
+
+	// a pull request read in the main checkout that has a worktree of its own, opened before the
+	// worktrees were read or checked out since from a terminal, moves there
+	$effect(() => {
+		if (place.kind !== 'pr' || data.repo !== main) return;
+		const tree = worktreeOfPr(place.number, trees, prs);
+		if (tree && tree.path !== main)
+			goto(url({ repo: tree.path }), { replaceState: true, keepFocus: true });
+	});
+
+	/** A pull request, in the worktree it's checked out in, else read in the main checkout. */
+	function prUrl(number: number) {
+		const repo = worktreeOfPr(number, trees, prs)?.path ?? main;
+		return url({ repo, pr: String(number), view: null }, true);
+	}
+
+	/** the pull request being checked out, and why the last one couldn't be, on its own page */
+	let checkingOut = $state<number | null>(null);
+	let checkoutFailure = $state<{ at: string; text: string } | null>(null);
+	/**
+	 * Checks the pull request out in a worktree of its own, its tab becoming the worktree's, and
+	 * goes there unless you've moved on meanwhile.
+	 */
+	async function checkOut(number: number) {
+		const at = page.url.href;
+		checkingOut = number;
+		checkoutFailure = null;
+		try {
+			const path = await checkoutPr({ repo: main, number });
+			checkedOut(main, number, path);
+			if (page.url.href === at)
+				await goto(url({ repo: path }), { keepFocus: true, noScroll: true });
+		} catch (e) {
+			checkoutFailure = { at, text: errorText(e) };
+		} finally {
+			checkingOut = null;
+		}
+	}
 	/** the PRs to pick from, with the one on screen when it isn't open anymore */
 	const prChoices = $derived(
 		pr && !prs?.some((p) => p.number === pr.number)
@@ -412,13 +485,6 @@
 		return `?${params}`;
 	}
 
-	/** PR mode without a pull request picked, the list of open ones. */
-	function prList() {
-		const params = new URLSearchParams(url({ view: null }, true).slice(1));
-		params.set('pr', '');
-		return `?${params}`;
-	}
-
 	/** `noScroll` stays where the page is, for another look at the same diff */
 	function navigate(next: Record<string, string | null>, reset = false, noScroll = false) {
 		goto(url(next, reset), { keepFocus: true, noScroll });
@@ -461,8 +527,8 @@
 	/** PR mode without one picked, the list of open ones to pick from */
 	const pickingPr = $derived(data.mode === 'pr' && !data.inputs.pr);
 	const hasViewNavigation = $derived(ready && !pickingPr && !loadingList && !diff.error);
-	/** 48px page header and, for an open comparison, the 44px shared view strip. */
-	const stickyTop = $derived(hasViewNavigation ? 92 : 48);
+	/** the page header and, for an open comparison, the 44px shared view strip */
+	const stickyTop = $derived(hasViewNavigation ? HEADER + 44 : HEADER);
 	const tab = $derived<Tab>(data.mode === 'commit' ? 'branch' : data.mode);
 
 	/** The checked-out branch, or the most recent one that isn't the base. */
@@ -475,11 +541,10 @@
 	}
 
 	function setMode(mode: Tab) {
-		// a picked pull request's tab still goes back to the list of them
-		if (mode === tab && mode !== 'pr') return;
-		if (mode === 'agents') goto(`/agents?${new URLSearchParams({ repo: data.repo })}`);
+		if (mode === tab) return;
+		if (mode === 'agents') goto(`/agents?${new URLSearchParams({ repo: main, cwd: data.repo })}`);
 		else if (mode === 'branch') navigate({ branch: suggestedBranch(), view: null }, true);
-		else if (mode === 'pr') goto(prList(), { keepFocus: true });
+		else if (mode === 'pr' && ownPr) navigate({ pr: String(ownPr), view: null }, true);
 		else if (mode === 'range')
 			navigate({ from: range?.from ?? 'HEAD~1', to: range?.to ?? 'HEAD', view: null }, true);
 		else navigate({ view: null }, true);
@@ -516,160 +581,66 @@
 <svelte:window {onkeydown} bind:innerWidth />
 
 <div class={['min-h-screen font-sans', width === 'full' && 'full-width']}>
-	<header
-		class="title-bar sticky top-0 z-20 flex h-12 items-center gap-1.5 border-b border-line bg-canvas px-3 shadow-strip min-[1351px]:gap-2 min-[1351px]:px-4"
-	>
-		<Logo />
+	<header class="sticky top-0 z-20 bg-canvas">
+		<WorktreeStrip {main} {place} />
+		<!-- the mode bar: how the worktree on screen is looked at, no line under it, the panels
+		     floating up to it -->
+		<div class="flex h-11 items-center gap-1.5 px-3 min-[1351px]:gap-2 min-[1351px]:px-4">
+			{#if data.branches.length}
+				{#if !readOnly && place.kind !== 'prs'}
+					<div class="shrink-0">
+						<SegmentedControl
+							options={modes(ownPr)}
+							value={tab}
+							onchange={setMode}
+							label="Agents and comparisons"
+						/>
+					</div>
+				{/if}
 
-		<RepoButton repo={data.repo} />
-
-		{#if data.branches.length}
-			<div class="ml-1 shrink-0">
-				<SegmentedControl
-					options={TABS}
-					value={tab}
-					onchange={setMode}
-					label="Agents and comparisons"
-				/>
-			</div>
-
-			<div class="flex min-w-0 flex-1 items-center gap-1.5">
-				{#if data.mode === 'branch'}
-					<RefPicker
-						compact
-						label="branch"
-						value={data.inputs.branch}
-						fallback=""
-						branches={data.branches}
-						commits={data.commits}
-						only={['branches']}
-						placeholder="Filter branches"
-						onselect={(branch) => navigate({ branch, commits: null })}
-					/>
-					{#if branchSel}
-						<!-- found from the history, a different base is a range -->
-						<span
-							class="flex h-8 min-w-0 items-center gap-1.5 px-1 text-[11.5px] text-muted"
-							title={branchSel.merged
-								? `Merged into ${branchSel.base}, shown against where it split off before the merge`
-								: `Where ${branchSel.name} split off ${branchSel.base}, found from the history`}
-						>
-							<span class="shrink-0 text-faint">from</span>
-							<span class="truncate font-mono text-fg">{branchSel.base}</span>
-							<span class="shrink-0 font-mono text-accent">{branchSel.mergeBase.slice(0, 7)}</span>
-							{#if branchSel.merged}
-								<span class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
-									>merged</span
-								>
-							{/if}
-						</span>
-					{/if}
-					{#if span}
-						<Button
-							variant="tint"
-							size="sm"
-							title="Show the whole branch"
-							onclick={() => navigate({ commits: null })}
-						>
-							{span.first === span.last
-								? `commit ${span.first}`
-								: `commits ${span.first}–${span.last}`} of {span.total}
-							<svg
-								viewBox="0 0 16 16"
-								class="size-3"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.75"
-								stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
+				<div class="flex min-w-0 flex-1 items-center gap-1.5">
+					{#if data.mode === 'branch'}
+						<RefPicker
+							compact
+							label="branch"
+							value={data.inputs.branch}
+							fallback=""
+							branches={data.branches}
+							commits={data.commits}
+							only={['branches']}
+							placeholder="Filter branches"
+							onselect={(branch) => navigate({ branch, commits: null })}
+						/>
+						{#if branchSel}
+							<!-- found from the history, a different base is a range -->
+							<span
+								class="flex h-8 min-w-0 items-center gap-1.5 px-1 text-[11.5px] text-muted"
+								title={branchSel.merged
+									? `Merged into ${branchSel.base}, shown against where it split off before the merge`
+									: `Where ${branchSel.name} split off ${branchSel.base}, found from the history`}
 							>
-						</Button>
-					{/if}
-				{:else if data.mode === 'commit'}
-					<RefPicker
-						compact
-						label="branch"
-						value={lane?.name ?? ''}
-						fallback="on no branch"
-						branches={data.branches}
-						commits={[]}
-						only={['branches']}
-						placeholder="Filter branches"
-						onselect={(branch) => navigate({ branch, view: null }, true)}
-					/>
-					<Button
-						size="lg"
-						icon
-						title={older
-							? 'Older commit  ['
-							: commit
-								? 'This is the first commit'
-								: 'Pick a commit first'}
-						aria-label="Older commit"
-						disabled={!older}
-						onclick={() => older && navigate(commitParams(older))}
-					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.75"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="m10 3.5-4.5 4.5 4.5 4.5" /></svg
-						>
-					</Button>
-					<RefPicker
-						compact
-						label="commit"
-						value={data.inputs.commit}
-						fallback=""
-						branches={data.branches}
-						commits={lane ? [...lane.commits].reverse() : data.commits}
-						more={lane?.earlier}
-						moreLabel={lane?.base ? `Earlier on ${lane.base}` : ''}
-						only={lane ? ['commits'] : ['commits', 'branches', 'tags']}
-						placeholder={lane
-							? `Filter commits on ${lane.name}`
-							: 'Filter commits, or pick a branch or tag'}
-						onselect={(sha) => navigate(commitParams(sha))}
-					/>
-					<Button
-						size="lg"
-						icon
-						title={newer
-							? 'Newer commit  ]'
-							: commit
-								? lane
-									? `The newest commit on ${lane.name}`
-									: 'No newer commit on any branch'
-								: 'Pick a commit first'}
-						aria-label="Newer commit"
-						disabled={!newer}
-						onclick={() => newer && navigate(commitParams(newer))}
-					>
-						<svg
-							viewBox="0 0 16 16"
-							class="size-3.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.75"
-							stroke-linecap="round"
-							stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg
-						>
-					</Button>
-					{#if lane && at >= 0}
-						{@const label = position
-							? `commit ${position.index} of ${position.total}`
-							: `before ${lane.name}, on ${lane.base}`}
-						{#if lane.base}
+								<span class="shrink-0 text-faint">from</span>
+								<span class="truncate font-mono text-fg">{branchSel.base}</span>
+								<span class="shrink-0 font-mono text-accent">{branchSel.mergeBase.slice(0, 7)}</span
+								>
+								{#if branchSel.merged}
+									<span
+										class="rounded-sm border border-line px-1 text-[10px] font-medium text-muted"
+										>merged</span
+									>
+								{/if}
+							</span>
+						{/if}
+						{#if span}
 							<Button
 								variant="tint"
 								size="sm"
-								class="tabular-nums"
 								title="Show the whole branch"
-								onclick={() => navigate({ branch: lane.name, view: null }, true)}
+								onclick={() => navigate({ commits: null })}
 							>
-								{label}
+								{span.first === span.last
+									? `commit ${span.first}`
+									: `commits ${span.first}–${span.last}`} of {span.total}
 								<svg
 									viewBox="0 0 16 16"
 									class="size-3"
@@ -679,44 +650,235 @@
 									stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
 								>
 							</Button>
-						{:else}
-							<!-- the default branch has no whole-branch view to go back to -->
-							<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
 						{/if}
-					{/if}
-				{:else if data.mode === 'pr'}
-					<!-- the list of pull requests has nothing to compare against yet -->
-					{#if pr}
+					{:else if data.mode === 'commit'}
 						<RefPicker
 							compact
-							label="PR"
-							value={data.inputs.pr}
-							fallback=""
-							branches={[]}
+							label="branch"
+							value={lane?.name ?? ''}
+							fallback="on no branch"
+							branches={data.branches}
 							commits={[]}
-							prs={prChoices}
-							only={['prs']}
-							placeholder="Filter pull requests, or type a number"
-							onselect={(number) => navigate({ pr: number, view: null }, true)}
+							only={['branches']}
+							placeholder="Filter branches"
+							onselect={(branch) => navigate({ branch, view: null }, true)}
+						/>
+						<Button
+							size="lg"
+							icon
+							title={older
+								? 'Older commit  ['
+								: commit
+									? 'This is the first commit'
+									: 'Pick a commit first'}
+							aria-label="Older commit"
+							disabled={!older}
+							onclick={() => older && navigate(commitParams(older))}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="m10 3.5-4.5 4.5 4.5 4.5" /></svg
+							>
+						</Button>
+						<RefPicker
+							compact
+							label="commit"
+							value={data.inputs.commit}
+							fallback=""
+							branches={data.branches}
+							commits={lane ? [...lane.commits].reverse() : data.commits}
+							more={lane?.earlier}
+							moreLabel={lane?.base ? `Earlier on ${lane.base}` : ''}
+							only={lane ? ['commits'] : ['commits', 'branches', 'tags']}
+							placeholder={lane
+								? `Filter commits on ${lane.name}`
+								: 'Filter commits, or pick a branch or tag'}
+							onselect={(sha) => navigate(commitParams(sha))}
+						/>
+						<Button
+							size="lg"
+							icon
+							title={newer
+								? 'Newer commit  ]'
+								: commit
+									? lane
+										? `The newest commit on ${lane.name}`
+										: 'No newer commit on any branch'
+									: 'Pick a commit first'}
+							aria-label="Newer commit"
+							disabled={!newer}
+							onclick={() => newer && navigate(commitParams(newer))}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.75"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="m6 3.5 4.5 4.5L6 12.5" /></svg
+							>
+						</Button>
+						{#if lane && at >= 0}
+							{@const label = position
+								? `commit ${position.index} of ${position.total}`
+								: `before ${lane.name}, on ${lane.base}`}
+							{#if lane.base}
+								<Button
+									variant="tint"
+									size="sm"
+									class="tabular-nums"
+									title="Show the whole branch"
+									onclick={() => navigate({ branch: lane.name, view: null }, true)}
+								>
+									{label}
+									<svg
+										viewBox="0 0 16 16"
+										class="size-3"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.75"
+										stroke-linecap="round"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7" /></svg
+									>
+								</Button>
+							{:else}
+								<!-- the default branch has no whole-branch view to go back to -->
+								<span class="px-1 text-[11.5px] text-muted tabular-nums">{label}</span>
+							{/if}
+						{/if}
+					{:else if data.mode === 'pr'}
+						<!-- the list of pull requests has nothing to compare against yet -->
+						{#if pr}
+							<RefPicker
+								compact
+								label="PR"
+								value={data.inputs.pr}
+								fallback=""
+								branches={[]}
+								commits={[]}
+								prs={prChoices}
+								only={['prs']}
+								placeholder="Filter pull requests, or type a number"
+								onselect={(number) => goto(prUrl(Number(number)), { keepFocus: true })}
+							/>
+						{/if}
+						{#if readOnly && place.kind === 'pr'}
+							{@const number = place.number}
+							<!-- to run it, or have an agent work on it -->
+							<Button
+								size="lg"
+								disabled={checkingOut !== null}
+								title="A worktree of its own with gh pr checkout, set up as a new one is"
+								onclick={() => checkOut(number)}
+							>
+								{#if checkingOut === number}<span
+										class="size-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
+									></span>Checking out…{:else}Check out{/if}
+							</Button>
+							{#if checkoutFailure?.at === page.url.href}
+								<span
+									class="min-w-0 truncate text-[11.5px] text-del"
+									role="alert"
+									title={checkoutFailure.text}>{checkoutFailure.text}</span
+								>
+							{/if}
+						{/if}
+					{:else if data.mode === 'range'}
+						<RefPicker
+							compact
+							label="from"
+							value={data.inputs.from}
+							fallback="HEAD"
+							branches={data.branches}
+							commits={data.commits}
+							onselect={(from) => navigate({ from })}
+						/>
+						<Button
+							size="lg"
+							icon
+							title="Swap from and to"
+							aria-label="Swap from and to"
+							onclick={() => navigate({ from: data.inputs.to, to: data.inputs.from || 'HEAD' })}
+						>
+							<svg
+								viewBox="0 0 16 16"
+								class="size-3.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"><path d="M2.5 5.5h10l-3-3M13.5 10.5h-10l3 3" /></svg
+							>
+						</Button>
+						<RefPicker
+							compact
+							label="to"
+							value={data.inputs.to}
+							fallback=""
+							branches={data.branches}
+							commits={data.commits}
+							onselect={(to) => navigate({ to })}
+						/>
+					{:else}
+						<RefPicker
+							compact
+							label="vs"
+							value={data.inputs.from}
+							fallback={headLabel}
+							branches={data.branches}
+							commits={data.commits}
+							onselect={(from) => navigate({ from })}
 						/>
 					{/if}
-				{:else if data.mode === 'range'}
-					<RefPicker
-						compact
-						label="from"
-						value={data.inputs.from}
-						fallback="HEAD"
-						branches={data.branches}
-						commits={data.commits}
-						onselect={(from) => navigate({ from })}
-					/>
-					<Button
-						size="lg"
-						icon
-						title="Swap from and to"
-						aria-label="Swap from and to"
-						onclick={() => navigate({ from: data.inputs.to, to: data.inputs.from || 'HEAD' })}
+				</div>
+			{/if}
+
+			<div class="ml-auto flex shrink-0 items-center gap-2">
+				{#if speaking}
+					{@const st = signal(speaking)}
+					<!-- the worktree's agent while it works or waits on you, back to it in one click -->
+					<a
+						class={buttonClass({ size: 'lg' })}
+						href="/agents?{new URLSearchParams({
+							repo: main,
+							cwd: data.repo,
+							session: speaking.id
+						})}"
+						title="{speaking.title}: {st.title}"
 					>
+						<span class={['size-1.5 rounded-full', st.glyph === 'check' ? 'bg-accent' : st.class]}
+						></span>
+						<span class="max-w-48 truncate">{speaking.title}</span>
+					</a>
+				{/if}
+				{#if diff.files.length > 0}
+					<div class="flex items-center gap-3 font-mono text-[11px] text-muted tabular-nums">
+						<span>{diff.files.length} {diff.files.length === 1 ? 'file' : 'files'}</span>
+						<span>
+							<span class="text-add">+{totals.additions}</span>
+							<span class="text-del">−{totals.deletions}</span>
+						</span>
+					</div>
+				{/if}
+				<button
+					type="button"
+					class="flex h-8 items-center gap-1.5 rounded-full border border-faint bg-accent/8 px-3.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
+					title={guideJob.running
+						? 'Writing a guide, open to follow or cancel it'
+						: guideJob.failure || 'Generate or open review guides'}
+					onclick={() => (dialog = 'pick')}
+				>
+					{#if guideJob.running}
+						<span
+							class="size-3.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent"
+							aria-label="Writing a guide"
+						></span>
+					{:else}
 						<svg
 							viewBox="0 0 16 16"
 							class="size-3.5"
@@ -724,82 +886,25 @@
 							stroke="currentColor"
 							stroke-width="1.5"
 							stroke-linecap="round"
-							stroke-linejoin="round"><path d="M2.5 5.5h10l-3-3M13.5 10.5h-10l3 3" /></svg
+							stroke-linejoin="round"
+							><path
+								d="M8 2.5 9.3 6.2 13 7.5 9.3 8.8 8 12.5 6.7 8.8 3 7.5l3.7-1.3zM12.5 11.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"
+							/></svg
 						>
-					</Button>
-					<RefPicker
-						compact
-						label="to"
-						value={data.inputs.to}
-						fallback=""
-						branches={data.branches}
-						commits={data.commits}
-						onselect={(to) => navigate({ to })}
-					/>
-				{:else}
-					<RefPicker
-						compact
-						label="vs"
-						value={data.inputs.from}
-						fallback={headLabel}
-						branches={data.branches}
-						commits={data.commits}
-						onselect={(from) => navigate({ from })}
-					/>
-				{/if}
+					{/if}
+					Guides
+					{#if guideJob.failure && !guideJob.running}
+						<span class="size-1.5 rounded-full bg-del" aria-label="The last guide failed"></span>
+					{/if}
+					{#if repoGuides.length}
+						<span
+							class="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] text-surface tabular-nums"
+							title="{repoGuides.length} saved for this repo">{repoGuides.length}</span
+						>
+					{/if}
+				</button>
+				<AgentPicker />
 			</div>
-		{/if}
-
-		<div class="ml-auto flex shrink-0 items-center gap-2">
-			{#if diff.files.length > 0}
-				<div class="flex items-center gap-3 font-mono text-[11px] text-muted tabular-nums">
-					<span>{diff.files.length} {diff.files.length === 1 ? 'file' : 'files'}</span>
-					<span>
-						<span class="text-add">+{totals.additions}</span>
-						<span class="text-del">−{totals.deletions}</span>
-					</span>
-				</div>
-			{/if}
-			<button
-				type="button"
-				class="flex h-8 items-center gap-1.5 rounded-full border border-faint bg-accent/8 px-3.5 text-[12px] font-medium text-accent shadow-raised hover:bg-accent/14 active:shadow-pressed"
-				title={guideJob.running
-					? 'Writing a guide, open to follow or cancel it'
-					: guideJob.failure || 'Generate or open review guides'}
-				onclick={() => (dialog = 'pick')}
-			>
-				{#if guideJob.running}
-					<span
-						class="size-3.5 animate-spin rounded-full border-[1.5px] border-accent border-t-transparent"
-						aria-label="Writing a guide"
-					></span>
-				{:else}
-					<svg
-						viewBox="0 0 16 16"
-						class="size-3.5"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						><path
-							d="M8 2.5 9.3 6.2 13 7.5 9.3 8.8 8 12.5 6.7 8.8 3 7.5l3.7-1.3zM12.5 11.5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5z"
-						/></svg
-					>
-				{/if}
-				Guides
-				{#if guideJob.failure && !guideJob.running}
-					<span class="size-1.5 rounded-full bg-del" aria-label="The last guide failed"></span>
-				{/if}
-				{#if repoGuides.length}
-					<span
-						class="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] text-surface tabular-nums"
-						title="{repoGuides.length} saved for this repo">{repoGuides.length}</span
-					>
-				{/if}
-			</button>
-			<AgentPicker />
-			<ThemeToggle />
 		</div>
 	</header>
 
@@ -868,7 +973,7 @@
 
 	{#snippet band()}
 		{#if hasViewNavigation}
-			<div class="sticky top-12 z-[19] h-11">
+			<div class="sticky z-[19] h-11" style:top="{HEADER}px">
 				{@render viewToolbar()}
 				<!-- what scrolls under the bar fades into it rather than being cut off -->
 				<div
@@ -945,7 +1050,8 @@
 					? undefined
 					: diff.prs}
 			bind:view={prView}
-			href={(number) => url({ pr: String(number), view: null }, true)}
+			href={prUrl}
+			worktree={worktreeName}
 		/>
 	{:else if openingPr}
 		<!-- a pull request picked from the list, what the list knew of it at once -->
@@ -961,7 +1067,7 @@
 		<DiffSkeleton
 			layout={shownLayout}
 			{stickyTop}
-			panelTop={48}
+			panelTop={HEADER}
 			toolbar={hasViewNavigation ? viewToolbar : undefined}
 		/>
 	{:else if diff.error}
@@ -992,11 +1098,7 @@
 	{:else if diff.mode === 'pr' && !pr}
 		{@render band()}
 		<!-- the list left for another comparison, before the skeleton shows -->
-		<PrList
-			prs={diff.prs}
-			bind:view={prView}
-			href={(number) => url({ pr: String(number), view: null }, true)}
-		/>
+		<PrList prs={diff.prs} bind:view={prView} href={prUrl} worktree={worktreeName} />
 	{:else if view === 'explainer'}
 		{@render band()}
 		{#if range}
@@ -1034,7 +1136,7 @@
 			guide={diff.guide}
 			files={diff.files}
 			{stickyTop}
-			panelTop={48}
+			panelTop={HEADER}
 			toolbar={viewToolbar}
 			layout={shownLayout}
 			{virtualize}
@@ -1146,14 +1248,15 @@
 				{prs}
 				current={headed ?? pr?.number}
 				bind:view={sideView}
-				href={(number) => url({ pr: String(number), view: null }, true)}
+				href={prUrl}
+				worktree={worktreeName}
 			/>
 		{/snippet}
 		<SidebarLayout
 			layout={view === 'overview' ? 'unified' : shownLayout}
 			chars={columnsOf(diff.files)}
 			{stickyTop}
-			panelTop={48}
+			panelTop={HEADER}
 			toolbar={viewToolbar}
 			aside={view === 'overview' ? prSidebar : fileSidebar}
 			rail={view === 'overview' ? undefined : fileRail}

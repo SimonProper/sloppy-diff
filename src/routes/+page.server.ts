@@ -42,6 +42,7 @@ import {
 import { annotateChanges } from '$lib/server/changes';
 import { guideEndingAt, listGuides, loadGuide, prepareGuide } from '$lib/server/guides';
 import { checkPrNumber, readPullRequest, recentPullRequests } from '$lib/server/gh';
+import { mainCheckout } from '$lib/server/agents';
 import { highlightFiles } from '$lib/server/highlight';
 import { adoptThreads, loadThreads, prepareThreads } from '$lib/server/threads';
 import { Timing } from '$lib/server/timing';
@@ -164,10 +165,14 @@ export const load: PageServerLoad = async ({
 		return {
 			...base,
 			...empty(),
+			main: null,
 			diff: Promise.resolve(noDiff(errorMessage(error))),
 			fresh: Promise.resolve(null)
 		};
 	}
+	// the checkout its worktrees hang off, whose tabs the header shows and whose pull requests
+	// are listed, one list for them all
+	const main = await mainCheckout(root).catch(() => root);
 	// `name` labels the step in Server-Timing, `detail` narrows the cache key
 	const cached = <T>(name: string, compute: () => Promise<T>, detail = '') =>
 		timing.measure(name, remember(`${root}\0${name}\0${detail}`, version, compute));
@@ -289,7 +294,7 @@ export const load: PageServerLoad = async ({
 			: null;
 	// the open ones beside it are asked for by the page once it's up, as it loads again
 	// in the background. Reloaded, they're read again too, ready by the time it asks
-	if (force && mode === 'pr' && inputs.pr) void recentPullRequests(root, true);
+	if (force && mode === 'pr' && inputs.pr) void recentPullRequests(main, true);
 	const selection = () =>
 		pr
 			? pr.then(({ now }) => timing.measure('pr', now))
@@ -304,7 +309,7 @@ export const load: PageServerLoad = async ({
 				);
 
 	// without a pull request picked, the open ones to pick from, as read last too
-	const listed = mode === 'pr' && !inputs.pr ? recentPullRequests(root, force) : null;
+	const listed = mode === 'pr' && !inputs.pr ? recentPullRequests(main, force) : null;
 	// the diff streams in after the page has landed, so picking something moves there at
 	// once and the page shows it loading
 	const diff = (
@@ -332,7 +337,7 @@ export const load: PageServerLoad = async ({
 	const [branches, commits] = await meta.catch((): [Branch[], Commit[]] => [[], []]);
 	const [branch, defaultBase] = await head;
 	report();
-	return { ...base, repo: root, branch, defaultBase, branches, commits, diff, fresh };
+	return { ...base, repo: root, main, branch, defaultBase, branches, commits, diff, fresh };
 };
 
 async function select(
