@@ -74,6 +74,11 @@ export function checkPrNumber(value: string | number): number {
 	return Number(text);
 }
 
+/** Checks the pull request out in `cwd` as gh does: its branch, tracking the head's remote. */
+export async function checkoutPullRequest(cwd: string, number: number): Promise<void> {
+	await gh(cwd, ['pr', 'checkout', String(checkPrNumber(number))]);
+}
+
 // ponytail: the first 100 of each, no paging. A PR with more threads or comments loses the rest.
 // Avatars at twice the size they're shown, for sharp screens
 const QUERY = `query($owner: String!, $repo: String!, $number: Int!) {

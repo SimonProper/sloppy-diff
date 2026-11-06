@@ -1,5 +1,6 @@
 import { command, getRequestEvent, query } from '$app/server';
 import {
+	addPrWorktree,
 	addWorktree,
 	branchFor,
 	busyIn,
@@ -228,6 +229,20 @@ export const startSession = command(
 			);
 			notify(await mainCheckout(repo));
 			return { id, cwd: where };
+		})
+);
+
+/** Checks the pull request out in a worktree of its own, its path. Set up as a new one is. */
+export const checkoutPr = command(
+	'unchecked',
+	({ repo, number }: { repo: string; number: number }) =>
+		badRequestOnError(async () => {
+			const main = await mainCheckout(repo);
+			const where = await addPrWorktree(main, number);
+			const { setup } = await loadScripts(main);
+			if (setup) openTerminal(where, main, 'Setup', setup);
+			notify(main);
+			return where;
 		})
 );
 

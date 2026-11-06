@@ -36,6 +36,7 @@ import type {
 	Task,
 	Worktree
 } from '$lib/agents/types';
+import { checkPrNumber, checkoutPullRequest } from './gh';
 import { git } from './git';
 import { repoDir } from './guides';
 import { log } from './log';
@@ -107,8 +108,7 @@ export async function addWorktree(repo: string, branch: string, base: string): P
 	const main = await mainCheckout(repo);
 	branch = (await git(main, ['check-ref-format', '--branch', branch.trim()])).trim();
 	if (base.startsWith('-')) throw new Error(`${base} isn't a branch`);
-	const root = env.WORKTREES_DIR || join(homedir(), '.sloppy-diff', 'worktrees');
-	const path = join(root, basename(main), branch.replaceAll('/', '-'));
+	const path = join(worktreesDir(), basename(main), branch.replaceAll('/', '-'));
 	// off the remote's copy of the base as it is now, as t3code, Conductor and Claude Code do,
 	// not a local one that may be behind. Not tracking it, its upstream is its own once pushed
 	await fetchNow(main);
@@ -121,6 +121,22 @@ export async function addWorktree(repo: string, branch: string, base: string): P
 	await git(main, ['worktree', 'add', '--no-track', '-b', branch, path, remote || base || 'HEAD']);
 	return path;
 }
+
+/** The pull request checked out by gh in a worktree of its own, `pr-<number>` beside the others. */
+export async function addPrWorktree(repo: string, number: number): Promise<string> {
+	const main = await mainCheckout(repo);
+	const path = join(worktreesDir(), basename(main), `pr-${checkPrNumber(number)}`);
+	await git(main, ['worktree', 'add', '--detach', path]);
+	try {
+		await checkoutPullRequest(path, number);
+	} catch (e) {
+		await git(main, ['worktree', 'remove', '--force', path]).catch(() => {});
+		throw e;
+	}
+	return path;
+}
+
+const worktreesDir = () => env.WORKTREES_DIR || join(homedir(), '.sloppy-diff', 'worktrees');
 
 // ---- settings
 
