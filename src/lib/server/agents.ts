@@ -30,7 +30,7 @@ import type {
 	Worktree
 } from '$lib/agents/types';
 import { git } from './git';
-import { guidesDir, repoDir } from './guides';
+import { repoDir } from './guides';
 import { log } from './log';
 import { fetchNow, run } from './sync';
 import { notify } from './watch';
@@ -117,7 +117,9 @@ export async function addWorktree(repo: string, branch: string, base: string): P
 
 // ---- settings
 
-const settingsPath = () => join(guidesDir(), 'agent-settings.json');
+// the user's, not the checkout's: the dev server and the app read the same ones
+const settingsDir = join(homedir(), '.sloppy-diff');
+const settingsPath = () => join(settingsDir, 'agent-settings.json');
 const DEFAULTS: AgentSettings = {
 	wrapper: '',
 	sandbox: true,
@@ -134,7 +136,7 @@ export async function loadSettings(): Promise<AgentSettings> {
 
 /** Saves them, and has every session's process start again with them, once it's between turns. */
 export async function saveSettings(settings: AgentSettings): Promise<void> {
-	await mkdir(guidesDir(), { recursive: true });
+	await mkdir(settingsDir, { recursive: true });
 	await writeFile(settingsPath(), JSON.stringify(settings, null, '\t'));
 	for (const entry of sessions.values()) {
 		if (!entry.query) continue;
