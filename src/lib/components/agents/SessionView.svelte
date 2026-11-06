@@ -19,6 +19,7 @@
 		stopTurn
 	} from '$lib/agents/agents.remote';
 	import { untrack } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { fly } from 'svelte/transition';
 	import { cubicIn, cubicOut } from 'svelte/easing';
 	import { buttonClass } from '$lib/components/Button.svelte';
@@ -240,6 +241,12 @@
 	// the page follows the end while the reader is there, scrolling up stops that until they're back
 	let following = true;
 	const atEnd = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 24;
+	// it opens at its end: after SvelteKit's own scroll to the top on the way here, which would
+	// otherwise read as the reader leaving the end. What comes in later is followed from there
+	afterNavigate(() => {
+		following = true;
+		scrollTo({ top: document.documentElement.scrollHeight });
+	});
 </script>
 
 <svelte:window {onkeydown} onscroll={() => (following = atEnd())} />
