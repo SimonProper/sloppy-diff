@@ -153,11 +153,12 @@ export function recentRead<T>(key: string, compute: () => Promise<T>, force = fa
 
 /**
  * After a write to pull request `number`: it's read from GitHub again before it's shown,
- * the open ones are served while they're read again. The other pull requests stay.
+ * the open ones are served while they're read again. The other pull requests stay. The list
+ * is the repo's, kept for its main checkout `main`, whichever worktree the PR was read in.
  */
-export function forgetPr(root: string, number: number) {
+export function forgetPr(root: string, number: number, main = root) {
 	prWrites++;
 	memo.delete(prKey(root, number));
-	const list = memo.get(prsKey(root));
+	const list = memo.get(prsKey(main));
 	if (list) list.at = undefined;
 }

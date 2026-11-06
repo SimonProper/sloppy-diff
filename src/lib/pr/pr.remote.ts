@@ -16,12 +16,13 @@ import {
 	type VerdictEvent
 } from '$lib/server/gh';
 import { repoRoot } from '$lib/server/git';
+import { mainCheckout } from '$lib/server/agents';
 import { forgetPr } from '$lib/server/cache';
 import { badRequestOnError } from '$lib/server/requests';
 
-/** The repo's open pull requests, null without gh or GitHub. */
+/** The repo's open pull requests, null without gh or GitHub. One list for all its worktrees. */
 export const getPullRequests = query('unchecked', async (repo: string) =>
-	recentPullRequests(await repoRoot(repo)).now.catch(() => null)
+	recentPullRequests(await mainCheckout(await repoRoot(repo))).now.catch(() => null)
 );
 
 /**
@@ -32,7 +33,7 @@ function write<T>(repo: string, number: number, run: (root: string) => Promise<T
 	return badRequestOnError(async () => {
 		const root = await repoRoot(repo);
 		const result = await run(root);
-		forgetPr(root, number);
+		forgetPr(root, number, await mainCheckout(root));
 		return result;
 	});
 }
