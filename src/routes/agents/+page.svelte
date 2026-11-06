@@ -424,75 +424,86 @@
 			{/if}
 			{#each trees.current ?? [] as t (t.path)}
 				{@const opened = t.sessions.filter((s) => s.open)}
+				{@const counts = !!(t.ahead || t.behind || t.behindBase || t.added || t.removed)}
 				<div class="group/tree mb-1.5">
-					<!-- herdr's line for a worktree: its branch, how far from upstream, what's uncommitted -->
+					<!-- herdr's line for a worktree, in two: its branch with the line to itself, then how
+					     far it is from upstream and what's uncommitted. Its actions take room on hover -->
 					<div
 						class={[
-							'flex h-8 items-center gap-1.5 rounded-lg pr-1 pl-2 hover:bg-subtle',
+							'flex gap-1 rounded-lg py-1 pr-1 pl-2 hover:bg-subtle',
 							t.path === cwd && !sessionId && !editing && 'bg-subtle'
 						]}
 					>
 						<button
 							type="button"
-							class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12.5px]"
+							class="flex min-w-0 flex-1 flex-col text-left"
 							title={[t.path, standing(t)].filter(Boolean).join('\n')}
 							onclick={() => (opened.length ? show(first(opened)) : newSession(t.path))}
 						>
-							<span class={['truncate font-mono', t.main ? 'text-fg' : 'text-muted']}
-								>{label(t)}</span
+							<span
+								class={[
+									'truncate font-mono text-[12.5px] leading-5',
+									t.main ? 'text-fg' : 'text-muted'
+								]}>{label(t)}</span
 							>
-							<!-- counts, not good or bad: muted, the amber one says it needs a rebase -->
-							{#if t.ahead}<span class="shrink-0 font-mono text-[11px] text-muted">↑{t.ahead}</span
-								>{/if}
-							{#if t.behind}<span class="shrink-0 font-mono text-[11px] text-muted"
-									>↓{t.behind}</span
-								>{/if}
-							{#if t.behindBase}<span
-									class="shrink-0 font-mono text-[11px] text-mod"
-									title="{t.behindBase} behind {t.base}"
-									>↓{t.behindBase} {t.base?.replace(/^[^/]+\//, '')}</span
-								>{/if}
-							{#if t.added || t.removed}
-								<span class="shrink-0 font-mono text-[10.5px] text-muted tabular-nums"
-									>+{t.added} −{t.removed}</span
+							{#if counts}
+								<!-- counts, not good or bad: muted, the amber one says it needs a rebase -->
+								<span
+									class="flex min-w-0 items-center gap-1.5 font-mono text-[11px] leading-4 text-muted"
 								>
+									{#if t.ahead}<span>↑{t.ahead}</span>{/if}
+									{#if t.behind}<span>↓{t.behind}</span>{/if}
+									{#if t.behindBase}<span
+											class="truncate text-mod"
+											title="{t.behindBase} behind {t.base}"
+											>↓{t.behindBase} {t.base?.replace(/^[^/]+\//, '')}</span
+										>{/if}
+									{#if t.added || t.removed}
+										<span class="tabular-nums">+{t.added} −{t.removed}</span>
+									{/if}
+								</span>
 							{/if}
 						</button>
-						{#if action(t)}
-							{@const next = action(t)!}
+						<div class="flex shrink-0 flex-col items-end">
 							<button
 								type="button"
-								class={[
-									'h-6 shrink-0 items-center gap-1 rounded-full border border-line px-2 text-[11px] text-muted group-focus-within/tree:flex group-hover/tree:flex hover:text-fg disabled:opacity-50 disabled:hover:text-muted',
-									syncing[t.path] ? 'flex' : 'hidden'
-								]}
-								title={next.why ??
-									(next.kind === 'pull'
-										? `Fast-forwards to its upstream${t.dirty ? ', its uncommitted changes stashed and put back' : ''}`
-										: `git rebase ${t.base}${t.dirty ? ', its uncommitted changes stashed and put back' : ''}, conflicts are left for the agent`)}
-								disabled={!!next.why || syncing[t.path]}
-								onclick={() => sync(t, next.kind)}
-								>{#if syncing[t.path]}<span
-										class="size-2.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
-									></span>{/if}{next.kind === 'pull' ? 'Pull' : 'Rebase'}</button
+								class="hidden size-5 place-items-center rounded-full text-muted group-focus-within/tree:grid group-hover/tree:grid hover:bg-canvas hover:text-fg"
+								title="New session in {label(t)}  ⌘N"
+								aria-label="New session in {label(t)}"
+								onclick={() => newSession(t.path)}
 							>
-						{/if}
-						<button
-							type="button"
-							class="grid size-6 shrink-0 place-items-center rounded-full text-muted opacity-0 group-focus-within/tree:opacity-100 group-hover/tree:opacity-100 hover:bg-canvas hover:text-fg focus-visible:opacity-100"
-							title="New session in {label(t)}  ⌘N"
-							aria-label="New session in {label(t)}"
-							onclick={() => newSession(t.path)}
-						>
-							<svg
-								viewBox="0 0 16 16"
-								class="size-3.5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.75"
-								stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9" /></svg
-							>
-						</button>
+								<svg
+									viewBox="0 0 16 16"
+									class="size-3.5"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.75"
+									stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9" /></svg
+								>
+							</button>
+							{#if action(t)}
+								{@const next = action(t)!}
+								<!-- under the +, by the counts that call for it -->
+								<button
+									type="button"
+									class={[
+										'h-4 items-center gap-1 rounded-full px-1.5 text-[10.5px] leading-none text-muted ring-1 ring-line hover:text-fg disabled:opacity-50 disabled:hover:text-muted',
+										syncing[t.path]
+											? 'flex'
+											: 'hidden group-focus-within/tree:flex group-hover/tree:flex'
+									]}
+									title={next.why ??
+										(next.kind === 'pull'
+											? `Fast-forwards to its upstream${t.dirty ? ', its uncommitted changes stashed and put back' : ''}`
+											: `git rebase ${t.base}${t.dirty ? ', its uncommitted changes stashed and put back' : ''}, conflicts are left for the agent`)}
+									disabled={!!next.why || syncing[t.path]}
+									onclick={() => sync(t, next.kind)}
+									>{#if syncing[t.path]}<span
+											class="size-2 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
+										></span>{/if}{next.kind === 'pull' ? 'Pull' : 'Rebase'}</button
+								>
+							{/if}
+						</div>
 					</div>
 					{#if t.conflicts}
 						<!-- Vibe Kanban's: a rebase stopped, for the agent to resolve or to give up on -->
