@@ -9,6 +9,7 @@ import {
 	decide,
 	forkAndSend,
 	interrupt,
+	stopTask,
 	listModels,
 	listSessions,
 	listWorktrees,
@@ -292,6 +293,12 @@ export const openClaudeCodeSession = command(
 
 export const stopTurn = command('unchecked', ({ repo, id }: Ref) =>
 	badRequestOnError(async () => interrupt(await mainCheckout(repo), checkSessionId(id)))
+);
+
+export const stopAgent = command('unchecked', ({ repo, id, taskId }: Ref & { taskId: string }) =>
+	badRequestOnError(async () =>
+		stopTask(await mainCheckout(repo), checkSessionId(id), String(taskId))
+	)
 );
 
 export const changeMode = command('unchecked', ({ repo, id, mode }: Ref & { mode: Mode }) =>

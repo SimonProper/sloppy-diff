@@ -12,7 +12,12 @@ import {
 	type CanUseTool,
 	type Options,
 	type Query,
+	type SDKBackgroundTasksChangedMessage,
 	type SDKMessage,
+	type SDKTaskNotificationMessage,
+	type SDKTaskProgressMessage,
+	type SDKTaskStartedMessage,
+	type SDKTaskUpdatedMessage,
 	type SessionMessage,
 	type SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk';
@@ -27,6 +32,7 @@ import type {
 	ModelOption,
 	Session,
 	SessionSummary,
+	Task,
 	Worktree
 } from '$lib/agents/types';
 import { git } from './git';
@@ -140,7 +146,7 @@ export async function saveSettings(settings: AgentSettings): Promise<void> {
 	await writeFile(settingsPath(), JSON.stringify(settings, null, '\t'));
 	for (const entry of sessions.values()) {
 		if (!entry.query) continue;
-		if (entry.session.status === 'idle') stop(entry);
+		if (entry.session.status === 'idle' && !entry.session.tasks?.length) stop(entry);
 		else entry.restart = true;
 	}
 }
@@ -180,7 +186,7 @@ interface Live {
 	shown?: string;
 }
 
-const fresh = (session: Session): Live => ({
+export const fresh = (session: Session): Live => ({
 	session,
 	approvals: new Map(),
 	listeners: new Set(),
@@ -212,6 +218,7 @@ function ended(entry: Live) {
 	entry.restart = false;
 	entry.pending.clear();
 	entry.session.status = 'closed';
+	entry.session.tasks = [];
 	entry.session.syncedAt = Date.now();
 	for (const resolve of entry.approvals.values()) resolve('deny');
 	changed(entry);
@@ -243,9 +250,17 @@ async function save(session: Session) {
 function changed(live: Live) {
 	for (const listener of live.listeners) listener();
 	// the sidebar only for what it shows, not each word streamed
-	const { status, open, title, doneAt, seenAt, items, syncedAt } = live.session;
+	const { open, title, doneAt, seenAt, items, syncedAt } = live.session;
 	const waiting = items.some((i) => i.type === 'approval' && !i.decision);
-	const shown = JSON.stringify([status, open, title, doneAt, seenAt, waiting, syncedAt]);
+	const shown = JSON.stringify([
+		shownStatus(live.session),
+		open,
+		title,
+		doneAt,
+		seenAt,
+		waiting,
+		syncedAt
+	]);
 	if (shown !== live.shown) {
 		live.shown = shown;
 		notify(live.session.repo);
@@ -262,7 +277,7 @@ async function live(repo: string, id: string): Promise<Live> {
 		reading = (async () => {
 			const session: Session = JSON.parse(await readFile(sessionPath(repo, id), 'utf8'));
 			// its process went with the server that ran it
-			const entry = fresh({ ...session, status: 'closed' });
+			const entry = fresh({ ...session, status: 'closed', tasks: [] });
 			sessions.set(id, entry);
 			await catchUp(entry);
 			return entry;
@@ -562,12 +577,13 @@ export async function listSessions(repo: string, worktrees: string[]): Promise<S
 				syncedAt,
 				open,
 				doneAt,
-				seenAt
+				seenAt,
+				tasks
 			}): SessionSummary => ({
 				id,
 				cwd,
 				title,
-				status,
+				status: shownStatus({ status, tasks } as Session),
 				// an approval in a session that ended can't be answered anymore
 				waiting: status !== 'closed' && items.some((i) => i.type === 'approval' && !i.decision),
 				failed: !!items.findLast((i) => i.type === 'turn')?.error,
@@ -682,12 +698,17 @@ function takenUp(entry: Live, ids: string[] | undefined) {
 	}
 }
 
+/** Running while its subagents work in the background too, its turn over or not. */
+function shownStatus(session: Session): Session['status'] {
+	return session.status === 'idle' && session.tasks?.length ? 'running' : session.status;
+}
+
 /** A session's Claude Code is working in the worktree: git leaves it alone meanwhile. */
 export function busyIn(cwd: string): boolean {
-	return [...sessions.values()].some(
-		({ session }) =>
-			session.cwd === cwd && (session.status === 'running' || session.status === 'starting')
-	);
+	return [...sessions.values()].some(({ session }) => {
+		const status = shownStatus(session);
+		return session.cwd === cwd && (status === 'running' || status === 'starting');
+	});
 }
 
 /** Puts the session in the sidebar, or takes it out, stopping its Claude Code. Nothing is deleted. */
@@ -709,6 +730,13 @@ export async function markSeen(repo: string, id: string) {
 
 export async function interrupt(repo: string, id: string) {
 	await (await live(repo, id)).query?.interrupt();
+}
+
+/** Stops one of its subagents, its end told to the session as any other's. */
+export async function stopTask(repo: string, id: string, taskId: string) {
+	const entry = await live(repo, id);
+	if (!entry.session.tasks?.some((t) => t.id === taskId)) throw new Error('No such agent running');
+	await entry.query?.stopTask(taskId);
 }
 
 /** Switches the running process's mode, or the one the next process starts in. */
@@ -861,6 +889,8 @@ async function start(entry: Live) {
 		// lets the mode be switched to it later
 		allowDangerouslySkipPermissions: true,
 		includePartialMessages: true,
+		// a line on what each subagent's on, every 30s or so, cheap off its cache
+		agentProgressSummaries: true,
 		// the questions tool needs a form of its own, asked in the chat instead
 		disallowedTools: ['AskUserQuestion'],
 		canUseTool: approve(entry)
@@ -870,9 +900,94 @@ async function start(entry: Live) {
 	// a resumed session's Claude Code reports what it had spent before too
 	entry.spent = session.claudeSession ? (session.costTotal ?? 0) : 0;
 	session.status = 'starting';
+	// a process's tasks are its own, and it says nothing of them as it starts
+	session.tasks = [];
 	// what was queued for a process that stopped before taking it up
 	for (const item of session.items) if (item.type === 'user' && item.queued) deliver(entry, item);
 	void pump(entry, entry.query);
+}
+
+/**
+ * Stops the process once it's been idle a while, rather than at once after a restart. Not while
+ * a subagent works on: its end is told to the session, a turn of its own.
+ */
+function rest(entry: Live) {
+	const { session } = entry;
+	// running, its timer is the one for a queued message's turn
+	if (session.status !== 'idle' || entry.pending.size) return;
+	clearTimeout(entry.idle);
+	if (session.tasks?.length) return;
+	entry.idle = setTimeout(
+		() => session.status === 'idle' && !entry.pending.size && !session.tasks?.length && stop(entry),
+		entry.restart ? 0 : IDLE_MS
+	);
+}
+
+type TaskMessage =
+	| SDKTaskStartedMessage
+	| SDKTaskProgressMessage
+	| SDKTaskUpdatedMessage
+	| SDKTaskNotificationMessage;
+
+/**
+ * Whether a task is a subagent, or a workflow of them. Background shells and monitors are tasks
+ * too, but a dev server can run for ever: they'd keep the session busy and git waiting on it.
+ * Nor the main session moved to the background, or housekeeping that isn't activity.
+ */
+const isAgent = (task: { task_type?: string; subagent_type?: string; ambient?: boolean }) =>
+	!task.ambient &&
+	task.subagent_type !== 'main-session' &&
+	(task.task_type === 'local_agent' ||
+		task.task_type === 'local_workflow' ||
+		(!task.task_type && !!task.subagent_type));
+
+/** The session's subagents from their events: started, what they're on, moved back, done. */
+export function followTask(entry: Live, message: TaskMessage) {
+	const { session } = entry;
+	const tasks = (session.tasks ??= []);
+	const task = tasks.find((t) => t.id === message.task_id);
+	if (message.subtype === 'task_started') {
+		if (task || !isAgent(message) || message.skip_transcript) return;
+		tasks.push({
+			id: message.task_id,
+			toolUseId: message.tool_use_id,
+			description: message.description,
+			background: !!message.is_backgrounded
+		});
+	} else if (!task) {
+		return;
+	} else if (message.subtype === 'task_progress') {
+		task.doing = message.summary || message.last_tool_name || task.doing;
+	} else if (message.subtype === 'task_updated') {
+		const { status, is_backgrounded, description } = message.patch;
+		if (is_backgrounded !== undefined) task.background = is_backgrounded;
+		if (description) task.description = description;
+		if (status && status !== 'running' && status !== 'pending') finished(entry, task);
+	} else {
+		finished(entry, task);
+	}
+}
+
+function finished(entry: Live, task: Task) {
+	entry.session.tasks = entry.session.tasks?.filter((t) => t !== task);
+	rest(entry);
+}
+
+/**
+ * The background ones as Claude Code has them, the set it sends whole on each change: one whose
+ * end was missed doesn't look busy for ever.
+ */
+export function followBackground(entry: Live, message: SDKBackgroundTasksChangedMessage) {
+	const { session } = entry;
+	const live = new Map(message.tasks.filter(isAgent).map((t) => [t.task_id, t]));
+	const tasks = (session.tasks ?? []).filter((t) => !t.background || live.has(t.id));
+	for (const [id, t] of live) {
+		const known = tasks.find((k) => k.id === id);
+		if (known) known.background = true;
+		else tasks.push({ id, description: t.description, background: true });
+	}
+	session.tasks = tasks;
+	rest(entry);
 }
 
 /** Reads the process's messages into the session until it ends. */
@@ -904,6 +1019,10 @@ async function pump(entry: Live, q: Query) {
 				if (session.status === 'starting') session.status = 'running';
 			} else if (message.type === 'system' && message.subtype === 'compact_boundary') {
 				push({ type: 'notice', text: 'Compacted the conversation' });
+			} else if (message.type === 'system' && message.subtype.startsWith('task_')) {
+				followTask(entry, message as TaskMessage);
+			} else if (message.type === 'system' && message.subtype === 'background_tasks_changed') {
+				followBackground(entry, message as SDKBackgroundTasksChangedMessage);
 			} else if (message.type === 'stream_event') {
 				const event = message.event;
 				if (event.type === 'content_block_start') {
@@ -979,14 +1098,12 @@ async function pump(entry: Live, q: Query) {
 						if (!entry.pending.size || Date.now() - (entry.heardAt ?? 0) < 25_000) return;
 						takenUp(entry, [...entry.pending]);
 						session.status = 'idle';
+						rest(entry);
 						changed(entry);
 					}, 30_000);
 				} else {
 					session.status = 'idle';
-					entry.idle = setTimeout(
-						() => session.status === 'idle' && !entry.pending.size && stop(entry),
-						entry.restart ? 0 : IDLE_MS
-					);
+					rest(entry);
 				}
 				await save(session);
 			}

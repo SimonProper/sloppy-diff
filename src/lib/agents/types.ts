@@ -101,6 +101,20 @@ export interface Session {
 	/** Claude Code's running total for the session, a resumed process carries on from it */
 	costTotal?: number;
 	contextTokens?: number;
+	/** its subagents while they run, gone with the process */
+	tasks?: Task[];
+}
+
+/** A subagent the session's Claude Code started, while it runs. */
+export interface Task {
+	id: string;
+	/** the Agent call that started it, its step in the chat */
+	toolUseId?: string;
+	description: string;
+	/** the turn went on without waiting for it */
+	background: boolean;
+	/** what it's on: its progress summary, else the tool it last used */
+	doing?: string;
 }
 
 export type SessionSummary = Pick<Session, 'id' | 'cwd' | 'title' | 'status'> & {

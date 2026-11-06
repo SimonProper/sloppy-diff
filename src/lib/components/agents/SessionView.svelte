@@ -14,6 +14,7 @@
 		seeSession,
 		forkAndSendMessage,
 		sendMessage,
+		stopAgent,
 		stopTurn
 	} from '$lib/agents/agents.remote';
 	import { untrack } from 'svelte';
@@ -22,7 +23,7 @@
 	import { buttonClass } from '$lib/components/Button.svelte';
 	import { drafts } from '$lib/agents/drafts.svelte';
 	import { foldSteps, summarize, type Step } from '$lib/agents/steps';
-	import { cyclesMode, nextMode, type Item } from '$lib/agents/types';
+	import { cyclesMode, nextMode, type Item, type Task } from '$lib/agents/types';
 	import { errorText } from '$lib/errors';
 	import { createMarkdown } from '$lib/markdown';
 
@@ -140,23 +141,37 @@
 		return () => clearTimeout(timer);
 	});
 
+	/** its subagents while they run, the background ones after its turn too */
+	const tasks = $derived(session?.tasks ?? []);
+	const taskOf = (id: string) => tasks.find((t) => t.toolUseId === id);
+	const doing = (task: Task) =>
+		task.doing ? `${task.description}: ${task.doing}` : task.description;
 	/**
 	 * The turn being worked on, one row at the end that stays from the send to the turn's end,
-	 * as t3code's working row: what it's on changes in it, it doesn't come and go.
+	 * as t3code's working row: what it's on changes in it, it doesn't come and go. After it, the
+	 * subagents left working in the background.
 	 */
-	const working = $derived(running || outgoing !== null);
+	const working = $derived(running || outgoing !== null || tasks.length > 0);
 	/**
 	 * What it's on, after the row's "Working for 12s", which never changes: none of t3code, Codex
 	 * or Claude Code name a start, only a slow one is said, nono or a long session resuming.
 	 * Null when it waits on you.
 	 */
 	const activity = $derived.by((): string | null => {
+		// the turn's over, the row's for what's left in the background
+		if (!running && tasks.length) return tasks.length === 1 ? doing(tasks[0]) : '';
 		if (session?.status === 'starting' || !running) {
 			return now - startedAt > 3000 ? 'starting Claude Code' : '';
 		}
 		const last = session?.items.findLast((i) => !(i.type === 'user' && i.queued));
 		if (last?.type === 'approval' && !last.decision) return null;
-		if (last?.type === 'tool' && !last.done) return `${last.name} ${last.title}`.trim();
+		if (last?.type === 'tool' && !last.done) {
+			// several at once would swap too fast to read
+			const waitedOn = tasks.filter((t) => !t.background).length;
+			if (waitedOn > 1) return `${waitedOn} agents running`;
+			const task = taskOf(last.id);
+			return task ? doing(task) : `${last.name} ${last.title}`.trim();
+		}
 		if (last?.type === 'thinking') return 'Thinking';
 		if (last?.type === 'text') return 'Writing';
 		return '';
@@ -187,6 +202,15 @@
 	}
 
 	const stop = () => act(() => stopTurn({ repo, id }));
+	/** the turn's over, its subagents left working in the background */
+	const background = $derived(!running && outgoing === null && tasks.length > 0);
+	/** the agents asked to stop, their buttons off until Claude Code says they have */
+	let stopping = $state<string[]>([]);
+	async function stopTask(taskId: string) {
+		stopping = [...stopping, taskId];
+		await act(() => stopAgent({ repo, id, taskId }));
+		if (failure) stopping = stopping.filter((t) => t !== taskId);
+	}
 
 	function onkeydown(event: KeyboardEvent) {
 		if (event.metaKey && event.key === '.' && running) {
@@ -231,7 +255,18 @@
 			>{/each}</pre>
 {/snippet}
 
+{#snippet stopButton(task: Task)}
+	<button
+		type="button"
+		class={buttonClass({ variant: 'danger', size: 'xs' })}
+		disabled={stopping.includes(task.id)}
+		aria-label="Stop {task.description}"
+		onclick={() => stopTask(task.id)}>Stop</button
+	>
+{/snippet}
+
 {#snippet tool(item: Extract<Item, { type: 'tool' }>)}
+	{@const task = taskOf(item.id)}
 	<details class="group rounded-lg border border-line bg-surface text-[12px]">
 		<summary class="flex h-8 cursor-pointer list-none items-center gap-2 px-2.5 select-none">
 			{#if !item.done}
@@ -245,6 +280,11 @@
 			<span class="min-w-0 truncate font-mono text-[11.5px] text-muted" title={item.title}
 				>{item.title}</span
 			>
+			<!-- a subagent's, while it runs: its summary, else its last tool -->
+			{#if task?.doing}
+				<span class="min-w-0 shrink-[2] truncate text-faint" title={task.doing}>· {task.doing}</span
+				>
+			{/if}
 			<svg
 				viewBox="0 0 16 16"
 				class="ml-auto size-3 shrink-0 text-faint transition-transform group-open:rotate-90"
@@ -476,7 +516,13 @@
 							label={activity ? `Working: ${activity}` : 'Working'}
 							class="-ml-1 text-fg"
 						/>
-						<span class="shrink-0 tabular-nums">Working for {elapsed(now - startedAt)}</span>
+						<span class="shrink-0 tabular-nums"
+							>{running || outgoing !== null
+								? `Working for ${elapsed(now - startedAt)}`
+								: tasks.length === 1
+									? 'An agent in the background'
+									: `${tasks.length} agents in the background`}</span
+						>
 						<!-- the old one up and out as the new one comes up from below, in the same place:
 						     a grid cell both share while they pass -->
 						<span class="grid min-w-0 flex-1 overflow-hidden text-faint">
@@ -489,8 +535,21 @@
 								>
 							{/key}
 						</span>
+						{#if background && tasks.length === 1}
+							{@render stopButton(tasks[0])}
+						{/if}
 					{/if}
 				</p>
+				{#if background && tasks.length > 1}
+					<ul class="mb-1 ml-1.5 flex flex-col border-l-2 border-line pl-3 text-[12px] text-muted">
+						{#each tasks as task (task.id)}
+							<li class="flex h-6 items-center gap-2">
+								<span class="min-w-0 flex-1 truncate" title={doing(task)}>{doing(task)}</span>
+								{@render stopButton(task)}
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			{/if}
 		</div>
 	</div>

@@ -4,7 +4,17 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { branchFor, describe as describeTool, fromTranscript, stitch, wrapperArgs } from './agents';
+import {
+	branchFor,
+	describe as describeTool,
+	followBackground,
+	followTask,
+	fresh,
+	fromTranscript,
+	stitch,
+	wrapperArgs
+} from './agents';
+import type { Session } from '$lib/agents/types';
 import { abortOperation, pull, rebase, syncOf } from './sync';
 
 describe('wrapperArgs', () => {
@@ -106,6 +116,105 @@ describe('stitch', () => {
 			'e',
 			'result',
 			'typed'
+		]);
+	});
+});
+
+describe('subagents', () => {
+	const ids = { uuid: '0-0-0-0-0', session_id: 's' } as const;
+	const entry = () => fresh({ status: 'running', items: [], tasks: [] } as unknown as Session);
+
+	it('follows them from start to end, leaving shells and housekeeping out', () => {
+		const e = entry();
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_started',
+			task_id: 'a',
+			tool_use_id: 't1',
+			description: 'Explore auth',
+			task_type: 'local_agent'
+		});
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_started',
+			task_id: 'b',
+			description: 'pnpm dev',
+			task_type: 'local_bash'
+		});
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_started',
+			task_id: 'c',
+			description: 'x',
+			task_type: 'local_agent',
+			ambient: true
+		});
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_progress',
+			task_id: 'a',
+			description: 'Explore auth',
+			last_tool_name: 'Read',
+			usage: { total_tokens: 1, tool_uses: 1, duration_ms: 1 }
+		});
+		expect(e.session.tasks).toEqual([
+			{ id: 'a', toolUseId: 't1', description: 'Explore auth', background: false, doing: 'Read' }
+		]);
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_updated',
+			task_id: 'a',
+			patch: { is_backgrounded: true }
+		});
+		expect(e.session.tasks?.[0].background).toBe(true);
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_notification',
+			task_id: 'a',
+			status: 'completed',
+			output_file: '',
+			summary: ''
+		});
+		expect(e.session.tasks).toEqual([]);
+	});
+
+	it("takes the background ones from Claude Code's set, one whose end was missed gone", () => {
+		const e = entry();
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_started',
+			task_id: 'a',
+			description: 'old',
+			task_type: 'local_agent',
+			is_backgrounded: true
+		});
+		followTask(e, {
+			...ids,
+			type: 'system',
+			subtype: 'task_started',
+			task_id: 'f',
+			description: 'waited on',
+			task_type: 'local_agent'
+		});
+		followBackground(e, {
+			...ids,
+			type: 'system',
+			subtype: 'background_tasks_changed',
+			tasks: [
+				{ task_id: 'b', task_type: 'local_agent', description: 'new' },
+				{ task_id: 'd', task_type: 'local_bash', description: 'pnpm dev' }
+			]
+		});
+		expect(e.session.tasks?.map((t) => [t.id, t.background])).toEqual([
+			['f', false],
+			['b', true]
 		]);
 	});
 });
