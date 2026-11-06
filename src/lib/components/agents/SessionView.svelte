@@ -551,7 +551,7 @@
 						>
 						<!-- the old one up and out as the new one comes up from below, in the same place:
 						     a grid cell both share while they pass -->
-						<span class="grid min-w-0 flex-1 overflow-hidden text-faint">
+						<span class="grid min-w-0 overflow-hidden text-faint">
 							{#key activity}
 								<span
 									class="truncate [grid-area:1/1]"
@@ -570,7 +570,7 @@
 					<ul class="mb-1 ml-1.5 flex flex-col border-l-2 border-line pl-3 text-[12px] text-muted">
 						{#each tasks as task (task.id)}
 							<li class="flex h-6 items-center gap-2">
-								<span class="min-w-0 flex-1 truncate" title={doing(task)}>{doing(task)}</span>
+								<span class="min-w-0 truncate" title={doing(task)}>{doing(task)}</span>
 								{@render stopButton(task)}
 							</li>
 						{/each}
