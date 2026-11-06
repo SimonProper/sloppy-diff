@@ -4,6 +4,7 @@
 	import StreamText from '$lib/components/ask/StreamText.svelte';
 	import AgentPickers from './AgentPickers.svelte';
 	import RainOrb from '$lib/components/rain-orb/RainOrb.svelte';
+	import Subagent from './Subagent.svelte';
 	import Band from './Band.svelte';
 	import {
 		answerApproval,
@@ -202,6 +203,8 @@
 	}
 
 	const stop = () => act(() => stopTurn({ repo, id }));
+	/** the Agent steps opened, their subagent's conversation shown in them */
+	let openAgents = $state<string[]>([]);
 	/** the turn's over, its subagents left working in the background */
 	const background = $derived(!running && outgoing === null && tasks.length > 0);
 	/** the agents asked to stop, their buttons off until Claude Code says they have */
@@ -267,7 +270,16 @@
 
 {#snippet tool(item: Extract<Item, { type: 'tool' }>)}
 	{@const task = taskOf(item.id)}
-	<details class="group rounded-lg border border-line bg-surface text-[12px]">
+	{@const agent = item.name === 'Agent' || item.name === 'Task'}
+	<details
+		class="group rounded-lg border border-line bg-surface text-[12px]"
+		ontoggle={(event) => {
+			if (!agent) return;
+			// closed, it stops following the subagent
+			const others = openAgents.filter((t) => t !== item.id);
+			openAgents = event.currentTarget.open ? [...others, item.id] : others;
+		}}
+	>
 		<summary class="flex h-8 cursor-pointer list-none items-center gap-2 px-2.5 select-none">
 			{#if !item.done}
 				<span
@@ -301,8 +313,15 @@
 					<div class="max-h-72 overflow-auto">{@render diffLines(item.detail)}</div>
 				{:else}
 					<pre
-						class="overflow-x-auto px-2.5 font-mono text-[11.5px] leading-[1.55] whitespace-pre-wrap">{item.detail}</pre>
+						class={[
+							'overflow-x-auto px-2.5 font-mono text-[11.5px] leading-[1.55] whitespace-pre-wrap',
+							agent && 'max-h-48 overflow-y-auto'
+						]}>{item.detail}</pre>
 				{/if}
+			{/if}
+			<!-- read once opened, and followed while it's open -->
+			{#if agent && openAgents.includes(item.id)}
+				<Subagent {repo} {id} toolUseId={item.id} {steps} />
 			{/if}
 			{#if item.output}
 				<pre

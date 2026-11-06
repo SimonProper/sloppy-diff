@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { access, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { watch, type FSWatcher } from 'node:fs';
+import { access, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, relative } from 'node:path';
 import {
@@ -351,8 +352,9 @@ async function transcriptFile(claudeSession: string, cwd: string): Promise<strin
  * A transcript file's messages as Claude Code resumes them: back from the last message along
  * the branch it's on, and across each compaction to the conversation it summarised, where the
  * SDK's reading stops. A compaction is a `system` message in its place, its summary left out.
+ * A subagent's file is all `sidechain`, its own conversation.
  */
-export function stitch(lines: string[]): SessionMessage[] {
+export function stitch(lines: string[], sidechain = false): SessionMessage[] {
 	type Row = {
 		type: string;
 		subtype?: string;
@@ -376,7 +378,8 @@ export function stitch(lines: string[]): SessionMessage[] {
 		}
 	}
 	const byId = new Map(rows.filter((r) => r.uuid).map((r) => [r.uuid!, r]));
-	const said = (r: Row) => (r.type === 'user' || r.type === 'assistant') && !r.isSidechain;
+	const said = (r: Row) =>
+		(r.type === 'user' || r.type === 'assistant') && !!r.isSidechain === sidechain;
 	// what the terminal doesn't show as yours: a subagent reporting back, a background task's
 	// notice. Tool results come back as user messages too, and stay
 	const foreign = (r: Row) =>
@@ -802,6 +805,85 @@ export async function decide(
 	const resolve = (await live(repo, id)).approvals.get(approval);
 	if (!resolve) throw new Error('That request was already answered');
 	resolve(decision);
+}
+
+/**
+ * A subagent's conversation, by the Agent call that started it, as it goes: read again each time
+ * its file changes. Null until Claude Code has written one, or when there's none to find.
+ */
+export async function* watchSubagent(
+	repo: string,
+	id: string,
+	toolUseId: string,
+	signal: AbortSignal
+): AsyncGenerator<Item[] | null> {
+	const entry = await live(repo, id);
+	const { claudeSession, cwd } = entry.session;
+	const file = claudeSession && (await transcriptFile(claudeSession, cwd));
+	if (!file) return yield null;
+	// beside the session's: <session>/subagents/agent-<id>.jsonl, the call in agent-<id>.meta.json
+	const dir = join(file.replace(/\.jsonl$/, ''), 'subagents');
+	let dirty = true;
+	let wake: (() => void) | undefined;
+	let watcher: FSWatcher | undefined;
+	const poke = () => {
+		follow();
+		dirty = true;
+		wake?.();
+	};
+	// the folder comes with the session's first subagent: till then a change to the session is
+	// the cue to look again
+	const follow = () => {
+		if (watcher) return;
+		try {
+			watcher = watch(dir, poke);
+			watcher.on('error', () => watcher?.close());
+			entry.listeners.delete(poke);
+		} catch {
+			entry.listeners.add(poke);
+		}
+	};
+	follow();
+	signal.addEventListener('abort', poke);
+	let path: string | null = null;
+	// what it read last, -2 for nothing yet: told once there's no file, again once there is
+	let size = -2;
+	try {
+		while (!signal.aborted) {
+			if (!dirty) await new Promise<void>((resolve) => (wake = resolve));
+			await new Promise((resolve) => setTimeout(resolve, 250));
+			dirty = false;
+			path ??= await subagentFile(dir, toolUseId);
+			const now = path
+				? await stat(path).then(
+						(s) => s.size,
+						() => -1
+					)
+				: -1;
+			if (now === size) continue;
+			size = now;
+			yield path && now >= 0
+				? fromTranscript(stitch((await readFile(path, 'utf8')).split('\n'), true), cwd)
+				: null;
+		}
+	} finally {
+		watcher?.close();
+		entry.listeners.delete(poke);
+		signal.removeEventListener('abort', poke);
+	}
+}
+
+/** The transcript of the subagent the Agent call `toolUseId` started, if it's there yet. */
+async function subagentFile(dir: string, toolUseId: string): Promise<string | null> {
+	for (const name of await readdir(dir).catch(() => [])) {
+		if (!name.endsWith('.meta.json')) continue;
+		const meta = await readFile(join(dir, name), 'utf8').then(
+			(text) => JSON.parse(text) as { toolUseId?: string },
+			() => null
+		);
+		if (meta?.toolUseId === toolUseId) return join(dir, name.replace(/\.meta\.json$/, '.jsonl'));
+	}
+	return null;
 }
 
 /** The session now, then again each time it changes, a burst of changes sent as one. */

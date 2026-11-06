@@ -120,6 +120,38 @@ describe('stitch', () => {
 	});
 });
 
+describe("a subagent's transcript", () => {
+	it('reads its own conversation, all sidechain, which the main one leaves out', () => {
+		const row = (uuid: string, parentUuid: string | null, type: string, content: unknown) =>
+			JSON.stringify({
+				uuid,
+				parentUuid,
+				type,
+				isSidechain: true,
+				message: { role: type, content }
+			});
+		const lines = [
+			row('1', null, 'user', 'Find the auth code'),
+			row('2', '1', 'assistant', [
+				{ type: 'tool_use', id: 't', name: 'Grep', input: { pattern: 'auth' } }
+			]),
+			row('3', '2', 'user', [{ type: 'tool_result', tool_use_id: 't', content: 'src/auth.ts' }]),
+			row('4', '3', 'assistant', [{ type: 'text', text: 'It is in src/auth.ts' }])
+		];
+		expect(stitch(lines)).toEqual([]);
+		expect(
+			fromTranscript(stitch(lines, true), '/w').map((i) => [
+				i.type,
+				'text' in i ? i.text : i.type === 'tool' && i.output
+			])
+		).toEqual([
+			['user', 'Find the auth code'],
+			['tool', 'src/auth.ts'],
+			['text', 'It is in src/auth.ts']
+		]);
+	});
+});
+
 describe('subagents', () => {
 	const ids = { uuid: '0-0-0-0-0', session_id: 's' } as const;
 	const entry = () => fresh({ status: 'running', items: [], tasks: [] } as unknown as Session);

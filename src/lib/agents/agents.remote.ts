@@ -23,7 +23,8 @@ import {
 	setEffort,
 	setOpen,
 	setModel,
-	watchSession
+	watchSession,
+	watchSubagent
 } from '$lib/server/agents';
 import {
 	abortOperation,
@@ -252,6 +253,16 @@ export const followSession = query.live('unchecked', async function* ({ repo, id
 	const signal = getRequestEvent().request.signal;
 	yield* watchSession(main, checkSessionId(id), signal);
 });
+
+/** A subagent's conversation, by the Agent call that started it, as it goes. */
+export const followSubagent = query.live(
+	'unchecked',
+	async function* ({ repo, id, toolUseId }: Ref & { toolUseId: string }) {
+		const main = await badRequestOnError(() => mainCheckout(repo));
+		const signal = getRequestEvent().request.signal;
+		yield* watchSubagent(main, checkSessionId(id), String(toolUseId), signal);
+	}
+);
 
 /** Sends, unless another Claude Code may have the session open and it isn't `force`d. */
 export const sendMessage = command(
